@@ -10,13 +10,12 @@ namespace LauncherServer.Server.Handler
 {
     public class LauncherPackets : IPacketHandler
     {
-        private static ILogger _logger;
+        private static readonly Lazy<ILogger> _lazyLogger = new Lazy<ILogger>(() =>
+            Core.ServiceProvider?.GetService<ILogger<LauncherPackets>>());
         
         private static ILogger GetLogger()
         {
-            if (_logger == null)
-                _logger = Core.ServiceProvider?.GetService<ILogger<LauncherPackets>>();
-            return _logger;
+            return _lazyLogger.Value;
         }
         
         [PacketHandler(PacketHandlerType.TCP, Opcodes.CL_CREATE, 0, "OnCreate")]

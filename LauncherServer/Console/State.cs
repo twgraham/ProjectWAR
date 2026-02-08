@@ -11,13 +11,12 @@ namespace LauncherServer.Console
     [ConsoleHandler("state", 1, "Server State")]
     public class State : IConsoleHandler
     {
-        private static ILogger<State> _logger;
+        private static readonly Lazy<ILogger<State>> _lazyLogger = new Lazy<ILogger<State>>(() =>
+            Core.ServiceProvider.GetService<ILogger<State>>());
+        private static ILogger<State> _logger => _lazyLogger.Value;
         
         public bool HandleCommand(string command, List<string> args)
         {
-            if (_logger == null)
-                _logger = Core.ServiceProvider.GetService<ILogger<State>>();
-                
             ServerState State;
 
             if (!Enum.TryParse(args[0], out State))

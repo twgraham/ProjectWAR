@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Common.Database.Account;
@@ -45,7 +46,9 @@ namespace LauncherServer
 
     internal class PatchMgr
     {
-        private static ILogger<PatchMgr> _logger;
+        private static readonly Lazy<ILogger<PatchMgr>> _lazyLogger = new Lazy<ILogger<PatchMgr>>(() => 
+            Core.ServiceProvider.GetService<ILogger<PatchMgr>>());
+        private static ILogger<PatchMgr> _logger => _lazyLogger.Value;
         
         public static uint VersionHash;
 
@@ -58,7 +61,6 @@ namespace LauncherServer
         [LoadingFunction(true)]
         public static void LoadPatch_Files()
         {
-            _logger = Core.ServiceProvider.GetService<ILogger<PatchMgr>>();
             _logger?.LogDebug("Loading Patch_Files...");
 
             _Patch_Files = LoadFilesFromDisk();
@@ -101,9 +103,6 @@ namespace LauncherServer
         [LoadingFunction(true)]
         public static void LoadPatch_Assets()
         {
-            if (_logger == null)
-                _logger = Core.ServiceProvider.GetService<ILogger<PatchMgr>>();
-                
             _logger?.LogDebug("Loading Patch_Assets...");
 
             _Patch_Assets = LoadAssetsFromDisk();
