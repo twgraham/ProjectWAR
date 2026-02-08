@@ -6,11 +6,15 @@ using System.Text;
 using Common.Database.Account;
 using FrameWork;
 using LauncherServer.Dtos;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LauncherServer.Server
 {
     public class Client : BaseClient
     {
+        private readonly ILogger<Client> _logger;
+        
         public long LastInfoRequest = 0;
         private AccountInfo _account;
         private string _sessionToken;
@@ -23,16 +27,17 @@ namespace LauncherServer.Server
         public Client(TCPManager srv)
             : base(srv)
         {
+            _logger = Core.ServiceProvider?.GetService<ILogger<Client>>();
         }
 
         public override void OnConnect()
         {
-            Log.Info("Connection", GetIp());
+            _logger?.LogInformation("Connection from {IP}", GetIp());
         }
 
         public override void OnDisconnect(string reason)
         {
-            Log.Info("Disconnection", GetIp() + " (" + reason + ")");
+            _logger?.LogInformation("Disconnection from {IP} ({Reason})", GetIp(), reason);
         }
 
         public override void SendTCPRaw(PacketOut packet)
@@ -50,7 +55,7 @@ namespace LauncherServer.Server
 
                 if (!Enum.IsDefined(typeof(Opcodes), (byte)pack.Opcode))
                 {
-                    Log.Error("OnReceive", "Opcode invalid : " + pack.Opcode);
+                    _logger?.LogError("Opcode invalid: {Opcode}", pack.Opcode);
                     return;
                 }
 

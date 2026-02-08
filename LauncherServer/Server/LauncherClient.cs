@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using FrameWork;
 using FrameWork.NetWork.V4;
 using LauncherServer.Dtos;
+using Microsoft.Extensions.Logging;
 using ClientV4 = FrameWork.NetWork.V4.Client;
 
 namespace LauncherServer.Server;
@@ -15,12 +16,16 @@ public partial class LauncherClient : ClientV4
     private const int PROTOCOL_LENGTH_SIZE = sizeof(int);
     private const int PROTOCOL_OPCODE_SIZE = sizeof(byte);
     
+    private readonly ILogger<LauncherClient> _logger;
+    
     public LauncherClient(
         TcpClient tcpClient,
         IPacketSerializerFactory serializerFactory,
+        ILogger<LauncherClient> logger,
         IByteTransformer? byteTransformer = null)
         : base(tcpClient, serializerFactory, byteTransformer, receiveBufferSize: 65536, errorThreshold: 3)
     {
+        _logger = logger;
     }
 
     protected override bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
@@ -76,7 +81,7 @@ public partial class LauncherClient : ClientV4
     [Rpc(Opcodes.CL_CHECK, Opcodes.LCR_CHECK)]
     public CheckVersionResponse CL_CHECK(CheckVersionRequest packet)
     {
-        Log.Debug("CL_CHECK", "Launcher Version : " + packet.Version);
+        _logger.LogDebug("Launcher Version: {Version}", packet.Version);
         
         if (packet.Version != Core.Version)
         {
@@ -89,7 +94,7 @@ public partial class LauncherClient : ClientV4
         
         if ((packet.Options & 1) == 1)
         {
-            Log.Debug("CHECK", "Has mythic file info");
+            _logger.LogDebug("Has mythic file info");
 
             if (packet.MythLoginServiceConfigLength != (ulong)Core.Info.Length)
             {
@@ -105,7 +110,7 @@ public partial class LauncherClient : ClientV4
         {
             // Dictionary<string, object> computerProfile = readProfile(ref packet);
 
-            Log.Debug("CHECK", "Has system info");
+            _logger.LogDebug("Has system info");
         }
 
         return new CheckVersionResponse
@@ -170,7 +175,7 @@ public partial class LauncherClient : ClientV4
 
         if (authResult.Result == LoginResult.Success)
         {
-            Log.Debug("CL_START", "Sending token to client : " + startRequest.Username + " token : " + authResult.Token);
+            _logger.LogDebug("Sending token to client: {Username}, token: {Token}", startRequest.Username, authResult.Token);
             response.AuthToken = authResult.Token;
         }
 

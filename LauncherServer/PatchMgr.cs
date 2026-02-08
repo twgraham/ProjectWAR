@@ -5,6 +5,8 @@ using Common.Database.Account;
 using FrameWork;
 using LauncherServer.Dtos;
 using LauncherServer.Server;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opcodes = LauncherServer.Server.Opcodes;
 
 namespace LauncherServer
@@ -43,6 +45,8 @@ namespace LauncherServer
 
     internal class PatchMgr
     {
+        private static ILogger<PatchMgr> _logger;
+        
         public static uint VersionHash;
 
         #region MYP Files
@@ -54,11 +58,12 @@ namespace LauncherServer
         [LoadingFunction(true)]
         public static void LoadPatch_Files()
         {
-            Log.Debug("PatchMgr", "Loading Patch_Files...");
+            _logger = Core.ServiceProvider.GetService<ILogger<PatchMgr>>();
+            _logger?.LogDebug("Loading Patch_Files...");
 
             _Patch_Files = LoadFilesFromDisk();
 
-            Log.Success("LoadPatch_Files", "Loaded " + _Patch_Files.Count + " Launcher_File");
+            _logger?.LogInformation("Loaded {Count} Launcher_File", _Patch_Files.Count);
         }
 
         public static List<PatchFile> LoadFilesFromDisk()
@@ -96,11 +101,14 @@ namespace LauncherServer
         [LoadingFunction(true)]
         public static void LoadPatch_Assets()
         {
-            Log.Debug("PatchMgr", "Loading Patch_Assets...");
+            if (_logger == null)
+                _logger = Core.ServiceProvider.GetService<ILogger<PatchMgr>>();
+                
+            _logger?.LogDebug("Loading Patch_Assets...");
 
             _Patch_Assets = LoadAssetsFromDisk();
 
-            Log.Success("LoadPatch_Assets", "Loaded " + _Patch_Assets.Count + " MYPs");
+            _logger?.LogInformation("Loaded {Count} MYPs", _Patch_Assets.Count);
         }
 
         public static Dictionary<Patch_MYP, List<PatchAsset>> LoadAssetsFromDisk()

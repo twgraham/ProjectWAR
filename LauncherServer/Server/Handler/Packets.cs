@@ -3,21 +3,33 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using FrameWork;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LauncherServer.Server.Handler
 {
     public class LauncherPackets : IPacketHandler
     {
+        private static ILogger _logger;
+        
+        private static ILogger GetLogger()
+        {
+            if (_logger == null)
+                _logger = Core.ServiceProvider?.GetService<ILogger<LauncherPackets>>();
+            return _logger;
+        }
+        
         [PacketHandler(PacketHandlerType.TCP, Opcodes.CL_CREATE, 0, "OnCreate")]
         public static void CL_CREATE(BaseClient client, PacketIn packet)
         {
+            var logger = GetLogger();
             Client cclient = (Client)client;
 
             string username = packet.GetString();
             string password = packet.GetString();
             string email = packet.GetString();
             byte langID = (byte)packet.ReadByte();
-            Log.Debug("CL_CREATE", $"CL_CREATE Create Request : {username} {password} {email} lang: {langID}");
+            logger?.LogDebug("CL_CREATE Create Request: {Username} {Password} {Email} lang: {LangID}", username, password, email, langID);
 
             var result = 0x02; // CreteAccountResult.ACCOUNT_BANNED;
 
@@ -28,7 +40,7 @@ namespace LauncherServer.Server.Handler
             // Check Ip Ban
             if (!Core.AcctMgr.IsIpBanned(new IsIpBannedRequest { IpAddress = ip }).IsBanned)
             {
-                Log.Debug("CL_CREATE", "Create Account Request : " + username + " " + result);
+                logger?.LogDebug("Create Account Request: {Username} {Result}", username, result);
                 
                 var createAccountRequest = new CreateAccountRequest
                 {
@@ -42,11 +54,11 @@ namespace LauncherServer.Server.Handler
                 if (Core.AcctMgr.CreateAccount(createAccountRequest).Created)
                 {
                     result = 0x01; // CreteAccountResult.ACCOUNT_NAME_SUCCESS;
-                    Log.Debug("CL_CREATE", "Create Account Request SUCCESS");
+                    logger?.LogDebug("Create Account Request SUCCESS");
                 }
                 else
                 {
-                    Log.Debug("CL_CREATE", "Create Account Request BUSY");
+                    logger?.LogDebug("Create Account Request BUSY");
                     result = 0x00; // CreteAccountResult.ACCOUNT_NAME_BUSY;
                 }
                 Out.WriteByte((byte)result);
@@ -55,13 +67,14 @@ namespace LauncherServer.Server.Handler
             {
                 Out.WriteByte((byte)result); // Banned
             }
-            Log.Debug("CL_CREATE", $"Writing response to Client {Out} ");
+            logger?.LogDebug("Writing response to Client {Out}", Out);
             cclient.SendPacketNoBlock(Out);
         }
 
         [PacketHandler(PacketHandlerType.TCP, Opcodes.CL_START, 0, "OnStart")]
         public static void CL_START(BaseClient client, PacketIn packet)
         {
+            var logger = GetLogger();
             var cclient = (Client)client;
 
             var username = packet.GetString();
@@ -79,7 +92,7 @@ namespace LauncherServer.Server.Handler
 
             if (authResult.Result == LoginResult.Success)
             {
-                Log.Debug("CL_START", "Sending token to client : " + username + " token : " + authResult.Token);
+                logger?.LogDebug("Sending token to client: {Username} token: {Token}", username, authResult.Token);
                 Out.WriteString(authResult.Token);
             }
             
@@ -94,10 +107,11 @@ namespace LauncherServer.Server.Handler
         [PacketHandler(PacketHandlerType.TCP, Opcodes.CL_CHECK, 0, "OnCheck")]
         public static void CL_CHECK(BaseClient client, PacketIn packet)
         {
+            var logger = GetLogger();
             Client cclient = (Client)client;
             uint version = packet.GetUint32();
 
-            Log.Debug("CL_CHECK", "Launcher Version : " + version);
+            logger?.LogDebug("Launcher Version: {Version}", version);
 
             PacketOut Out = new PacketOut(Opcodes.LCR_CHECK);
 
@@ -116,7 +130,7 @@ namespace LauncherServer.Server.Handler
 
             if ((options & 1) == 1)
             {
-                Log.Debug("CHECK", "Has mythic file info");
+                logger?.LogDebug("Has mythic file info");
                 len = packet.GetUint64();
 
                 if ((long)len != Core.Info.Length)
@@ -132,7 +146,7 @@ namespace LauncherServer.Server.Handler
             {
                 Dictionary<string, object> computerProfile = readProfile(ref packet);
 
-                Log.Debug("CHECK", "Has system info");
+                logger?.LogDebug("Has system info");
             }
 
             Out.WriteByte((byte)CheckResult.LAUNCHER_OK);
@@ -309,13 +323,14 @@ namespace LauncherServer.Server.Handler
         [PacketHandler(PacketHandlerType.TCP, Opcodes.CL_EMAIL_REGISTRATION, 0, "CL_EMAIL_REGISTRATION")]
         public static void CL_EMAIL_REGISTRATION(BaseClient client, PacketIn packet)
         {
+            var logger = GetLogger();
             Client cclient = (Client)client;
 
             string username = packet.GetString().ToLower();
             string code = packet.GetString();
             PacketOut Out = new PacketOut(Opcodes.LCR_EMAIL_RESPONCE);
             // Out.WriteInt32(Core.AcctMgr.CheckCode(username, code));
-            Log.Debug("CL_EMAIL_REGISTRATION", $"Writing response to Client {Out} ");
+            logger?.LogDebug("Writing response to Client {Out}", Out);
             cclient.SendPacketNoBlock(Out);
         }
     }
