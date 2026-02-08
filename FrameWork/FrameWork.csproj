@@ -19,7 +19,8 @@
       </PackageReference>
       <PackageReference Include="MySql.Data" Version="9.4.0">
       </PackageReference>
-      <PackageReference Include="NLog" Version="6.0.4" />  
+      <PackageReference Include="NLog" Version="6.0.4" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
       <PackageReference Include="System.Data.Odbc" Version="9.0.9">
       </PackageReference>
       <PackageReference Include="System.Data.OleDb" Version="9.0.9">

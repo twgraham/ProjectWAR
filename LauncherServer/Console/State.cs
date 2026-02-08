@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using FrameWork;
 using LauncherServer.Dtos;
 using LauncherServer.Server;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LauncherServer.Console
@@ -11,9 +10,12 @@ namespace LauncherServer.Console
     [ConsoleHandler("state", 1, "Server State")]
     public class State : IConsoleHandler
     {
-        private static readonly Lazy<ILogger<State>> _lazyLogger = new Lazy<ILogger<State>>(() =>
-            Core.ServiceProvider.GetService<ILogger<State>>());
-        private static ILogger<State> _logger => _lazyLogger.Value;
+        private readonly ILogger<State> _logger;
+        
+        public State(ILogger<State> logger)
+        {
+            _logger = logger;
+        }
         
         public bool HandleCommand(string command, List<string> args)
         {
@@ -21,12 +23,12 @@ namespace LauncherServer.Console
 
             if (!Enum.TryParse(args[0], out State))
             {
-                _logger?.LogError("Invalid State");
+                _logger.LogError("Invalid State");
                 return false;
             }
 
             PatchMgr.SetServerState(State);
-            _logger?.LogInformation("Server state is now {State}", State);
+            _logger.LogInformation("Server state is now {State}", State);
 
             return true;
         }

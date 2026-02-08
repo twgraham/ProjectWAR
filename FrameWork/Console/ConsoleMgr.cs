@@ -2,16 +2,30 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace FrameWork
 {
-    public class ConsoleMgr
+    public class ConsoleMgr : IHostedService
     {
         public readonly Dictionary<string, IConsoleHandler> m_consoleHandlers = new Dictionary<string, IConsoleHandler>();
 
         private static ConsoleMgr Instance;
         private bool _IsRunning = true;
         private DateTime _start_time = DateTime.UtcNow;
+        private Task _consoleTask;
+        private CancellationTokenSource _cancellationTokenSource;
+        private readonly IServiceProvider _serviceProvider;
+
+        // Constructor for DI
+        public ConsoleMgr(IServiceProvider serviceProvider = null)
+        {
+            _serviceProvider = serviceProvider;
+            if (Instance == null)
+                Instance = this;
+        }
 
         public static void Start()
         {
@@ -19,17 +33,44 @@ namespace FrameWork
                 return;
 
             Instance = new ConsoleMgr();
+            
+            // Backwards compatibility: call StartAsync synchronously
+            Instance.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
 
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            
             try
             {
-                Instance.LoadConsoleHandler();
+                LoadConsoleHandler();
             }
             catch (Exception e)
             {
                 Log.Error("ConsoleMgr", "Can not load : " + e);
             }
 
-            while (Instance._IsRunning)
+            // Start the console reading loop in a background task
+            _consoleTask = Task.Run(() => ConsoleLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+            
+            return Task.CompletedTask;
+        }
+
+        public async Task StopAsync(CancellationToken cancellationToken)
+        {
+            _IsRunning = false;
+            _cancellationTokenSource?.Cancel();
+            
+            if (_consoleTask != null)
+            {
+                await _consoleTask.ConfigureAwait(false);
+            }
+        }
+
+        private void ConsoleLoop(CancellationToken cancellationToken)
+        {
+            while (_IsRunning && !cancellationToken.IsCancellationRequested)
             {
                 string line;
 
@@ -52,7 +93,7 @@ namespace FrameWork
                 {
                     line = line.Substring(1);
 
-                    if (!Instance.ExecuteCommand(line))
+                    if (!ExecuteCommand(line))
                         Log.Error("ConsoleMgr", "Command not found");
                 }
                 else CleanLine(line.Length);
@@ -115,7 +156,23 @@ namespace FrameWork
                     if (consoleHandlerAttribs.Length > 0)
                     {
                         Log.Info("ConsoleMgr", "." + consoleHandlerAttribs[0].Command + " : " + consoleHandlerAttribs[0].Description);
-                        RegisterHandler(consoleHandlerAttribs[0].Command, (IConsoleHandler)Activator.CreateInstance(type));
+                        
+                        // Try to create instance from DI container first, fallback to Activator
+                        IConsoleHandler handler;
+                        if (_serviceProvider != null)
+                        {
+                            handler = _serviceProvider.GetService(type) as IConsoleHandler;
+                            if (handler == null)
+                            {
+                                handler = (IConsoleHandler)Activator.CreateInstance(type);
+                            }
+                        }
+                        else
+                        {
+                            handler = (IConsoleHandler)Activator.CreateInstance(type);
+                        }
+                        
+                        RegisterHandler(consoleHandlerAttribs[0].Command, handler);
                     }
                     Log.Dump("ConsoleMgr", type.FullName);
                 }
