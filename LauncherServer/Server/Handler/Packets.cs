@@ -28,7 +28,7 @@ namespace LauncherServer.Server.Handler
             string password = packet.GetString();
             string email = packet.GetString();
             byte langID = (byte)packet.ReadByte();
-            logger?.LogDebug("CL_CREATE Create Request: {Username} {Password} {Email} lang: {LangID}", username, password, email, langID);
+            logger?.LogDebug("CL_CREATE Create Request: {Username} {Email} lang: {LangID}", username, email, langID);
 
             var result = 0x02; // CreteAccountResult.ACCOUNT_BANNED;
 
