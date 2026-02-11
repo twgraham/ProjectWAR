@@ -3,15 +3,29 @@ using FrameWork;
 
 namespace AccountCacher.Tests;
 
-public class AuthenticationTests : AccountCacherTestBase
+public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
 {
+    private readonly AccountCacherFixture _fixture;
+    private AccountMgr.AccountMgrClient Client => _fixture.Client!;
+    
+    public AuthenticationTests(AccountCacherFixture fixture)
+    {
+        _fixture = fixture;
+    }
+    
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+    
+    public async ValueTask DisposeAsync()
+    {
+        await _fixture.ClearAccountsAsync();
+    }
     [Fact]
     public async Task AuthenticateUser_WithValidCredentials_ShouldSucceed()
     {
         // Arrange
         var username = "validuser";
         var password = "password123";
-        await InsertTestAccountAsync(username, password, "valid@test.com", gmLevel: 0);
+        await _fixture.InsertTestAccountAsync(username, password, "valid@test.com", gmLevel: 0);
         
         var request = new AuthenticateUserRequest
         {
@@ -35,7 +49,7 @@ public class AuthenticationTests : AccountCacherTestBase
     {
         // Arrange
         var username = "testuser";
-        await InsertTestAccountAsync(username, "correctpassword");
+        await _fixture.InsertTestAccountAsync(username, "correctpassword");
         
         var request = new AuthenticateUserRequest
         {
@@ -77,7 +91,7 @@ public class AuthenticationTests : AccountCacherTestBase
         // Arrange
         var username = "banneduser";
         // Use banned = 1 for permanent ban
-        await InsertTestAccountAsync(username, "password123", banned: 1);
+        await _fixture.InsertTestAccountAsync(username, "password123", banned: 1);
         
         var request = new AuthenticateUserRequest
         {
@@ -99,7 +113,7 @@ public class AuthenticationTests : AccountCacherTestBase
         // Arrange
         var username = "inactiveuser";
         // GM level < 0 means inactive
-        await InsertTestAccountAsync(username, "password123", gmLevel: -1);
+        await _fixture.InsertTestAccountAsync(username, "password123", gmLevel: -1);
         
         var request = new AuthenticateUserRequest
         {
@@ -121,7 +135,7 @@ public class AuthenticationTests : AccountCacherTestBase
         // Arrange
         var username = "caseuser";
         var password = "password123";
-        await InsertTestAccountAsync(username, password);
+        await _fixture.InsertTestAccountAsync(username, password);
         
         // Test with different case
         var request = new AuthenticateUserRequest
@@ -145,7 +159,7 @@ public class AuthenticationTests : AccountCacherTestBase
         // Arrange
         var username = "pwduser";
         var password = "PassWord123";
-        await InsertTestAccountAsync(username, password);
+        await _fixture.InsertTestAccountAsync(username, password);
         
         // Test with different case password
         var request = new AuthenticateUserRequest
@@ -168,7 +182,7 @@ public class AuthenticationTests : AccountCacherTestBase
         // Arrange
         var username = "multiuser";
         var password = "password123";
-        await InsertTestAccountAsync(username, password);
+        await _fixture.InsertTestAccountAsync(username, password);
         
         var request = new AuthenticateUserRequest
         {
@@ -195,7 +209,7 @@ public class AuthenticationTests : AccountCacherTestBase
         var password = "password123";
         // Use a timestamp in the past (ban expired)
         var expiredTimestamp = TCPManager.GetTimeStamp() - 10000;
-        await InsertTestAccountAsync(username, password, banned: expiredTimestamp);
+        await _fixture.InsertTestAccountAsync(username, password, banned: expiredTimestamp);
         
         var request = new AuthenticateUserRequest
         {

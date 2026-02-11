@@ -2,8 +2,25 @@ using FrameWork;
 
 namespace AccountCacher.Tests;
 
-public class SecurityTests : AccountCacherTestBase
+public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
 {
+    private readonly AccountCacherFixture _fixture;
+    private AccountMgr.AccountMgrClient Client => _fixture.Client;
+    
+    public SecurityTests(AccountCacherFixture fixture)
+    {
+        _fixture = fixture;
+    }
+    
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+    
+    public async ValueTask DisposeAsync()
+    {
+        await _fixture.ClearAccountsAsync();
+        await _fixture.ClearRealmsAsync();
+        await _fixture.ClearIpBansAsync();
+    }
+    
     [Fact]
     public async Task IsIpBanned_WithNonBannedIp_ShouldReturnFalse()
     {
@@ -11,7 +28,7 @@ public class SecurityTests : AccountCacherTestBase
         var request = new IsIpBannedRequest { IpAddress = "192.168.1.1" };
         
         // Act
-        var response = await Client!.IsIpBannedAsync(request);
+        var response = await Client.IsIpBannedAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -24,12 +41,12 @@ public class SecurityTests : AccountCacherTestBase
         // Arrange
         var ipAddress = "192.168.1.100";
         // Use 1 for permanent ban
-        await InsertIpBanAsync(ipAddress, 1);
+        await _fixture.InsertIpBanAsync(ipAddress, 1);
         
         var request = new IsIpBannedRequest { IpAddress = ipAddress };
         
         // Act
-        var response = await Client!.IsIpBannedAsync(request);
+        var response = await Client.IsIpBannedAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -42,12 +59,12 @@ public class SecurityTests : AccountCacherTestBase
         // Arrange
         var ipAddress = "192.168.1.101";
         var expiredTimestamp = TCPManager.GetTimeStamp() - 10000;
-        await InsertIpBanAsync(ipAddress, expiredTimestamp);
+        await _fixture.InsertIpBanAsync(ipAddress, expiredTimestamp);
         
         var request = new IsIpBannedRequest { IpAddress = ipAddress };
         
         // Act
-        var response = await Client!.IsIpBannedAsync(request);
+        var response = await Client.IsIpBannedAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -60,12 +77,12 @@ public class SecurityTests : AccountCacherTestBase
         // Arrange
         var ipAddress = "192.168.1.102";
         var futureTimestamp = TCPManager.GetTimeStamp() + 10000;
-        await InsertIpBanAsync(ipAddress, futureTimestamp);
+        await _fixture.InsertIpBanAsync(ipAddress, futureTimestamp);
         
         var request = new IsIpBannedRequest { IpAddress = ipAddress };
         
         // Act
-        var response = await Client!.IsIpBannedAsync(request);
+        var response = await Client.IsIpBannedAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -78,13 +95,13 @@ public class SecurityTests : AccountCacherTestBase
         // Arrange
         // Ban a subnet
         var bannedSubnet = "192.168.1";
-        await InsertIpBanAsync(bannedSubnet, 1);
+        await _fixture.InsertIpBanAsync(bannedSubnet, 1);
         
         // Test full IP in that subnet
         var request = new IsIpBannedRequest { IpAddress = "192.168.1.50" };
         
         // Act
-        var response = await Client!.IsIpBannedAsync(request);
+        var response = await Client.IsIpBannedAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -96,11 +113,11 @@ public class SecurityTests : AccountCacherTestBase
     {
         // Arrange
         var username = "tokenuser";
-        var accountId = await InsertTestAccountAsync(username, "password123");
+        var accountId = await _fixture.InsertTestAccountAsync(username, "password123");
         
         // Set a token for the account
         var token = Guid.NewGuid().ToString();
-        using var connection = new MySql.Data.MySqlClient.MySqlConnection(ConnectionString);
+        using var connection = new MySql.Data.MySqlClient.MySqlConnection(_fixture.ConnectionString);
         await connection.OpenAsync();
         var updateCmd = new MySql.Data.MySqlClient.MySqlCommand(
             "UPDATE accounts SET Token = @Token WHERE AccountId = @AccountId", connection);
@@ -115,7 +132,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.CheckTokenAsync(request);
+        var response = await Client.CheckTokenAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -127,7 +144,7 @@ public class SecurityTests : AccountCacherTestBase
     {
         // Arrange
         var username = "tokenuser2";
-        await InsertTestAccountAsync(username, "password123");
+        await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new CheckTokenRequest
         {
@@ -136,7 +153,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.CheckTokenAsync(request);
+        var response = await Client.CheckTokenAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -154,7 +171,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.CheckTokenAsync(request);
+        var response = await Client.CheckTokenAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -166,7 +183,7 @@ public class SecurityTests : AccountCacherTestBase
     {
         // Arrange
         var username = "accessuser";
-        await InsertTestAccountAsync(username, "password123", gmLevel: 0);
+        await _fixture.InsertTestAccountAsync(username, "password123", gmLevel: 0);
         
         var request = new ModifyAccessRequest
         {
@@ -176,7 +193,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.ModifyAccessAsync(request);
+        var response = await Client.ModifyAccessAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -203,7 +220,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.ModifyAccessAsync(request);
+        var response = await Client.ModifyAccessAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -223,7 +240,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.BanPlayerAsync(request);
+        var response = await Client.BanPlayerAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -243,7 +260,7 @@ public class SecurityTests : AccountCacherTestBase
         };
         
         // Act
-        var response = await Client!.SanctionPlayerAsync(request);
+        var response = await Client.SanctionPlayerAsync(request);
         
         // Assert
         Assert.NotNull(response);

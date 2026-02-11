@@ -1,18 +1,35 @@
 namespace AccountCacher.Tests;
 
-public class AccountRetrievalTests : AccountCacherTestBase
+public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
 {
+    private readonly AccountCacherFixture _fixture;
+    private AccountMgr.AccountMgrClient Client => _fixture.Client;
+    
+    public AccountRetrievalTests(AccountCacherFixture fixture)
+    {
+        _fixture = fixture;
+    }
+    
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+    
+    public async ValueTask DisposeAsync()
+    {
+        await _fixture.ClearAccountsAsync();
+        await _fixture.ClearRealmsAsync();
+        await _fixture.ClearIpBansAsync();
+    }
+    
     [Fact]
     public async Task GetAccount_WithExistingUsername_ShouldReturnAccount()
     {
         // Arrange
         var username = "existinguser";
-        var accountId = await InsertTestAccountAsync(username, "password123", "existing@test.com");
+        var accountId = await _fixture.InsertTestAccountAsync(username, "password123", "existing@test.com");
         
         var request = new GetAccountRequest { Username = username };
         
         // Act
-        var response = await Client!.GetAccountAsync(request);
+        var response = await Client.GetAccountAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -29,7 +46,7 @@ public class AccountRetrievalTests : AccountCacherTestBase
         var request = new GetAccountRequest { Username = "nonexistent" };
         
         // Act
-        var response = await Client!.GetAccountAsync(request);
+        var response = await Client.GetAccountAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -41,12 +58,12 @@ public class AccountRetrievalTests : AccountCacherTestBase
     {
         // Arrange
         var username = "casetest";
-        await InsertTestAccountAsync(username, "password123");
+        await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new GetAccountRequest { Username = "CaseTest" };
         
         // Act
-        var response = await Client!.GetAccountAsync(request);
+        var response = await Client.GetAccountAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -59,12 +76,12 @@ public class AccountRetrievalTests : AccountCacherTestBase
     {
         // Arrange
         var username = "iduser";
-        var accountId = await InsertTestAccountAsync(username, "password123", "id@test.com");
+        var accountId = await _fixture.InsertTestAccountAsync(username, "password123", "id@test.com");
         
         var request = new GetAccountByIdRequest { Id = (uint)accountId };
         
         // Act
-        var response = await Client!.GetAccountByIdAsync(request);
+        var response = await Client.GetAccountByIdAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -81,7 +98,7 @@ public class AccountRetrievalTests : AccountCacherTestBase
         var request = new GetAccountByIdRequest { Id = 999999 };
         
         // Act
-        var response = await Client!.GetAccountByIdAsync(request);
+        var response = await Client.GetAccountByIdAsync(request);
         
         // Assert
         Assert.NotNull(response);
@@ -93,12 +110,12 @@ public class AccountRetrievalTests : AccountCacherTestBase
     {
         // Arrange
         var username = "cacheuser";
-        await InsertTestAccountAsync(username, "password123");
+        await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new GetAccountRequest { Username = username };
         
         // Act - Call multiple times to test caching
-        var response1 = await Client!.GetAccountAsync(request);
+        var response1 = await Client.GetAccountAsync(request);
         var response2 = await Client.GetAccountAsync(request);
         var response3 = await Client.GetAccountAsync(request);
         
@@ -115,11 +132,11 @@ public class AccountRetrievalTests : AccountCacherTestBase
     {
         // Arrange
         var username = "cacheiduser";
-        var accountId = await InsertTestAccountAsync(username, "password123");
+        var accountId = await _fixture.InsertTestAccountAsync(username, "password123");
         
         // First get by username to populate cache
         var usernameRequest = new GetAccountRequest { Username = username };
-        var usernameResponse = await Client!.GetAccountAsync(usernameRequest);
+        var usernameResponse = await Client.GetAccountAsync(usernameRequest);
         
         // Act - Get by ID, which should use cached data
         var idRequest = new GetAccountByIdRequest { Id = (uint)accountId };
@@ -137,10 +154,10 @@ public class AccountRetrievalTests : AccountCacherTestBase
     {
         // Arrange
         var username = "packetloguser";
-        await InsertTestAccountAsync(username, "password123");
+        await _fixture.InsertTestAccountAsync(username, "password123");
         
         // Enable packet logging by updating the account directly
-        using var connection = new MySql.Data.MySqlClient.MySqlConnection(ConnectionString);
+        using var connection = new MySql.Data.MySqlClient.MySqlConnection(_fixture.ConnectionString);
         await connection.OpenAsync();
         var updateCmd = new MySql.Data.MySqlClient.MySqlCommand(
             "UPDATE accounts SET PacketLog = 1 WHERE Username = @Username", connection);
@@ -150,7 +167,7 @@ public class AccountRetrievalTests : AccountCacherTestBase
         var request = new GetAccountRequest { Username = username };
         
         // Act
-        var response = await Client!.GetAccountAsync(request);
+        var response = await Client.GetAccountAsync(request);
         
         // Assert
         Assert.NotNull(response.Account);
@@ -162,12 +179,12 @@ public class AccountRetrievalTests : AccountCacherTestBase
     {
         // Arrange
         var username = "bannedcheckuser";
-        await InsertTestAccountAsync(username, "password123", banned: 1);
+        await _fixture.InsertTestAccountAsync(username, "password123", banned: 1);
         
         var request = new GetAccountRequest { Username = username };
         
         // Act
-        var response = await Client!.GetAccountAsync(request);
+        var response = await Client.GetAccountAsync(request);
         
         // Assert
         Assert.NotNull(response.Account);
@@ -203,7 +220,7 @@ public class AccountRetrievalTests : AccountCacherTestBase
             IpAddress = "127.0.0.1"
         };
         
-        await Client!.CreateAccountAsync(createRequest1);
+        await Client.CreateAccountAsync(createRequest1);
         await Client.CreateAccountAsync(createRequest2);
         
         // Act

@@ -3,8 +3,23 @@ using Grpc.Core;
 
 namespace AccountCacher.Tests;
 
-public class CreateAccountTests : AccountCacherTestBase
+public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
 {
+    private readonly AccountCacherFixture _fixture;
+    private AccountMgr.AccountMgrClient Client => _fixture.Client!;
+    
+    public CreateAccountTests(AccountCacherFixture fixture)
+    {
+        _fixture = fixture;
+    }
+    
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+    
+    public async ValueTask DisposeAsync()
+    {
+        // Clean up test data after each test
+        await _fixture.ClearAccountsAsync();
+    }
     [Fact]
     public async Task CreateAccount_WithValidDetails_ShouldSucceed()
     {
@@ -41,7 +56,7 @@ public class CreateAccountTests : AccountCacherTestBase
     {
         // Arrange
         var username = "duplicateuser";
-        await InsertTestAccountAsync(username, "password123");
+        await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new CreateAccountRequest
         {
