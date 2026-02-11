@@ -23,7 +23,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithValidDetails_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN a new account request with valid details
         var request = new CreateAccountRequest
         {
             Username = "newuser",
@@ -34,10 +34,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // WHEN
+        // WHEN creating the account
         var response = await Client!.CreateAccountAsync(request);
         
-        // THEN
+        // THEN the account should be created successfully and retrievable from the database
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
@@ -54,7 +54,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithDuplicateUsername_ShouldFail()
     {
-        // GIVEN
+        // GIVEN an existing account with a specific username
         var username = "duplicateuser";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -68,10 +68,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // WHEN
+        // WHEN attempting to create another account with the same username
         var response = await Client!.CreateAccountAsync(request);
         
-        // THEN
+        // THEN the account creation should fail due to duplicate username
         response.ShouldNotBeNull();
         response.Created.ShouldBeFalse();
     }
@@ -79,7 +79,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithSystemUsername_ShouldFail()
     {
-        // GIVEN
+        // GIVEN a request with a reserved system username
         var request = new CreateAccountRequest
         {
             Username = "System",
@@ -90,10 +90,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // WHEN
+        // WHEN attempting to create an account with the system username
         var response = await Client!.CreateAccountAsync(request);
         
-        // THEN
+        // THEN the account creation should fail to prevent system name conflicts
         response.ShouldNotBeNull();
         response.Created.ShouldBeFalse();
     }
@@ -101,7 +101,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithGmLevel_ShouldCreateGmAccount()
     {
-        // GIVEN
+        // GIVEN a request with elevated GM privileges
         var request = new CreateAccountRequest
         {
             Username = "gmuser",
@@ -112,10 +112,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // WHEN
+        // WHEN creating the GM account
         var response = await Client!.CreateAccountAsync(request);
         
-        // THEN
+        // THEN the account should be created with the specified GM level
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
@@ -130,7 +130,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithLocalhost_ShouldNotRequireVerification()
     {
-        // GIVEN
+        // GIVEN a request from localhost that should bypass email verification
         var request = new CreateAccountRequest
         {
             Username = "localhostuser",
@@ -141,10 +141,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // WHEN
+        // WHEN creating the account from localhost
         var response = await Client!.CreateAccountAsync(request);
         
-        // THEN
+        // THEN the account should be created and immediately available for authentication
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
@@ -162,7 +162,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_CaseInsensitive_ShouldNormalizeUsername()
     {
-        // GIVEN
+        // GIVEN a request with mixed-case username
         var request = new CreateAccountRequest
         {
             Username = "MixedCaseUser",
@@ -173,10 +173,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // WHEN
+        // WHEN creating the account
         var response = await Client!.CreateAccountAsync(request);
         
-        // THEN
+        // THEN the username should be normalized to lowercase for consistency
         response.Created.ShouldBeTrue();
         
         // Verify username is stored in lowercase

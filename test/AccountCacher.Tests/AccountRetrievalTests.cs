@@ -22,16 +22,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithExistingUsername_ShouldReturnAccount()
     {
-        // GIVEN
+        // GIVEN an existing user account in the database
         var username = "existinguser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123", "existing@test.com");
         
         var request = new GetAccountRequest { Username = username };
         
-        // WHEN
+        // WHEN retrieving the account by username
         var response = await Client.GetAccountAsync(request);
         
-        // THEN
+        // THEN the account details should be returned correctly
         response.ShouldNotBeNull();
         response.Account.ShouldNotBeNull();
         response.Account.Username.ShouldBe(username);
@@ -42,13 +42,13 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithNonExistentUsername_ShouldReturnNull()
     {
-        // GIVEN
+        // GIVEN no account exists with the specified username
         var request = new GetAccountRequest { Username = "nonexistent" };
         
-        // WHEN
+        // WHEN attempting to retrieve the account
         var response = await Client.GetAccountAsync(request);
         
-        // THEN
+        // THEN the response should indicate no account found
         response.ShouldNotBeNull();
         response.Account.ShouldBeNull();
     }
@@ -56,16 +56,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_CaseInsensitive_ShouldWork()
     {
-        // GIVEN
+        // GIVEN an account with lowercase username
         var username = "casetest";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new GetAccountRequest { Username = "CaseTest" };
         
-        // WHEN
+        // WHEN retrieving with mixed-case username
         var response = await Client.GetAccountAsync(request);
         
-        // THEN
+        // THEN the account should be found (case-insensitive lookup)
         response.ShouldNotBeNull();
         response.Account.ShouldNotBeNull();
         response.Account.Username.ShouldBe(username);
@@ -74,16 +74,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccountById_WithExistingId_ShouldReturnAccount()
     {
-        // GIVEN
+        // GIVEN an existing account with a specific ID
         var username = "iduser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123", "id@test.com");
         
         var request = new GetAccountByIdRequest { Id = (uint)accountId };
         
-        // WHEN
+        // WHEN retrieving the account by ID
         var response = await Client.GetAccountByIdAsync(request);
         
-        // THEN
+        // THEN the complete account details should be returned
         response.ShouldNotBeNull();
         response.Account.ShouldNotBeNull();
         response.Account.Username.ShouldBe(username);
@@ -94,13 +94,13 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccountById_WithNonExistentId_ShouldReturnNull()
     {
-        // GIVEN
+        // GIVEN no account exists with the specified ID
         var request = new GetAccountByIdRequest { Id = 999999 };
         
-        // WHEN
+        // WHEN attempting to retrieve by non-existent ID
         var response = await Client.GetAccountByIdAsync(request);
         
-        // THEN
+        // THEN the response should indicate no account found
         response.ShouldNotBeNull();
         response.Account.ShouldBeNull();
     }
@@ -108,7 +108,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_CalledMultipleTimes_ShouldUseCache()
     {
-        // GIVEN
+        // GIVEN an existing account that will be retrieved multiple times
         var username = "cacheuser";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -195,7 +195,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetPendingAccounts_AfterAccountCreation_ShouldReturnNewAccounts()
     {
-        // GIVEN
+        // GIVEN accounts awaiting email verification
         var username1 = "pending1";
         var username2 = "pending2";
         
@@ -223,11 +223,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         await Client.CreateAccountAsync(createRequest1);
         await Client.CreateAccountAsync(createRequest2);
         
-        // WHEN
+        // WHEN requesting the list of pending accounts
         var request = new GetPendingAccountsRequest();
         var response = await Client.GetPendingAccountsAsync(request);
         
-        // THEN
+        // THEN all pending accounts should be returned for admin review
         response.ShouldNotBeNull();
         response.AccountIds.ShouldNotBeEmpty();
     }

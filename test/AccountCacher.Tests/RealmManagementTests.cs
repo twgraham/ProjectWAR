@@ -22,13 +22,13 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task ListRealms_WithNoRealms_ShouldReturnEmptyList()
     {
-        // GIVEN
+        // GIVEN no realms configured in the database
         var request = new ListRealmsRequest();
         
-        // WHEN
+        // WHEN requesting the list of available realms
         var response = await Client.ListRealmsAsync(request);
         
-        // THEN
+        // THEN an empty list should be returned
         response.ShouldNotBeNull();
         response.Realms.ShouldBeEmpty();
     }
@@ -36,7 +36,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task ListRealms_WithMultipleRealms_ShouldReturnAll()
     {
-        // GIVEN
+        // GIVEN multiple game realms configured in the system
         await _fixture.InsertTestRealmAsync(1, "Realm1", "127.0.0.1", 10300);
         await _fixture.InsertTestRealmAsync(2, "Realm2", "127.0.0.1", 10301);
         await _fixture.InsertTestRealmAsync(3, "Realm3", "127.0.0.1", 10302);
@@ -47,10 +47,10 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         
         var request = new ListRealmsRequest();
         
-        // WHEN
+        // WHEN requesting all available realms
         var response = await Client.ListRealmsAsync(request);
         
-        // THEN
+        // THEN all configured realms should be returned in the list
         response.ShouldNotBeNull();
         response.Realms.Count.ShouldBe(3);
         response.Realms.ShouldContain(r => r.Name == "Realm1");
@@ -61,16 +61,16 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetRealm_WithExistingRealmId_ShouldReturnRealm()
     {
-        // GIVEN
+        // GIVEN a specific realm exists with a known ID
         await _fixture.InsertTestRealmAsync(1, "TestRealm", "127.0.0.1", 10300);
         await Task.Delay(500); // Wait for realm to be loaded
         
         var request = new GetRealmRequest { RealmId = 1 };
         
-        // WHEN
+        // WHEN requesting realm details by ID
         var response = await Client.GetRealmAsync(request);
         
-        // THEN
+        // THEN the realm information should be returned
         response.ShouldNotBeNull();
         response.Realm.ShouldNotBeNull();
         response.Realm.RealmId.ShouldBe((uint)1);
@@ -81,13 +81,13 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetRealm_WithNonExistentRealmId_ShouldReturnNull()
     {
-        // GIVEN
+        // GIVEN no realm exists with the specified ID
         var request = new GetRealmRequest { RealmId = 99 };
         
-        // WHEN
+        // WHEN attempting to retrieve a non-existent realm
         var response = await Client.GetRealmAsync(request);
         
-        // THEN
+        // THEN the response should indicate no realm found
         response.ShouldNotBeNull();
         response.Realm.ShouldBeNull();
     }
@@ -95,7 +95,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task UpdateRealm_WithExistingRealm_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN an existing realm with outdated information
         await _fixture.InsertTestRealmAsync(1, "UpdateRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
@@ -107,10 +107,10 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
             DestructionCount = 50
         };
         
-        // WHEN
+        // WHEN updating the realm's player counts and status
         var response = await Client.UpdateRealmAsync(request);
         
-        // THEN
+        // THEN the realm information should be updated successfully
         response.ShouldNotBeNull();
         
         // Verify the realm was updated
@@ -143,16 +143,16 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetClusterList_WithRealms_ShouldReturnClusterInfo()
     {
-        // GIVEN
+        // GIVEN configured realms with cluster properties
         await _fixture.InsertTestRealmAsync(1, "ClusterRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
         var request = new GetClusterListRequest();
         
-        // WHEN
+        // WHEN requesting the cluster list
         var response = await Client.GetClusterListAsync(request);
         
-        // THEN
+        // THEN cluster information should be returned with realm details
         response.ShouldNotBeNull();
         response.Clusters.ShouldNotBeEmpty();
         
@@ -166,13 +166,13 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetClusterList_WithNoRealms_ShouldReturnEmptyList()
     {
-        // GIVEN
+        // GIVEN no realms are configured
         var request = new GetClusterListRequest();
         
-        // WHEN
+        // WHEN requesting cluster information
         var response = await Client.GetClusterListAsync(request);
         
-        // THEN
+        // THEN an empty cluster list should be returned
         response.ShouldNotBeNull();
         response.Clusters.ShouldBeEmpty();
     }
@@ -180,16 +180,16 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetClusterList_ShouldIncludeRealmProperties()
     {
-        // GIVEN
+        // GIVEN realms with specific network configuration
         await _fixture.InsertTestRealmAsync(1, "PropRealm", "192.168.1.1", 10300);
         await Task.Delay(500);
         
         var request = new GetClusterListRequest();
         
-        // WHEN
+        // WHEN retrieving cluster information
         var response = await Client.GetClusterListAsync(request);
         
-        // THEN
+        // THEN the response should include realm properties like address and port
         response.ShouldNotBeNull();
         response.Clusters.ShouldNotBeEmpty();
         
@@ -205,7 +205,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task ListRealms_ShouldIncludeOnlinePlayerCounts()
     {
-        // GIVEN
+        // GIVEN realms with active players online
         await _fixture.InsertTestRealmAsync(1, "PopulatedRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
@@ -219,11 +219,11 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         };
         await Client.UpdateRealmAsync(updateRequest);
         
-        // WHEN
+        // WHEN listing all realms
         var listRequest = new ListRealmsRequest();
         var response = await Client.ListRealmsAsync(listRequest);
         
-        // THEN
+        // THEN each realm should show current online player counts
         response.ShouldNotBeNull();
         response.Realms.ShouldNotBeEmpty();
         

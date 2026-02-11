@@ -24,13 +24,13 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task IsIpBanned_WithNonBannedIp_ShouldReturnFalse()
     {
-        // GIVEN
+        // GIVEN an IP address that is not banned
         var request = new IsIpBannedRequest { IpAddress = "192.168.1.1" };
         
-        // WHEN
+        // WHEN checking if the IP is banned
         var response = await Client.IsIpBannedAsync(request);
         
-        // THEN
+        // THEN the check should return false (IP is allowed)
         response.ShouldNotBeNull();
         response.IsBanned.ShouldBeFalse();
     }
@@ -38,17 +38,17 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task IsIpBanned_WithBannedIp_ShouldReturnTrue()
     {
-        // GIVEN
+        // GIVEN an IP address that has been banned
         var ipAddress = "192.168.1.100";
         // Use 1 for permanent ban
         await _fixture.InsertIpBanAsync(ipAddress, 1);
         
         var request = new IsIpBannedRequest { IpAddress = ipAddress };
         
-        // WHEN
+        // WHEN checking the ban status of the IP
         var response = await Client.IsIpBannedAsync(request);
         
-        // THEN
+        // THEN the check should return true (IP is blocked)
         response.ShouldNotBeNull();
         response.IsBanned.ShouldBeTrue();
     }
@@ -56,17 +56,17 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task IsIpBanned_WithExpiredBan_ShouldRemoveBanAndReturnFalse()
     {
-        // GIVEN
+        // GIVEN an IP ban that has expired (timestamp in past)
         var ipAddress = "192.168.1.101";
         var expiredTimestamp = TCPManager.GetTimeStamp() - 10000;
         await _fixture.InsertIpBanAsync(ipAddress, expiredTimestamp);
         
         var request = new IsIpBannedRequest { IpAddress = ipAddress };
         
-        // WHEN
+        // WHEN checking if the IP is still banned
         var response = await Client.IsIpBannedAsync(request);
         
-        // THEN
+        // THEN the ban should be cleared and return false
         response.ShouldNotBeNull();
         response.IsBanned.ShouldBeFalse();
     }
@@ -74,17 +74,17 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task IsIpBanned_WithActiveBan_ShouldReturnTrue()
     {
-        // GIVEN
+        // GIVEN an IP ban that is still active (future expiration)
         var ipAddress = "192.168.1.102";
         var futureTimestamp = TCPManager.GetTimeStamp() + 10000;
         await _fixture.InsertIpBanAsync(ipAddress, futureTimestamp);
         
         var request = new IsIpBannedRequest { IpAddress = ipAddress };
         
-        // WHEN
+        // WHEN checking the IP ban status
         var response = await Client.IsIpBannedAsync(request);
         
-        // THEN
+        // THEN the ban should be enforced and return true
         response.ShouldNotBeNull();
         response.IsBanned.ShouldBeTrue();
     }
@@ -92,7 +92,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task IsIpBanned_WithPartialIpMatch_ShouldWork()
     {
-        // GIVEN
+        // GIVEN a banned IP subnet (partial IP ban)
         // Ban a subnet
         var bannedSubnet = "192.168.1";
         await _fixture.InsertIpBanAsync(bannedSubnet, 1);
@@ -100,10 +100,10 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         // Test full IP in that subnet
         var request = new IsIpBannedRequest { IpAddress = "192.168.1.50" };
         
-        // WHEN
+        // WHEN checking if an IP in that subnet is banned
         var response = await Client.IsIpBannedAsync(request);
         
-        // THEN
+        // THEN the ban should match the subnet and return true
         response.ShouldNotBeNull();
         response.IsBanned.ShouldBeTrue();
     }
@@ -111,7 +111,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task CheckToken_WithValidToken_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN a valid authentication token for a user account
         var username = "tokenuser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -131,10 +131,10 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
             Token = token
         };
         
-        // WHEN
+        // WHEN validating the token
         var response = await Client.CheckTokenAsync(request);
         
-        // THEN
+        // THEN the validation should succeed and return true
         response.ShouldNotBeNull();
         response.Result.ShouldBe(AuthResult.AuthSuccess);
     }
@@ -142,7 +142,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task CheckToken_WithInvalidToken_ShouldFail()
     {
-        // GIVEN
+        // GIVEN a user account with an invalid or mismatched token
         var username = "tokenuser2";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -152,10 +152,10 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
             Token = "invalid-token"
         };
         
-        // WHEN
+        // WHEN providing an invalid authentication token
         var response = await Client.CheckTokenAsync(request);
         
-        // THEN
+        // THEN the validation should fail for security
         response.ShouldNotBeNull();
         response.Result.ShouldBe(AuthResult.AuthInvalidCredentials);
     }
@@ -163,17 +163,17 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task CheckToken_WithNonExistentUser_ShouldFail()
     {
-        // GIVEN
+        // GIVEN a token validation request for a user that doesn't exist
         var request = new CheckTokenRequest
         {
             Username = "nonexistent",
             Token = "some-token"
         };
         
-        // WHEN
+        // WHEN attempting to validate token for non-existent user
         var response = await Client.CheckTokenAsync(request);
         
-        // THEN
+        // THEN the validation should fail to prevent user enumeration
         response.ShouldNotBeNull();
         response.Result.ShouldBe(AuthResult.AuthInvalidCredentials);
     }
@@ -181,7 +181,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task ModifyAccess_WithExistingAccount_ShouldUpdateLevels()
     {
-        // GIVEN
+        // GIVEN a user account with standard access levels
         var username = "accessuser";
         await _fixture.InsertTestAccountAsync(username, "password123", gmLevel: 0);
         
@@ -192,10 +192,10 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
             CoreLevel = 10
         };
         
-        // WHEN
+        // WHEN updating the GM and core access levels
         var response = await Client.ModifyAccessAsync(request);
         
-        // THEN
+        // THEN the access levels should be updated successfully
         response.ShouldNotBeNull();
         response.Success.ShouldBeTrue();
         
@@ -211,7 +211,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task ModifyAccess_WithNonExistentAccount_ShouldFail()
     {
-        // GIVEN
+        // GIVEN an attempt to modify access for a non-existent account
         var request = new ModifyAccessRequest
         {
             Username = "nonexistent",
@@ -219,10 +219,10 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
             CoreLevel = 10
         };
         
-        // WHEN
+        // WHEN attempting the access modification
         var response = await Client.ModifyAccessAsync(request);
         
-        // THEN
+        // THEN the operation should fail with an error message
         response.ShouldNotBeNull();
         response.Success.ShouldBeFalse();
         response.ErrorMessage.ShouldNotBeNull();
@@ -231,7 +231,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task BanPlayer_ShouldReturnSuccess()
     {
-        // GIVEN - Note: BanPlayer is marked as TODO in the code
+        // GIVEN a player account that needs to be banned (Note: stub implementation)
         var request = new BanPlayerRequest
         {
             Username = "banuser",
@@ -239,10 +239,10 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
             BanExpiry = TCPManager.GetTimeStamp() + 86400
         };
         
-        // WHEN
+        // WHEN calling the ban player endpoint
         var response = await Client.BanPlayerAsync(request);
         
-        // THEN
+        // THEN the stub should be invoked successfully (actual ban logic not implemented)
         response.ShouldNotBeNull();
         response.Success.ShouldBeTrue();
     }
@@ -250,7 +250,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
     [Fact]
     public async Task SanctionPlayer_ShouldReturnSuccess()
     {
-        // GIVEN - Note: SanctionPlayer is marked as TODO in the code
+        // GIVEN a player that violated terms requiring sanctions (Note: stub implementation)
         var request = new SanctionPlayerRequest
         {
             Username = "sanctionuser",
@@ -259,7 +259,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
             Expiry = TCPManager.GetTimeStamp() + 86400
         };
         
-        // WHEN
+        // WHEN calling the sanction player endpoint
         var response = await Client.SanctionPlayerAsync(request);
         
         // THEN

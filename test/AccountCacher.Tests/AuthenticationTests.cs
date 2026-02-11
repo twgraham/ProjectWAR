@@ -22,7 +22,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_WithValidCredentials_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN a valid user account with correct credentials
         var username = "validuser";
         var password = "password123";
         await _fixture.InsertTestAccountAsync(username, password, "valid@test.com", gmLevel: 0);
@@ -33,10 +33,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = password
         };
         
-        // WHEN
+        // WHEN authenticating with valid credentials
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should succeed and return account details
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.Success);
         response.Account.ShouldNotBeNull();
@@ -47,7 +47,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_WithInvalidPassword_ShouldFail()
     {
-        // GIVEN
+        // GIVEN a user account with a specific password
         var username = "testuser";
         await _fixture.InsertTestAccountAsync(username, "correctpassword");
         
@@ -57,10 +57,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = "wrongpassword"
         };
         
-        // WHEN
+        // WHEN attempting authentication with incorrect password
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should fail with invalid credentials
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.InvalidCredentials);
         response.Account.ShouldBeNull();
@@ -69,17 +69,17 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_WithNonExistentUser_ShouldFail()
     {
-        // GIVEN
+        // GIVEN no account exists with the specified username
         var request = new AuthenticateUserRequest
         {
             Username = "nonexistent",
             Password = "password123"
         };
         
-        // WHEN
+        // WHEN attempting to authenticate a non-existent user
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should fail to prevent user enumeration
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.InvalidCredentials);
         response.Account.ShouldBeNull();
@@ -88,7 +88,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_WithBannedAccount_ShouldFail()
     {
-        // GIVEN
+        // GIVEN a user account that has been permanently banned
         var username = "banneduser";
         // Use banned = 1 for permanent ban
         await _fixture.InsertTestAccountAsync(username, "password123", banned: 1);
@@ -99,10 +99,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = "password123"
         };
         
-        // WHEN
+        // WHEN attempting to authenticate with a banned account
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should fail indicating the ban status
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.AccountBanned);
     }
@@ -110,7 +110,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_WithInactiveAccount_ShouldFail()
     {
-        // GIVEN
+        // GIVEN an inactive user account (GM level < 0 indicates inactive)
         var username = "inactiveuser";
         // GM level < 0 means inactive
         await _fixture.InsertTestAccountAsync(username, "password123", gmLevel: -1);
@@ -121,10 +121,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = "password123"
         };
         
-        // WHEN
+        // WHEN attempting to authenticate with an inactive account
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should fail until account is activated
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.NotActive);
     }
@@ -132,7 +132,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_CaseInsensitive_ShouldWork()
     {
-        // GIVEN
+        // GIVEN a user account with lowercase username
         var username = "caseuser";
         var password = "password123";
         await _fixture.InsertTestAccountAsync(username, password);
@@ -144,10 +144,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = password
         };
         
-        // WHEN
+        // WHEN authenticating with mixed-case username
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should succeed because usernames are case-insensitive
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.Success);
         response.Account.ShouldNotBeNull();
@@ -156,7 +156,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_PasswordCaseInsensitive_ShouldWork()
     {
-        // GIVEN
+        // GIVEN a user account with mixed-case password
         var username = "pwduser";
         var password = "PassWord123";
         await _fixture.InsertTestAccountAsync(username, password);
@@ -168,10 +168,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = "PASSWORD123"
         };
         
-        // WHEN
+        // WHEN authenticating with different password casing
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should succeed because passwords are case-insensitive
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.Success);
     }
@@ -179,7 +179,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_MultipleTimes_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN a valid user account
         var username = "multiuser";
         var password = "password123";
         await _fixture.InsertTestAccountAsync(username, password);
@@ -190,12 +190,12 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = password
         };
         
-        // WHEN - Authenticate multiple times
+        // WHEN authenticating multiple times in succession
         var response1 = await Client!.AuthenticateUserAsync(request);
         var response2 = await Client.AuthenticateUserAsync(request);
         var response3 = await Client.AuthenticateUserAsync(request);
         
-        // THEN - All should succeed
+        // THEN all authentication attempts should succeed (no rate limiting or session conflicts)
         response1.Result.ShouldBe(LoginResult.Success);
         response2.Result.ShouldBe(LoginResult.Success);
         response3.Result.ShouldBe(LoginResult.Success);
@@ -204,7 +204,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     [Fact]
     public async Task AuthenticateUser_WithExpiredBan_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN a user account with an expired ban (timestamp in the past)
         var username = "expiredbanuser";
         var password = "password123";
         // Use a timestamp in the past (ban expired)
@@ -217,10 +217,10 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
             Password = password
         };
         
-        // WHEN
+        // WHEN attempting to authenticate after ban expiration
         var response = await Client!.AuthenticateUserAsync(request);
         
-        // THEN
+        // THEN authentication should succeed because the ban has expired
         response.ShouldNotBeNull();
         response.Result.ShouldBe(LoginResult.Success);
     }
