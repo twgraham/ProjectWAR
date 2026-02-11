@@ -69,20 +69,7 @@ public class AccountCacherFixture : IAsyncLifetime
             {
                 builder.ConfigureKestrel(opts =>
                         opts.ListenLocalhost(port, o => { o.UseHttps(); })) // Use specific port
-                    .ConfigureServices((context, services) =>
-                    {
-                        // Initialize database connection
-                        var acc = new Account();
-                        services.AddSingleton(
-                            DBManager.Start(config.AccountDB.Total(), config.AccountDB.ConnectionType, "Accounts",
-                                config.AccountDB.Database));
-                        
-                        services.AddGrpc();
-                        
-                        services.AddSingleton<AccountMgrService>(sp =>
-                            new AccountMgrService(sp.GetRequiredService<IObjectDatabase>(), config.EnableCache, config.MaxCacheSize));
-                        services.AddHostedService(sp => sp.GetRequiredService<AccountMgrService>());
-                    })
+                    .ConfigureServices((context, services) => services.ConfigureServices(config))
                     .Configure(app =>
                     {
                         app.UseRouting();

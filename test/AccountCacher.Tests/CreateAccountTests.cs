@@ -38,17 +38,17 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         var response = await Client!.CreateAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.Created);
+        response.ShouldNotBeNull();
+        response.Created.ShouldBeTrue();
         
         // Verify account was created in database by fetching it
         var getRequest = new GetAccountRequest { Username = "newuser" };
         var getResponse = await Client.GetAccountAsync(getRequest);
         
-        Assert.NotNull(getResponse.Account);
-        Assert.Equal("newuser", getResponse.Account.Username);
-        Assert.Equal("newuser@test.com", getResponse.Account.Email);
-        Assert.Equal(0, getResponse.Account.GmLevel);
+        getResponse.Account.ShouldNotBeNull();
+        getResponse.Account.Username.ShouldBe("newuser");
+        getResponse.Account.Email.ShouldBe("newuser@test.com");
+        getResponse.Account.GmLevel.ShouldBe(0);
     }
     
     [Fact]
@@ -72,8 +72,8 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         var response = await Client!.CreateAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.False(response.Created);
+        response.ShouldNotBeNull();
+        response.Created.ShouldBeFalse();
     }
     
     [Fact]
@@ -94,8 +94,8 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         var response = await Client!.CreateAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.False(response.Created);
+        response.ShouldNotBeNull();
+        response.Created.ShouldBeFalse();
     }
     
     [Fact]
@@ -116,15 +116,15 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         var response = await Client!.CreateAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.Created);
+        response.ShouldNotBeNull();
+        response.Created.ShouldBeTrue();
         
         // Verify GM level was set
         var getRequest = new GetAccountRequest { Username = "gmuser" };
         var getResponse = await Client.GetAccountAsync(getRequest);
         
-        Assert.NotNull(getResponse.Account);
-        Assert.Equal(40, getResponse.Account.GmLevel);
+        getResponse.Account.ShouldNotBeNull();
+        getResponse.Account.GmLevel.ShouldBe(40);
     }
     
     [Fact]
@@ -145,8 +145,8 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         var response = await Client!.CreateAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.Created);
+        response.ShouldNotBeNull();
+        response.Created.ShouldBeTrue();
         
         // Account should be immediately available for authentication
         var authRequest = new AuthenticateUserRequest
@@ -156,7 +156,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         };
         var authResponse = await Client.AuthenticateUserAsync(authRequest);
         
-        Assert.Equal(LoginResult.Success, authResponse.Result);
+        authResponse.Result.ShouldBe(LoginResult.Success);
     }
     
     [Fact]
@@ -177,13 +177,13 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         var response = await Client!.CreateAccountAsync(request);
         
         // Assert
-        Assert.True(response.Created);
+        response.Created.ShouldBeTrue();
         
         // Verify username is stored in lowercase
         var getRequest = new GetAccountRequest { Username = "mixedcaseuser" };
         var getResponse = await Client.GetAccountAsync(getRequest);
         
-        Assert.NotNull(getResponse.Account);
-        Assert.Equal("mixedcaseuser", getResponse.Account.Username);
+        getResponse.Account.ShouldNotBeNull();
+        getResponse.Account.Username.ShouldBe("mixedcaseuser");
     }
 }

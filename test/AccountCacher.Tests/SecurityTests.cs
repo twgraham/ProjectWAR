@@ -31,8 +31,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.IsIpBannedAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.False(response.IsBanned);
+        response.ShouldNotBeNull();
+        response.IsBanned.ShouldBeFalse();
     }
     
     [Fact]
@@ -49,8 +49,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.IsIpBannedAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.IsBanned);
+        response.ShouldNotBeNull();
+        response.IsBanned.ShouldBeTrue();
     }
     
     [Fact]
@@ -67,8 +67,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.IsIpBannedAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.False(response.IsBanned);
+        response.ShouldNotBeNull();
+        response.IsBanned.ShouldBeFalse();
     }
     
     [Fact]
@@ -85,8 +85,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.IsIpBannedAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.IsBanned);
+        response.ShouldNotBeNull();
+        response.IsBanned.ShouldBeTrue();
     }
     
     [Fact]
@@ -104,8 +104,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.IsIpBannedAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.IsBanned);
+        response.ShouldNotBeNull();
+        response.IsBanned.ShouldBeTrue();
     }
     
     [Fact]
@@ -135,8 +135,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.CheckTokenAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(AuthResult.AuthSuccess, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(AuthResult.AuthSuccess);
     }
     
     [Fact]
@@ -156,8 +156,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.CheckTokenAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(AuthResult.AuthInvalidCredentials, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(AuthResult.AuthInvalidCredentials);
     }
     
     [Fact]
@@ -174,8 +174,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.CheckTokenAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(AuthResult.AuthInvalidCredentials, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(AuthResult.AuthInvalidCredentials);
     }
     
     [Fact]
@@ -196,16 +196,16 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.ModifyAccessAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.Success);
+        response.ShouldNotBeNull();
+        response.Success.ShouldBeTrue();
         
         // Verify the changes
         var getRequest = new GetAccountRequest { Username = username };
         var getResponse = await Client.GetAccountAsync(getRequest);
         
-        Assert.NotNull(getResponse.Account);
-        Assert.Equal(40, getResponse.Account.GmLevel);
-        Assert.Equal(10, getResponse.Account.CoreLevel);
+        getResponse.Account.ShouldNotBeNull();
+        getResponse.Account.GmLevel.ShouldBe(40);
+        getResponse.Account.CoreLevel.ShouldBe(10);
     }
     
     [Fact]
@@ -223,9 +223,9 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.ModifyAccessAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.False(response.Success);
-        Assert.NotNull(response.ErrorMessage);
+        response.ShouldNotBeNull();
+        response.Success.ShouldBeFalse();
+        response.ErrorMessage.ShouldNotBeNull();
     }
     
     [Fact]
@@ -243,8 +243,8 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.BanPlayerAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.Success);
+        response.ShouldNotBeNull();
+        response.Success.ShouldBeTrue();
     }
     
     [Fact]
@@ -263,7 +263,7 @@ public class SecurityTests : IClassFixture<AccountCacherFixture>, IAsyncLifetime
         var response = await Client.SanctionPlayerAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.True(response.Success);
+        response.ShouldNotBeNull();
+        response.Success.ShouldBeTrue();
     }
 }

@@ -29,8 +29,8 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.ListRealmsAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Empty(response.Realms);
+        response.ShouldNotBeNull();
+        response.Realms.ShouldBeEmpty();
     }
     
     [Fact]
@@ -51,11 +51,11 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.ListRealmsAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(3, response.Realms.Count);
-        Assert.Contains(response.Realms, r => r.Name == "Realm1");
-        Assert.Contains(response.Realms, r => r.Name == "Realm2");
-        Assert.Contains(response.Realms, r => r.Name == "Realm3");
+        response.ShouldNotBeNull();
+        response.Realms.Count.ShouldBe(3);
+        response.Realms.ShouldContain(r => r.Name == "Realm1");
+        response.Realms.ShouldContain(r => r.Name == "Realm2");
+        response.Realms.ShouldContain(r => r.Name == "Realm3");
     }
     
     [Fact]
@@ -71,11 +71,11 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.GetRealmAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotNull(response.Realm);
-        Assert.Equal((uint)1, response.Realm.RealmId);
-        Assert.Equal("TestRealm", response.Realm.Name);
-        Assert.Equal((uint)10300, response.Realm.Port);
+        response.ShouldNotBeNull();
+        response.Realm.ShouldNotBeNull();
+        response.Realm.RealmId.ShouldBe((uint)1);
+        response.Realm.Name.ShouldBe("TestRealm");
+        response.Realm.Port.ShouldBe((uint)10300);
     }
     
     [Fact]
@@ -88,8 +88,8 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.GetRealmAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Null(response.Realm);
+        response.ShouldNotBeNull();
+        response.Realm.ShouldBeNull();
     }
     
     [Fact]
@@ -111,12 +111,12 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.UpdateRealmAsync(request);
         
         // Assert
-        Assert.NotNull(response);
+        response.ShouldNotBeNull();
         
         // Verify the realm was updated
         var getRequest = new GetRealmRequest { RealmId = 1 };
         var getResponse = await Client.GetRealmAsync(getRequest);
-        Assert.NotNull(getResponse.Realm);
+        getResponse.Realm.ShouldNotBeNull();
     }
     
     [Fact]
@@ -137,7 +137,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.UpdateRealmCharactersTotalAsync(request);
         
         // Assert
-        Assert.NotNull(response);
+        response.ShouldNotBeNull();
     }
     
     [Fact]
@@ -153,14 +153,14 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.GetClusterListAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotEmpty(response.Clusters);
+        response.ShouldNotBeNull();
+        response.Clusters.ShouldNotBeEmpty();
         
         var cluster = response.Clusters.First();
-        Assert.Equal((uint)1, cluster.ClusterId);
-        Assert.Equal("ClusterRealm", cluster.ClusterName);
-        Assert.NotEmpty(cluster.ServerList);
-        Assert.NotEmpty(cluster.PropertyList);
+        cluster.ClusterId.ShouldBe((uint)1);
+        cluster.ClusterName.ShouldBe("ClusterRealm");
+        cluster.ServerList.ShouldNotBeEmpty();
+        cluster.PropertyList.ShouldNotBeEmpty();
     }
     
     [Fact]
@@ -173,8 +173,8 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.GetClusterListAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Empty(response.Clusters);
+        response.ShouldNotBeNull();
+        response.Clusters.ShouldBeEmpty();
     }
     
     [Fact]
@@ -190,16 +190,16 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.GetClusterListAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotEmpty(response.Clusters);
+        response.ShouldNotBeNull();
+        response.Clusters.ShouldNotBeEmpty();
         
         var cluster = response.Clusters.First();
-        Assert.NotEmpty(cluster.PropertyList);
+        cluster.PropertyList.ShouldNotBeEmpty();
         
         // Check for specific properties
-        Assert.Contains(cluster.PropertyList, p => p.PropName == "setting.name");
-        Assert.Contains(cluster.PropertyList, p => p.PropName == "setting.net.address");
-        Assert.Contains(cluster.PropertyList, p => p.PropName == "setting.net.port");
+        cluster.PropertyList.ShouldContain(p => p.PropName == "setting.name");
+        cluster.PropertyList.ShouldContain(p => p.PropName == "setting.net.address");
+        cluster.PropertyList.ShouldContain(p => p.PropName == "setting.net.port");
     }
     
     [Fact]
@@ -224,11 +224,11 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         var response = await Client.ListRealmsAsync(listRequest);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotEmpty(response.Realms);
+        response.ShouldNotBeNull();
+        response.Realms.ShouldNotBeEmpty();
         
         var realm = response.Realms.First(r => r.RealmId == 1);
         // Note: The counts may be set during update, verify structure exists
-        Assert.NotNull(realm);
+        realm.ShouldNotBeNull();
     }
 }

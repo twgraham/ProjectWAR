@@ -37,11 +37,11 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.Success, response.Result);
-        Assert.NotNull(response.Account);
-        Assert.Equal(username, response.Account.Username);
-        Assert.Equal("valid@test.com", response.Account.Email);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.Success);
+        response.Account.ShouldNotBeNull();
+        response.Account.Username.ShouldBe(username);
+        response.Account.Email.ShouldBe("valid@test.com");
     }
     
     [Fact]
@@ -61,9 +61,9 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.InvalidCredentials, response.Result);
-        Assert.Null(response.Account);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.InvalidCredentials);
+        response.Account.ShouldBeNull();
     }
     
     [Fact]
@@ -80,9 +80,9 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.InvalidCredentials, response.Result);
-        Assert.Null(response.Account);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.InvalidCredentials);
+        response.Account.ShouldBeNull();
     }
     
     [Fact]
@@ -103,8 +103,8 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.AccountBanned, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.AccountBanned);
     }
     
     [Fact]
@@ -125,8 +125,8 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.NotActive, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.NotActive);
     }
     
     [Fact]
@@ -148,9 +148,9 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.Success, response.Result);
-        Assert.NotNull(response.Account);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.Success);
+        response.Account.ShouldNotBeNull();
     }
     
     [Fact]
@@ -172,8 +172,8 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.Success, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.Success);
     }
     
     [Fact]
@@ -196,9 +196,9 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response3 = await Client.AuthenticateUserAsync(request);
         
         // Assert - All should succeed
-        Assert.Equal(LoginResult.Success, response1.Result);
-        Assert.Equal(LoginResult.Success, response2.Result);
-        Assert.Equal(LoginResult.Success, response3.Result);
+        response1.Result.ShouldBe(LoginResult.Success);
+        response2.Result.ShouldBe(LoginResult.Success);
+        response3.Result.ShouldBe(LoginResult.Success);
     }
     
     [Fact]
@@ -221,7 +221,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
         var response = await Client!.AuthenticateUserAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Equal(LoginResult.Success, response.Result);
+        response.ShouldNotBeNull();
+        response.Result.ShouldBe(LoginResult.Success);
     }
 }

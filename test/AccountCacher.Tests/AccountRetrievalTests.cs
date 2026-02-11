@@ -32,11 +32,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotNull(response.Account);
-        Assert.Equal(username, response.Account.Username);
-        Assert.Equal("existing@test.com", response.Account.Email);
-        Assert.Equal((uint)accountId, response.Account.Id);
+        response.ShouldNotBeNull();
+        response.Account.ShouldNotBeNull();
+        response.Account.Username.ShouldBe(username);
+        response.Account.Email.ShouldBe("existing@test.com");
+        response.Account.Id.ShouldBe((uint)accountId);
     }
     
     [Fact]
@@ -49,8 +49,8 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Null(response.Account);
+        response.ShouldNotBeNull();
+        response.Account.ShouldBeNull();
     }
     
     [Fact]
@@ -66,9 +66,9 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotNull(response.Account);
-        Assert.Equal(username, response.Account.Username);
+        response.ShouldNotBeNull();
+        response.Account.ShouldNotBeNull();
+        response.Account.Username.ShouldBe(username);
     }
     
     [Fact]
@@ -84,11 +84,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountByIdAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotNull(response.Account);
-        Assert.Equal(username, response.Account.Username);
-        Assert.Equal("id@test.com", response.Account.Email);
-        Assert.Equal((uint)accountId, response.Account.Id);
+        response.ShouldNotBeNull();
+        response.Account.ShouldNotBeNull();
+        response.Account.Username.ShouldBe(username);
+        response.Account.Email.ShouldBe("id@test.com");
+        response.Account.Id.ShouldBe((uint)accountId);
     }
     
     [Fact]
@@ -101,8 +101,8 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountByIdAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.Null(response.Account);
+        response.ShouldNotBeNull();
+        response.Account.ShouldBeNull();
     }
     
     [Fact]
@@ -120,11 +120,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response3 = await Client.GetAccountAsync(request);
         
         // Assert - All should return the same account
-        Assert.NotNull(response1.Account);
-        Assert.NotNull(response2.Account);
-        Assert.NotNull(response3.Account);
-        Assert.Equal(response1.Account.Id, response2.Account.Id);
-        Assert.Equal(response1.Account.Id, response3.Account.Id);
+        response1.Account.ShouldNotBeNull();
+        response2.Account.ShouldNotBeNull();
+        response3.Account.ShouldNotBeNull();
+        response2.Account.Id.ShouldBe(response1.Account.Id);
+        response3.Account.Id.ShouldBe(response1.Account.Id);
     }
     
     [Fact]
@@ -143,10 +143,10 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var idResponse = await Client.GetAccountByIdAsync(idRequest);
         
         // Assert
-        Assert.NotNull(usernameResponse.Account);
-        Assert.NotNull(idResponse.Account);
-        Assert.Equal(usernameResponse.Account.Id, idResponse.Account.Id);
-        Assert.Equal(usernameResponse.Account.Username, idResponse.Account.Username);
+        usernameResponse.Account.ShouldNotBeNull();
+        idResponse.Account.ShouldNotBeNull();
+        idResponse.Account.Id.ShouldBe(usernameResponse.Account.Id);
+        idResponse.Account.Username.ShouldBe(usernameResponse.Account.Username);
     }
     
     [Fact]
@@ -170,8 +170,8 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response.Account);
-        Assert.True(response.Account.PacketLoggerEnabled);
+        response.Account.ShouldNotBeNull();
+        response.Account.PacketLoggerEnabled.ShouldBeTrue();
     }
     
     [Fact]
@@ -187,7 +187,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetAccountAsync(request);
         
         // Assert
-        Assert.NotNull(response.Account);
+        response.Account.ShouldNotBeNull();
         // Note: IsBanned flag depends on implementation
         // The Account class has IsBanned property based on timestamp comparison
     }
@@ -228,7 +228,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var response = await Client.GetPendingAccountsAsync(request);
         
         // Assert
-        Assert.NotNull(response);
-        Assert.NotEmpty(response.AccountIds);
+        response.ShouldNotBeNull();
+        response.AccountIds.ShouldNotBeEmpty();
     }
 }

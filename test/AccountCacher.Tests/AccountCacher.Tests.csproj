@@ -29,10 +29,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="MySql.Data" Version="9.4.0" />
+    <PackageReference Include="Shouldly" Version="4.2.1" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Shouldly" />
   </ItemGroup>
 
   <ItemGroup>
