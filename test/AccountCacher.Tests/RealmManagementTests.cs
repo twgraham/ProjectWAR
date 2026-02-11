@@ -22,13 +22,13 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task ListRealms_WithNoRealms_ShouldReturnEmptyList()
     {
-        // Arrange
+        // GIVEN
         var request = new ListRealmsRequest();
         
-        // Act
+        // WHEN
         var response = await Client.ListRealmsAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Realms.ShouldBeEmpty();
     }
@@ -36,7 +36,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task ListRealms_WithMultipleRealms_ShouldReturnAll()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "Realm1", "127.0.0.1", 10300);
         await _fixture.InsertTestRealmAsync(2, "Realm2", "127.0.0.1", 10301);
         await _fixture.InsertTestRealmAsync(3, "Realm3", "127.0.0.1", 10302);
@@ -47,10 +47,10 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         
         var request = new ListRealmsRequest();
         
-        // Act
+        // WHEN
         var response = await Client.ListRealmsAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Realms.Count.ShouldBe(3);
         response.Realms.ShouldContain(r => r.Name == "Realm1");
@@ -61,16 +61,16 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetRealm_WithExistingRealmId_ShouldReturnRealm()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "TestRealm", "127.0.0.1", 10300);
         await Task.Delay(500); // Wait for realm to be loaded
         
         var request = new GetRealmRequest { RealmId = 1 };
         
-        // Act
+        // WHEN
         var response = await Client.GetRealmAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Realm.ShouldNotBeNull();
         response.Realm.RealmId.ShouldBe((uint)1);
@@ -81,13 +81,13 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetRealm_WithNonExistentRealmId_ShouldReturnNull()
     {
-        // Arrange
+        // GIVEN
         var request = new GetRealmRequest { RealmId = 99 };
         
-        // Act
+        // WHEN
         var response = await Client.GetRealmAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Realm.ShouldBeNull();
     }
@@ -95,7 +95,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task UpdateRealm_WithExistingRealm_ShouldSucceed()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "UpdateRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
@@ -107,10 +107,10 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
             DestructionCount = 50
         };
         
-        // Act
+        // WHEN
         var response = await Client.UpdateRealmAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         
         // Verify the realm was updated
@@ -122,7 +122,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task UpdateRealmCharactersTotal_WithExistingRealm_ShouldSucceed()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "CharCountRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
@@ -133,26 +133,26 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
             DestructionCount = 150
         };
         
-        // Act
+        // WHEN
         var response = await Client.UpdateRealmCharactersTotalAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
     }
     
     [Fact]
     public async Task GetClusterList_WithRealms_ShouldReturnClusterInfo()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "ClusterRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
         var request = new GetClusterListRequest();
         
-        // Act
+        // WHEN
         var response = await Client.GetClusterListAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Clusters.ShouldNotBeEmpty();
         
@@ -166,13 +166,13 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetClusterList_WithNoRealms_ShouldReturnEmptyList()
     {
-        // Arrange
+        // GIVEN
         var request = new GetClusterListRequest();
         
-        // Act
+        // WHEN
         var response = await Client.GetClusterListAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Clusters.ShouldBeEmpty();
     }
@@ -180,16 +180,16 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetClusterList_ShouldIncludeRealmProperties()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "PropRealm", "192.168.1.1", 10300);
         await Task.Delay(500);
         
         var request = new GetClusterListRequest();
         
-        // Act
+        // WHEN
         var response = await Client.GetClusterListAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Clusters.ShouldNotBeEmpty();
         
@@ -205,7 +205,7 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task ListRealms_ShouldIncludeOnlinePlayerCounts()
     {
-        // Arrange
+        // GIVEN
         await _fixture.InsertTestRealmAsync(1, "PopulatedRealm", "127.0.0.1", 10300);
         await Task.Delay(500);
         
@@ -219,11 +219,11 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         };
         await Client.UpdateRealmAsync(updateRequest);
         
-        // Act
+        // WHEN
         var listRequest = new ListRealmsRequest();
         var response = await Client.ListRealmsAsync(listRequest);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Realms.ShouldNotBeEmpty();
         

@@ -23,7 +23,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithValidDetails_ShouldSucceed()
     {
-        // Arrange
+        // GIVEN
         var request = new CreateAccountRequest
         {
             Username = "newuser",
@@ -34,10 +34,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // Act
+        // WHEN
         var response = await Client!.CreateAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
@@ -54,7 +54,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithDuplicateUsername_ShouldFail()
     {
-        // Arrange
+        // GIVEN
         var username = "duplicateuser";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -68,10 +68,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // Act
+        // WHEN
         var response = await Client!.CreateAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Created.ShouldBeFalse();
     }
@@ -79,7 +79,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithSystemUsername_ShouldFail()
     {
-        // Arrange
+        // GIVEN
         var request = new CreateAccountRequest
         {
             Username = "System",
@@ -90,10 +90,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // Act
+        // WHEN
         var response = await Client!.CreateAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Created.ShouldBeFalse();
     }
@@ -101,7 +101,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithGmLevel_ShouldCreateGmAccount()
     {
-        // Arrange
+        // GIVEN
         var request = new CreateAccountRequest
         {
             Username = "gmuser",
@@ -112,10 +112,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // Act
+        // WHEN
         var response = await Client!.CreateAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
@@ -130,7 +130,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_WithLocalhost_ShouldNotRequireVerification()
     {
-        // Arrange
+        // GIVEN
         var request = new CreateAccountRequest
         {
             Username = "localhostuser",
@@ -141,10 +141,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // Act
+        // WHEN
         var response = await Client!.CreateAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
@@ -162,7 +162,7 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
     [Fact]
     public async Task CreateAccount_CaseInsensitive_ShouldNormalizeUsername()
     {
-        // Arrange
+        // GIVEN
         var request = new CreateAccountRequest
         {
             Username = "MixedCaseUser",
@@ -173,10 +173,10 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
             IpAddress = "127.0.0.1"
         };
         
-        // Act
+        // WHEN
         var response = await Client!.CreateAccountAsync(request);
         
-        // Assert
+        // THEN
         response.Created.ShouldBeTrue();
         
         // Verify username is stored in lowercase

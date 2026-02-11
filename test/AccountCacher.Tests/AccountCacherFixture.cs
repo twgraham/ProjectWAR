@@ -1,15 +1,12 @@
 using Common;
 using DotNet.Testcontainers.Builders;
 using FrameWork;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MySql.Data.MySqlClient;
 using Testcontainers.MySql;
 using Grpc.Net.Client;
-using AccountCacher.Services;
 
 namespace AccountCacher.Tests;
 
@@ -23,12 +20,15 @@ public class AccountCacherFixture : IAsyncLifetime
     
     public async ValueTask InitializeAsync()
     {
+        // Generate random password for this test run
+        var randomPassword = Guid.NewGuid().ToString("N");
+        
         // Create and start MySQL container
         _mysqlContainer = new MySqlBuilder()
             .WithImage("mysql:8.0")
             .WithDatabase("war_accounts")
             .WithUsername("root")
-            .WithPassword("admin")
+            .WithPassword(randomPassword)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(3306))
             .Build();
 
@@ -50,7 +50,7 @@ public class AccountCacherFixture : IAsyncLifetime
                 Port = _mysqlContainer.GetMappedPublicPort(3306).ToString(),
                 Database = "war_accounts",
                 Username = "root",
-                Password = "admin",
+                Password = randomPassword,
                 Custom = "Treat Tiny As Boolean=False",
                 MultipleActiveResultSets = false,
                 ConnectionType = ConnectionType.DATABASE_MYSQL
@@ -62,23 +62,17 @@ public class AccountCacherFixture : IAsyncLifetime
         // Initialize logging
         Log.InitLog(new LogInfo { Info = true, Error = true, Debug = true, Tcp = false }, "AccountCacherTests");
         
-        // Build and start the host
+        // Build and start the host using the factory method from Program.cs
         var port = Random.Shared.Next(6000, 7000); // Use a random port in a specific range
-        _host = Host.CreateDefaultBuilder()
-            .ConfigureWebHostDefaults(builder =>
-            {
-                builder.ConfigureKestrel(opts =>
-                        opts.ListenLocalhost(port, o => { o.UseHttps(); })) // Use specific port
-                    .ConfigureServices((context, services) => services.ConfigureServices(config))
-                    .Configure(app =>
-                    {
-                        app.UseRouting();
-                        app.UseEndpoints(endpoints => { endpoints.MapGrpcService<AccountMgrService>(); });
-                    });
-            })
-            .Build();
+        _host = Program.CreateHostBuilder(Array.Empty<string>(), config, port).Build();
 
         await _host.StartAsync();
+        
+        // Wait for the host to be ready by checking application lifetime
+        var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
+        var tcs = new TaskCompletionSource();
+        lifetime.ApplicationStarted.Register(() => tcs.SetResult());
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
         
         // Use the port we configured
         var address = $"https://localhost:{port}";
@@ -95,9 +89,6 @@ public class AccountCacherFixture : IAsyncLifetime
         });
         
         Client = new AccountMgr.AccountMgrClient(Channel);
-        
-        // Wait for service to be ready
-        await Task.Delay(2000);
     }
     
     public async ValueTask DisposeAsync()

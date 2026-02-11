@@ -22,16 +22,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithExistingUsername_ShouldReturnAccount()
     {
-        // Arrange
+        // GIVEN
         var username = "existinguser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123", "existing@test.com");
         
         var request = new GetAccountRequest { Username = username };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Account.ShouldNotBeNull();
         response.Account.Username.ShouldBe(username);
@@ -42,13 +42,13 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithNonExistentUsername_ShouldReturnNull()
     {
-        // Arrange
+        // GIVEN
         var request = new GetAccountRequest { Username = "nonexistent" };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Account.ShouldBeNull();
     }
@@ -56,16 +56,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_CaseInsensitive_ShouldWork()
     {
-        // Arrange
+        // GIVEN
         var username = "casetest";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new GetAccountRequest { Username = "CaseTest" };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Account.ShouldNotBeNull();
         response.Account.Username.ShouldBe(username);
@@ -74,16 +74,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccountById_WithExistingId_ShouldReturnAccount()
     {
-        // Arrange
+        // GIVEN
         var username = "iduser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123", "id@test.com");
         
         var request = new GetAccountByIdRequest { Id = (uint)accountId };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountByIdAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Account.ShouldNotBeNull();
         response.Account.Username.ShouldBe(username);
@@ -94,13 +94,13 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccountById_WithNonExistentId_ShouldReturnNull()
     {
-        // Arrange
+        // GIVEN
         var request = new GetAccountByIdRequest { Id = 999999 };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountByIdAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.Account.ShouldBeNull();
     }
@@ -108,18 +108,18 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_CalledMultipleTimes_ShouldUseCache()
     {
-        // Arrange
+        // GIVEN
         var username = "cacheuser";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
         var request = new GetAccountRequest { Username = username };
         
-        // Act - Call multiple times to test caching
+        // WHEN - Call multiple times to test caching
         var response1 = await Client.GetAccountAsync(request);
         var response2 = await Client.GetAccountAsync(request);
         var response3 = await Client.GetAccountAsync(request);
         
-        // Assert - All should return the same account
+        // THEN - All should return the same account
         response1.Account.ShouldNotBeNull();
         response2.Account.ShouldNotBeNull();
         response3.Account.ShouldNotBeNull();
@@ -130,7 +130,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccountById_AfterGetAccount_ShouldUseCachedData()
     {
-        // Arrange
+        // GIVEN
         var username = "cacheiduser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -138,11 +138,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var usernameRequest = new GetAccountRequest { Username = username };
         var usernameResponse = await Client.GetAccountAsync(usernameRequest);
         
-        // Act - Get by ID, which should use cached data
+        // WHEN - Get by ID, which should use cached data
         var idRequest = new GetAccountByIdRequest { Id = (uint)accountId };
         var idResponse = await Client.GetAccountByIdAsync(idRequest);
         
-        // Assert
+        // THEN
         usernameResponse.Account.ShouldNotBeNull();
         idResponse.Account.ShouldNotBeNull();
         idResponse.Account.Id.ShouldBe(usernameResponse.Account.Id);
@@ -152,7 +152,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithPacketLogEnabled_ShouldReturnFlag()
     {
-        // Arrange
+        // GIVEN
         var username = "packetloguser";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -166,10 +166,10 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         
         var request = new GetAccountRequest { Username = username };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountAsync(request);
         
-        // Assert
+        // THEN
         response.Account.ShouldNotBeNull();
         response.Account.PacketLoggerEnabled.ShouldBeTrue();
     }
@@ -177,16 +177,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithBannedAccount_ShouldReturnBanFlag()
     {
-        // Arrange
+        // GIVEN
         var username = "bannedcheckuser";
         await _fixture.InsertTestAccountAsync(username, "password123", banned: 1);
         
         var request = new GetAccountRequest { Username = username };
         
-        // Act
+        // WHEN
         var response = await Client.GetAccountAsync(request);
         
-        // Assert
+        // THEN
         response.Account.ShouldNotBeNull();
         // Note: IsBanned flag depends on implementation
         // The Account class has IsBanned property based on timestamp comparison
@@ -195,7 +195,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetPendingAccounts_AfterAccountCreation_ShouldReturnNewAccounts()
     {
-        // Arrange
+        // GIVEN
         var username1 = "pending1";
         var username2 = "pending2";
         
@@ -223,11 +223,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         await Client.CreateAccountAsync(createRequest1);
         await Client.CreateAccountAsync(createRequest2);
         
-        // Act
+        // WHEN
         var request = new GetPendingAccountsRequest();
         var response = await Client.GetPendingAccountsAsync(request);
         
-        // Assert
+        // THEN
         response.ShouldNotBeNull();
         response.AccountIds.ShouldNotBeEmpty();
     }

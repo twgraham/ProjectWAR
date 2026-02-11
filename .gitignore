@@ -7,6 +7,9 @@ obj/
 *.cache
 *.log
 
+# Test results
+TestResults/
+
 # Visual Studio local settings
 .vs/
 *.o
