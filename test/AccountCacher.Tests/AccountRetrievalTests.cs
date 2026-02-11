@@ -130,7 +130,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccountById_AfterGetAccount_ShouldUseCachedData()
     {
-        // GIVEN
+        // GIVEN a cached account that needs to be retrieved
         var username = "cacheiduser";
         var accountId = await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -138,11 +138,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         var usernameRequest = new GetAccountRequest { Username = username };
         var usernameResponse = await Client.GetAccountAsync(usernameRequest);
         
-        // WHEN - Get by ID, which should use cached data
+        // WHEN fetching by ID after username lookup (tests cache hit)
         var idRequest = new GetAccountByIdRequest { Id = (uint)accountId };
         var idResponse = await Client.GetAccountByIdAsync(idRequest);
         
-        // THEN
+        // THEN the account should be retrieved from cache without database query
         usernameResponse.Account.ShouldNotBeNull();
         idResponse.Account.ShouldNotBeNull();
         idResponse.Account.Id.ShouldBe(usernameResponse.Account.Id);
@@ -152,7 +152,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithPacketLogEnabled_ShouldReturnFlag()
     {
-        // GIVEN
+        // GIVEN an account with packet logging enabled
         var username = "packetloguser";
         await _fixture.InsertTestAccountAsync(username, "password123");
         
@@ -166,10 +166,10 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
         
         var request = new GetAccountRequest { Username = username };
         
-        // WHEN
+        // WHEN retrieving the account details
         var response = await Client.GetAccountAsync(request);
         
-        // THEN
+        // THEN the packet log flag should be correctly returned
         response.Account.ShouldNotBeNull();
         response.Account.PacketLoggerEnabled.ShouldBeTrue();
     }
@@ -177,16 +177,16 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetAccount_WithBannedAccount_ShouldReturnBanFlag()
     {
-        // GIVEN
+        // GIVEN a banned user account
         var username = "bannedcheckuser";
         await _fixture.InsertTestAccountAsync(username, "password123", banned: 1);
         
         var request = new GetAccountRequest { Username = username };
         
-        // WHEN
+        // WHEN retrieving the account information
         var response = await Client.GetAccountAsync(request);
         
-        // THEN
+        // THEN the ban status should be correctly indicated
         response.Account.ShouldNotBeNull();
         // Note: IsBanned flag depends on implementation
         // The Account class has IsBanned property based on timestamp comparison
