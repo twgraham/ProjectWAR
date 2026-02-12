@@ -8,17 +8,11 @@ namespace Tests.RpcSourceGenerator;
 
 public class RpcSourceGeneratorTests
 {
-    private static readonly string ClientBaseCode = @"
+    private static readonly string HandlerBaseCode = @"
 namespace FrameWork.NetWork.V4
 {
-    public abstract class Client
-    {
-        protected abstract void ProcessPacket(byte opcode, ReadOnlySpan<byte> payload);
-        protected void SendResponse<T>(byte opcode, T response) { }
-        protected void OnUnknownOpcode(byte opcode) { }
-        protected void OnHandlerError(byte opcode, Exception ex) { }
-    }
-    
+    public abstract class PacketHandler { }
+
     [System.AttributeUsage(System.AttributeTargets.Method)]
     public class RpcAttribute : System.Attribute
     {
@@ -27,10 +21,34 @@ namespace FrameWork.NetWork.V4
         public RpcAttribute(byte opcode) { Opcode = opcode; }
         public RpcAttribute(byte opcode, byte responseOpcode) { Opcode = opcode; ResponseOpcode = responseOpcode; }
     }
+
+    [System.AttributeUsage(System.AttributeTargets.Parameter)]
+    public class FromServicesAttribute : System.Attribute { }
+
+    public interface IPacketSerializer
+    {
+        T Deserialize<T>(System.ReadOnlySpan<byte> data);
+        void Serialize<T>(System.Buffers.IBufferWriter<byte> writer, T value);
+    }
+
+    public interface IConnectionContext
+    {
+        string RemoteAddress { get; }
+        void SendResponse<T>(byte opcode, T response);
+        void Disconnect(object reason);
+        System.Collections.Generic.IDictionary<string, object> Items { get; }
+        void OnDispatchError(byte opcode, System.Exception exception);
+    }
+
+    public interface IPacketDispatcher<in THandler> where THandler : PacketHandler
+    {
+        void Dispatch(THandler handler, byte opcode, System.ReadOnlyMemory<byte> payload,
+            System.IServiceProvider services, IPacketSerializer serializer, IConnectionContext connection);
+    }
 }";
 
     [Fact]
-    public void GeneratesRpcHandler_WithSynchronousMethod_NoParameters()
+    public void GeneratesDispatcher_WithSynchronousMethod_NoParameters()
     {
         var source = @"
 using System;
@@ -38,7 +56,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestClient : Client
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -48,15 +66,17 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         result.GeneratedTrees.ShouldHaveSingleItem();
-        result.GeneratedTrees[0].ToString().ShouldContain("case 0x01:");
-        result.GeneratedTrees[0].ToString().ShouldContain("HandlePing()");
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x01:");
+        code.ShouldContain("handler.HandlePing()");
+        code.ShouldContain("class Dispatcher : IPacketDispatcher<TestHandler>");
     }
 
     [Fact]
-    public void GeneratesRpcHandler_WithSynchronousMethod_WithRequest()
+    public void GeneratesDispatcher_WithSynchronousMethod_WithRequest()
     {
         var source = @"
 using System;
@@ -65,8 +85,8 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     public class LoginRequest { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x10)]
         public void HandleLogin(LoginRequest request)
@@ -76,17 +96,17 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         result.GeneratedTrees.ShouldHaveSingleItem();
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("case 0x10:");
-        code.ShouldContain("var request = Serializer.Deserialize<TestNamespace.LoginRequest>(payload);");
-        code.ShouldContain("HandleLogin(request);");
+        code.ShouldContain("serializer.Deserialize<TestNamespace.LoginRequest>(payload.Span)");
+        code.ShouldContain("handler.HandleLogin(request)");
     }
 
     [Fact]
-    public void GeneratesRpcHandler_WithSynchronousMethod_WithResponse()
+    public void GeneratesDispatcher_WithSynchronousMethod_WithResponse()
     {
         var source = @"
 using System;
@@ -96,8 +116,8 @@ namespace TestNamespace
 {
     public class LoginRequest { }
     public class LoginResponse { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x10, 0x11)]
         public LoginResponse HandleLogin(LoginRequest request)
@@ -108,17 +128,17 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         result.GeneratedTrees.ShouldHaveSingleItem();
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("case 0x10:");
-        code.ShouldContain("var response = HandleLogin(request);");
-        code.ShouldContain("SendResponse(0x11, response);");
+        code.ShouldContain("var response = handler.HandleLogin(request);");
+        code.ShouldContain("connection.SendResponse(0x11, response)");
     }
 
     [Fact]
-    public void GeneratesRpcHandler_WithAsyncMethod_ReturnsTask()
+    public void GeneratesDispatcher_WithAsyncMethod_ReturnsTask()
     {
         var source = @"
 using System;
@@ -128,8 +148,8 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     public class PingRequest { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x01)]
         public async Task HandlePing(PingRequest request)
@@ -140,17 +160,17 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         result.GeneratedTrees.ShouldHaveSingleItem();
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("case 0x01:");
-        code.ShouldContain("_ = HandleAsync_HandlePing(request);");
-        code.ShouldContain("private async Task HandleAsync_HandlePing(TestNamespace.PingRequest request)");
+        code.ShouldContain("_ = DispatchAsync_HandlePing(handler, request, connection);");
+        code.ShouldContain("private static async Task DispatchAsync_HandlePing(");
     }
 
     [Fact]
-    public void GeneratesRpcHandler_WithAsyncMethod_ReturnsTaskWithResponse()
+    public void GeneratesDispatcher_WithAsyncMethod_ReturnsTaskWithResponse()
     {
         var source = @"
 using System;
@@ -161,8 +181,8 @@ namespace TestNamespace
 {
     public class LoginRequest { }
     public class LoginResponse { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x10, 0x11)]
         public async Task<LoginResponse> HandleLogin(LoginRequest request)
@@ -173,14 +193,104 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         result.GeneratedTrees.ShouldHaveSingleItem();
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("case 0x10:");
-        code.ShouldContain("_ = HandleAsync_HandleLogin(request);");
-        code.ShouldContain("var response = await HandleLogin(request);");
-        code.ShouldContain("SendResponse(0x11, response);");
+        code.ShouldContain("_ = DispatchAsync_HandleLogin(handler, request, connection);");
+        code.ShouldContain("var response = await handler.HandleLogin(request);");
+        code.ShouldContain("connection.SendResponse(0x11, response)");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_WithFromServicesParameter()
+    {
+        var source = @"
+using System;
+using System.Threading.Tasks;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public class MyService { }
+    public class LoginResponse { }
+
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x10, 0x11)]
+        public async Task<LoginResponse> HandleLogin([FromServices] MyService svc)
+        {
+            return await Task.FromResult(new LoginResponse());
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("var __scope = services.CreateScope();");
+        code.ShouldContain("GetRequiredService<TestNamespace.MyService>()");
+        code.ShouldContain("__scope.Dispose()");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_WithConnectionContextParameter()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandlePing(IConnectionContext context)
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("handler.HandlePing(connection)");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_WithMixedParameters()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public class LoginRequest { }
+    public class LoginResponse { }
+    public class MyService { }
+
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x10, 0x11)]
+        public LoginResponse HandleLogin(LoginRequest request, IConnectionContext context, [FromServices] MyService svc)
+        {
+            return new LoginResponse();
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("serializer.Deserialize<TestNamespace.LoginRequest>(payload.Span)");
+        code.ShouldContain("using var __scope = services.CreateScope();");
+        code.ShouldContain("GetRequiredService<TestNamespace.MyService>()");
+        code.ShouldContain("handler.HandleLogin(request, connection, __svc_svc)");
     }
 
     [Fact]
@@ -192,7 +302,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestClient : Client
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -207,7 +317,7 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         var error = result.Diagnostics.FirstOrDefault(d => d.Id == "RPC001");
         error.ShouldNotBeNull();
         error.Severity.ShouldBe(DiagnosticSeverity.Error);
@@ -215,7 +325,7 @@ namespace TestNamespace
     }
 
     [Fact]
-    public void ReportsDiagnostic_ForInvalidMethodSignature_TooManyParameters()
+    public void ReportsDiagnostic_ForMultipleRequestParameters()
     {
         var source = @"
 using System;
@@ -225,8 +335,8 @@ namespace TestNamespace
 {
     public class Param1 { }
     public class Param2 { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x01)]
         public void HandleInvalid(Param1 p1, Param2 p2)
@@ -236,11 +346,10 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         var error = result.Diagnostics.FirstOrDefault(d => d.Id == "RPC002");
         error.ShouldNotBeNull();
         error.Severity.ShouldBe(DiagnosticSeverity.Error);
-        Assert.Contains("zero or one parameter", error.GetMessage());
     }
 
     [Fact]
@@ -252,7 +361,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public class TestClient : Client
+    public class TestHandler : PacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -262,12 +371,11 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
         result.GeneratedTrees.ShouldBeEmpty();
     }
 
     [Fact]
-    public void IgnoresClassNotInheritingFromClient()
+    public void IgnoresClassNotInheritingFromPacketHandler()
     {
         var source = @"
 using System;
@@ -275,7 +383,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestClient
+    public partial class TestHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -285,7 +393,6 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
         result.GeneratedTrees.ShouldBeEmpty();
     }
 
@@ -298,7 +405,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestClient : Client
+    public partial class TestHandler : PacketHandler
     {
         public void RegularMethod()
         {
@@ -307,12 +414,11 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
         result.GeneratedTrees.ShouldBeEmpty();
     }
 
     [Fact]
-    public void GeneratesRpcHandler_WithMultipleMethods()
+    public void GeneratesDispatcher_WithMultipleMethods()
     {
         var source = @"
 using System;
@@ -324,8 +430,8 @@ namespace TestNamespace
     public class Request1 { }
     public class Request2 { }
     public class Response2 { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x01)]
         public void HandleMethod1(Request1 request)
@@ -337,7 +443,7 @@ namespace TestNamespace
         {
             return await Task.FromResult(new Response2());
         }
-        
+
         [Rpc(0x03)]
         public void HandleMethod3()
         {
@@ -346,24 +452,21 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         result.GeneratedTrees.ShouldHaveSingleItem();
         var code = result.GeneratedTrees[0].ToString();
-        
-        // Check all three methods are handled
+
         code.ShouldContain("case 0x01:");
         code.ShouldContain("case 0x02:");
         code.ShouldContain("case 0x03:");
-        
-        // Check proper handling
-        code.ShouldContain("HandleMethod1(request);");
-        code.ShouldContain("_ = HandleAsync_HandleMethod2(request);");
-        code.ShouldContain("HandleMethod3()");
+        code.ShouldContain("handler.HandleMethod1(request)");
+        code.ShouldContain("_ = DispatchAsync_HandleMethod2(handler, request, connection)");
+        code.ShouldContain("handler.HandleMethod3()");
     }
 
     [Fact]
-    public void GeneratesRpcHandler_WithDefaultResponseOpcode()
+    public void GeneratesDispatcher_WithDefaultResponseOpcode()
     {
         var source = @"
 using System;
@@ -373,8 +476,8 @@ namespace TestNamespace
 {
     public class LoginRequest { }
     public class LoginResponse { }
-    
-    public partial class TestClient : Client
+
+    public partial class TestHandler : PacketHandler
     {
         [Rpc(0x10)]
         public LoginResponse HandleLogin(LoginRequest request)
@@ -385,11 +488,73 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        
+
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
-        // When only one opcode is provided, it's used for both request and response
-        code.ShouldContain("SendResponse(0x10, response);");
+        code.ShouldContain("connection.SendResponse(0x10, response)");
+    }
+
+    [Fact]
+    public void AllowsMultipleFromServicesParameters()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public class Svc1 { }
+    public class Svc2 { }
+
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void Handle([FromServices] Svc1 svc1, [FromServices] Svc2 svc2)
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("GetRequiredService<TestNamespace.Svc1>()");
+        code.ShouldContain("GetRequiredService<TestNamespace.Svc2>()");
+        code.ShouldContain("handler.Handle(__svc_svc1, __svc_svc2)");
+    }
+
+    [Fact]
+    public void AsyncWithServices_CreatesNonDisposableScope_AndDisposesInFinally()
+    {
+        var source = @"
+using System;
+using System.Threading.Tasks;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public class MyService { }
+
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public async Task HandleAsync([FromServices] MyService svc)
+        {
+            await Task.Delay(10);
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        // Async handler should NOT use 'using' (scope passed to wrapper)
+        code.ShouldContain("var __scope = services.CreateScope();");
+        Assert.DoesNotContain("using var __scope", code);
+        // Wrapper should dispose scope in finally
+        code.ShouldContain("__scope.Dispose()");
     }
 
     private GeneratorTestResult RunGenerator(string source)
@@ -402,7 +567,7 @@ namespace TestNamespace
 
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
-            new[] { syntaxTree, CSharpSyntaxTree.ParseText(ClientBaseCode) },
+            new[] { syntaxTree, CSharpSyntaxTree.ParseText(HandlerBaseCode) },
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 

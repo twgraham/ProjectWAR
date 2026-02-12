@@ -4,199 +4,193 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace FrameWork.NetWork.V4
+namespace FrameWork.NetWork.V4;
+
+/// <summary>
+/// Manages TCP server endpoints and client connections.
+/// Handles connection acceptance, DI scope creation, and client lifecycle management.
+/// </summary>
+public sealed class NetworkManager<THandler> : IHostedService, IDisposable
+    where THandler : PacketHandler
 {
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IPacketFramer _framer;
+    private readonly IPacketSerializerFactory _serializerFactory;
+    private readonly IPacketDispatcher<THandler> _dispatcher;
+    private readonly IByteTransformer? _byteTransformer;
+    private readonly ConcurrentDictionary<int, ClientConnection<THandler>> _connections = new();
+    private readonly TcpListener _listener;
+    private bool _isStarted;
+    private CancellationTokenSource? _cancellationTokenSource;
+    private Task? _acceptTask;
+    private int _nextConnectionId;
+    private bool _disposed;
+
     /// <summary>
-    /// Manages TCP server endpoints and client connections.
-    /// Handles connection acceptance and client lifecycle management.
+    /// Gets or sets the maximum number of concurrent connections.
     /// </summary>
-    public sealed class NetworkManager<TClient> : IHostedService, IDisposable where TClient : Client
+    public int MaxConnections { get; set; } = 5000;
+
+    /// <summary>
+    /// Gets or sets the receive buffer size for each connection.
+    /// </summary>
+    public int ReceiveBufferSize { get; set; } = 65536;
+
+    /// <summary>
+    /// Gets or sets the error threshold before a connection is disconnected.
+    /// </summary>
+    public int ErrorThreshold { get; set; } = 3;
+
+    /// <summary>
+    /// Gets the current number of connected clients.
+    /// </summary>
+    public int ClientCount => _connections.Count;
+
+    /// <summary>
+    /// Raised when a new client connects.
+    /// </summary>
+    public event Action<IConnectionContext>? ClientConnected;
+
+    /// <summary>
+    /// Raised when a client disconnects.
+    /// </summary>
+    public event Action<IConnectionContext, DisconnectReason>? ClientDisconnected;
+
+    public NetworkManager(
+        IPEndPoint endpoint,
+        IServiceScopeFactory scopeFactory,
+        IPacketFramer framer,
+        IPacketSerializerFactory serializerFactory,
+        IPacketDispatcher<THandler> dispatcher,
+        IByteTransformer? byteTransformer = null)
     {
-        private readonly IClientFactory<TClient> _clientFactory;
-        private readonly ConcurrentDictionary<int, Client> _clients = new();
-        private readonly TcpListener _listenerClient;
-        private bool _isStarted = false;
-        private CancellationTokenSource _cancellationTokenSource;
-        private Task _acceptTask;
-        private int _nextClientId;
-        private int _maxConnections = 5000;
-        private bool _disposed;
+        _listener = new TcpListener(endpoint);
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _framer = framer ?? throw new ArgumentNullException(nameof(framer));
+        _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
+        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _byteTransformer = byteTransformer;
+    }
 
-        /// <summary>
-        /// Gets or sets the maximum number of concurrent connections.
-        /// </summary>
-        public int MaxConnections
+    private async Task AcceptLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
         {
-            get => _maxConnections;
-            set => _maxConnections = value;
-        }
-
-        /// <summary>
-        /// Gets the current number of connected clients.
-        /// </summary>
-        public int ClientCount => _clients.Count;
-
-        /// <summary>
-        /// Raised when a new client connects.
-        /// </summary>
-        public event Action<Client> ClientConnected;
-
-        /// <summary>
-        /// Raised when a client disconnects.
-        /// </summary>
-        public event Action<Client, DisconnectReason> ClientDisconnected;
-
-        public NetworkManager(IPEndPoint endpoint, IClientFactory<TClient> clientFactory)
-        {
-            _listenerClient = new TcpListener(endpoint);
-            _clientFactory = clientFactory;
-        }
-
-        private async Task AcceptLoopAsync(CancellationToken cancellationToken)
-        {
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var tcpClient = await _listenerClient.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
+                var tcpClient = await _listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
 
-                    // Check connection limit
-                    if (_clients.Count >= _maxConnections)
-                    {
-                        try
-                        {
-                            tcpClient.Client.Shutdown(SocketShutdown.Both);
-                            tcpClient.Close();
-                        }
-                        catch { /* Ignore close errors */ }
-                        continue;
-                    }
+                if (_connections.Count >= MaxConnections)
+                {
+                    try { tcpClient.Client.Shutdown(SocketShutdown.Both); tcpClient.Close(); }
+                    catch { /* Ignore close errors */ }
+                    continue;
+                }
 
-                    // Wrap socket in TcpClient and create client instance
-                    var client = _clientFactory.Create(tcpClient);
-                    var clientId = Interlocked.Increment(ref _nextClientId);
-                    
-                    if (_clients.TryAdd(clientId, client))
-                    {
-                        // Set up client disconnection handling
-                        client.Disconnected += (reason) => OnClientDisconnected(clientId, client, reason);
-                        
-                        // Start the client
-                        client.Start(cancellationToken);
-                        
-                        // Notify connection
-                        ClientConnected?.Invoke(client);
-                    }
-                    else
-                    {
-                        // Failed to add to dictionary (shouldn't happen)
-                        client.Dispose();
-                    }
-                }
-                catch (SocketException)
+                // Create a connection-scoped DI scope
+                var connectionScope = _scopeFactory.CreateScope();
+
+                // Resolve the handler from the connection scope
+                var handler = connectionScope.ServiceProvider.GetRequiredService<THandler>();
+
+                // Create a per-connection serializer instance
+                var serializer = _serializerFactory.Create();
+
+                // Create the connection (owns the scope lifetime)
+                var connection = new ClientConnection<THandler>(
+                    tcpClient, _framer, serializer, handler, _dispatcher,
+                    connectionScope, _byteTransformer,
+                    ReceiveBufferSize, ErrorThreshold);
+
+                var connectionId = Interlocked.Increment(ref _nextConnectionId);
+
+                if (_connections.TryAdd(connectionId, connection))
                 {
-                    // Socket closed or error during accept
-                    if (!cancellationToken.IsCancellationRequested)
-                        break;
+                    connection.Disconnected += reason => OnConnectionDisconnected(connectionId, connection, reason);
+                    connection.Start(cancellationToken);
+                    ClientConnected?.Invoke(connection);
                 }
-                catch (ObjectDisposedException)
+                else
                 {
-                    // Socket was disposed
+                    connection.Dispose();
+                }
+            }
+            catch (SocketException)
+            {
+                if (!cancellationToken.IsCancellationRequested)
                     break;
-                }
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
             }
         }
+    }
 
-        private void OnClientDisconnected(int clientId, Client client, DisconnectReason reason)
+    private void OnConnectionDisconnected(int connectionId, ClientConnection<THandler> connection, DisconnectReason reason)
+    {
+        if (_connections.TryRemove(connectionId, out _))
         {
-            if (_clients.TryRemove(clientId, out _))
-            {
-                ClientDisconnected?.Invoke(client, reason);
-            }
+            ClientDisconnected?.Invoke(connection, reason);
         }
+    }
 
-        /// <summary>
-        /// Stops the server and disconnects all clients.
-        /// </summary>
-        public void Stop()
+    /// <summary>
+    /// Disconnects a specific connection.
+    /// </summary>
+    public void DisconnectClient(IConnectionContext connection)
+    {
+        if (connection == null) throw new ArgumentNullException(nameof(connection));
+        connection.Disconnect(DisconnectReason.ServerShutdown);
+    }
+
+    /// <summary>
+    /// Stops the server and disconnects all clients.
+    /// </summary>
+    public void Stop()
+    {
+        if (_cancellationTokenSource == null)
+            return;
+
+        _cancellationTokenSource.Cancel();
+
+        try { _listener.Stop(); } catch { }
+        try { _acceptTask?.Wait(TimeSpan.FromSeconds(5)); } catch { }
+
+        Parallel.ForEach(_connections.Values, connection =>
         {
-            if (_cancellationTokenSource == null)
-                return;
+            try { connection.Dispose(); } catch { }
+        });
 
-            // Signal cancellation
-            _cancellationTokenSource.Cancel();
+        _connections.Clear();
+    }
 
-            // Close listener socket
-            try
-            {
-                _listenerClient?.Stop();
-            }
-            catch { /* Ignore close errors */ }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Stop();
+        _cancellationTokenSource?.Dispose();
+    }
 
-            // Wait for accept loop to finish
-            try
-            {
-                _acceptTask?.Wait(TimeSpan.FromSeconds(5));
-            }
-            catch { /* Ignore wait errors */ }
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (_isStarted)
+            throw new InvalidOperationException("NetworkManager is already started.");
 
-            // Disconnect all clients in parallel
-            Parallel.ForEach(_clients.Values, client =>
-            {
-                try
-                {
-                    client.Dispose();
-                }
-                catch { /* Ignore disposal errors */ }
-            });
+        _cancellationTokenSource = new CancellationTokenSource();
+        _listener.Start(100);
+        _acceptTask = AcceptLoopAsync(_cancellationTokenSource.Token);
+        _isStarted = true;
+        return Task.CompletedTask;
+    }
 
-            _clients.Clear();
-        }
-
-        /// <summary>
-        /// Disconnects a specific client.
-        /// </summary>
-        /// <param name="client">The client to disconnect.</param>
-        public void DisconnectClient(Client client)
-        {
-            if (client == null)
-                throw new ArgumentNullException(nameof(client));
-
-            client.Dispose();
-        }
-
-        /// <summary>
-        /// Disposes the NetworkManager and releases all resources.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_disposed)
-                return;
-
-            _disposed = true;
-            Stop();
-            _cancellationTokenSource?.Dispose();
-        }
-
-        public Task StartAsync(CancellationToken cancellationToken)
-        {
-            if (_isStarted)
-                throw new InvalidOperationException("NetworkManager is already started.");
-
-            _cancellationTokenSource = new CancellationTokenSource();
-            _listenerClient.Start(100);
-
-            _acceptTask = AcceptLoopAsync(_cancellationTokenSource.Token);
-            _isStarted = true;
-            return Task.CompletedTask;
-        }
-
-        public Task StopAsync(CancellationToken cancellationToken)
-        {
-            _cancellationTokenSource.Cancel();
-            return Task.CompletedTask;
-        }
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _cancellationTokenSource?.Cancel();
+        return Task.CompletedTask;
     }
 }

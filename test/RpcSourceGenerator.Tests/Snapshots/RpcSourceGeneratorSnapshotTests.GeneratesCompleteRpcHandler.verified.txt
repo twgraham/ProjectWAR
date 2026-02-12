@@ -1,69 +1,104 @@
-﻿
+
 using System;
 using System.Threading.Tasks;
+using FrameWork.NetWork.V4;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TestNamespace
 {
-    partial class GameClient
+    partial class GameHandler
     {
-        protected override void ProcessPacket(byte opcode, ReadOnlySpan<byte> payload)
+        public sealed class Dispatcher : IPacketDispatcher<GameHandler>
         {
-            switch (opcode)
+            public void Dispatch(
+                GameHandler handler,
+                byte opcode,
+                ReadOnlyMemory<byte> payload,
+                IServiceProvider services,
+                IPacketSerializer serializer,
+                IConnectionContext connection)
             {
-                case 0x01:
+                switch (opcode)
                 {
-                    HandlePing();
-                    break;
+                    case 0x01:
+                    {
+                        handler.HandlePing();
+                        break;
+                    }
+                    case 0x10:
+                    {
+                        var request = serializer.Deserialize<TestNamespace.LoginRequest>(payload.Span);
+                        var response = handler.HandleLogin(request);
+                        if (response != null)
+                            connection.SendResponse(0x11, response);
+                        break;
+                    }
+                    case 0x20:
+                    {
+                        var request = serializer.Deserialize<TestNamespace.PingRequest>(payload.Span);
+                        _ = DispatchAsync_HandlePingAsync(handler, request, connection);
+                        break;
+                    }
+                    case 0x30:
+                    {
+                        var request = serializer.Deserialize<TestNamespace.NotifyRequest>(payload.Span);
+                        _ = DispatchAsync_HandleNotifyAsync(handler, request, connection);
+                        break;
+                    }
+                    case 0x40:
+                    {
+                        var __scope = services.CreateScope();
+                        var __svc_svc = __scope.ServiceProvider.GetRequiredService<TestNamespace.MyService>();
+                        _ = DispatchAsync_HandleWithServices(handler, __svc_svc, connection, __scope);
+                        break;
+                    }
+                    default:
+                        break;
                 }
-                case 0x10:
+            }
+
+            private static async Task DispatchAsync_HandlePingAsync(GameHandler handler, TestNamespace.PingRequest request, IConnectionContext connection)
+            {
+                try
                 {
-                    var request = Serializer.Deserialize<TestNamespace.LoginRequest>(payload);
-                    var response = HandleLogin(request);
+                    var response = await handler.HandlePingAsync(request);
                     if (response != null)
-                        SendResponse(0x11, response);
-                    break;
+                        connection.SendResponse(0x21, response);
                 }
-                case 0x20:
+                catch (Exception ex)
                 {
-                    var request = Serializer.Deserialize<TestNamespace.PingRequest>(payload);
-                    _ = HandleAsync_HandlePingAsync(request);
-                    break;
+                    connection.OnDispatchError(0x20, ex);
                 }
-                case 0x30:
+            }
+
+            private static async Task DispatchAsync_HandleNotifyAsync(GameHandler handler, TestNamespace.NotifyRequest request, IConnectionContext connection)
+            {
+                try
                 {
-                    var request = Serializer.Deserialize<TestNamespace.NotifyRequest>(payload);
-                    _ = HandleAsync_HandleNotifyAsync(request);
-                    break;
+                    await handler.HandleNotifyAsync(request);
                 }
-                default:
-                    OnUnknownOpcode(opcode);
-                    break;
+                catch (Exception ex)
+                {
+                    connection.OnDispatchError(0x30, ex);
+                }
             }
-        }
 
-        private async Task HandleAsync_HandlePingAsync(TestNamespace.PingRequest request)
-        {
-            try
+            private static async Task DispatchAsync_HandleWithServices(GameHandler handler, TestNamespace.MyService __svc_svc, IConnectionContext connection, IServiceScope __scope)
             {
-                var response = await HandlePingAsync(request);
-                if (response != null)
-                    SendResponse(0x21, response);
-            }
-            catch (Exception ex)
-            {
-                OnHandlerError(0x20, ex);
-            }
-        }
-
-        private async Task HandleAsync_HandleNotifyAsync(TestNamespace.NotifyRequest request)
-        {
-            try
-            {
-                await HandleNotifyAsync(request);
-            }
-            catch (Exception ex)
-            {
-                OnHandlerError(0x30, ex);
+                try
+                {
+                    var response = await handler.HandleWithServices(__svc_svc, connection);
+                    if (response != null)
+                        connection.SendResponse(0x41, response);
+                }
+                catch (Exception ex)
+                {
+                    connection.OnDispatchError(0x40, ex);
+                }
+                finally
+                {
+                    __scope.Dispose();
+                }
             }
         }
     }
