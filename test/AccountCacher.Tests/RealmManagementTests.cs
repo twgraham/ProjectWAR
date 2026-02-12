@@ -173,7 +173,8 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task GetClusterList_WithNoRealms_ShouldReturnEmptyList()
     {
-        // GIVEN no realms are configured
+        // GIVEN no realms are configured (restart service to ensure clean state)
+        await _fixture.RestartServiceAsync();
         var request = new GetClusterListRequest();
         
         // WHEN requesting cluster information

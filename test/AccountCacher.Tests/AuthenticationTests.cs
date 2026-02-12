@@ -48,7 +48,7 @@ public class AuthenticationTests : IClassFixture<AccountCacherFixture>, IAsyncLi
     public async Task AuthenticateUser_WithInvalidPassword_ShouldFail()
     {
         // GIVEN a user account with a specific password
-        var username = "testuser";
+        var username = "invalidpwdtest";
         await _fixture.InsertTestAccountAsync(username, "correctpassword");
         
         var request = new AuthenticateUserRequest

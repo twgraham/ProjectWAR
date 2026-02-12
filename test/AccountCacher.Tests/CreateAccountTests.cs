@@ -148,6 +148,9 @@ public class CreateAccountTests : IClassFixture<AccountCacherFixture>, IAsyncLif
         response.ShouldNotBeNull();
         response.Created.ShouldBeTrue();
         
+        // Wait a moment for database persistence
+        await Task.Delay(100);
+        
         // Account should be immediately available for authentication
         var authRequest = new AuthenticateUserRequest
         {

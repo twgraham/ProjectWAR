@@ -277,8 +277,24 @@ public class AccountCacherFixture : IAsyncLifetime
         await connection.OpenAsync();
         
         var sql = @"
-            INSERT INTO realms (RealmId, Name, Language, Adresse, Port, Online, OnlinePlayers, OrderCount, DestructionCount, MaxPlayers, OrderCharacters, DestruCharacters, NextRotationTime, MasterPassword, BootTime)
-            VALUES (@RealmId, @Name, 'EN', @Address, @Port, 0, 0, 0, 0, 1000, 0, 0, 0, '', 0);
+            INSERT INTO realms (
+                RealmId, Name, Language, Adresse, Port, 
+                AllowTrials, CharfxerAvailable, Legacy, 
+                BonusDestruction, BonusOrder, Redirect, Region, Retired,
+                WaitingDestruction, WaitingOrder, DensityDestruction, DensityOrder,
+                OpenRvr, Rp, Status,
+                Online, OnlinePlayers, OrderCount, DestructionCount, MaxPlayers, 
+                OrderCharacters, DestruCharacters, NextRotationTime, MasterPassword, BootTime
+            )
+            VALUES (
+                @RealmId, @Name, 'EN', @Address, @Port,
+                'true', 'false', 'false',
+                '0', '0', 'false', 'EU', 'false',
+                '0', '0', 'Low', 'Low',
+                'false', 'true', 'online',
+                0, 0, 0, 0, 1000,
+                0, 0, 0, '', 0
+            );
         ";
         
         using var command = new MySqlCommand(sql, connection);

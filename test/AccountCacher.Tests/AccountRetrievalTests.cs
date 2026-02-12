@@ -195,11 +195,11 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
     [Fact]
     public async Task GetPendingAccounts_AfterAccountCreation_ShouldReturnNewAccounts()
     {
-        // GIVEN accounts awaiting email verification
+        // GIVEN accounts awaiting email verification from non-localhost IPs
         var username1 = "pending1";
         var username2 = "pending2";
         
-        // Create accounts which should add them to pending list
+        // Create accounts from remote IPs which should add them to pending verification
         var createRequest1 = new CreateAccountRequest
         {
             Username = username1,
@@ -207,7 +207,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
             Email = "pending1@test.com",
             GmLevel = 0,
             LanguageId = 0,
-            IpAddress = "127.0.0.1"
+            IpAddress = "192.168.1.100" // Non-localhost IP requires verification
         };
         
         var createRequest2 = new CreateAccountRequest
@@ -217,7 +217,7 @@ public class AccountRetrievalTests : IClassFixture<AccountCacherFixture>, IAsync
             Email = "pending2@test.com",
             GmLevel = 0,
             LanguageId = 0,
-            IpAddress = "127.0.0.1"
+            IpAddress = "192.168.1.101" // Non-localhost IP requires verification
         };
         
         await Client.CreateAccountAsync(createRequest1);
