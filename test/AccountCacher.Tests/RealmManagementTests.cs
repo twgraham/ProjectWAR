@@ -41,9 +41,8 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
         await _fixture.InsertTestRealmAsync(2, "Realm2", "127.0.0.1", 10301);
         await _fixture.InsertTestRealmAsync(3, "Realm3", "127.0.0.1", 10302);
         
-        // Need to reload the service to load realms
-        // Since realms are loaded on startup, we need to wait for them to be loaded
-        await Task.Delay(500);
+        // Restart the service to load the newly inserted realms
+        await _fixture.RestartServiceAsync();
         
         var request = new ListRealmsRequest();
         
@@ -63,7 +62,9 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     {
         // GIVEN a specific realm exists with a known ID
         await _fixture.InsertTestRealmAsync(1, "TestRealm", "127.0.0.1", 10300);
-        await Task.Delay(500); // Wait for realm to be loaded
+        
+        // Restart the service to load the newly inserted realm
+        await _fixture.RestartServiceAsync();
         
         var request = new GetRealmRequest { RealmId = 1 };
         
@@ -97,7 +98,9 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     {
         // GIVEN an existing realm with outdated information
         await _fixture.InsertTestRealmAsync(1, "UpdateRealm", "127.0.0.1", 10300);
-        await Task.Delay(500);
+        
+        // Restart the service to load the newly inserted realm
+        await _fixture.RestartServiceAsync();
         
         var request = new UpdateRealmRequest
         {
@@ -122,9 +125,11 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     [Fact]
     public async Task UpdateRealmCharactersTotal_WithExistingRealm_ShouldSucceed()
     {
-        // GIVEN
+        // GIVEN a realm with character count data
         await _fixture.InsertTestRealmAsync(1, "CharCountRealm", "127.0.0.1", 10300);
-        await Task.Delay(500);
+        
+        // Restart the service to load the newly inserted realm
+        await _fixture.RestartServiceAsync();
         
         var request = new UpdateRealmCharactersTotalRequest
         {
@@ -133,10 +138,10 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
             DestructionCount = 150
         };
         
-        // WHEN
+        // WHEN updating the total character counts per faction
         var response = await Client.UpdateRealmCharactersTotalAsync(request);
         
-        // THEN
+        // THEN the realm character totals should be updated
         response.ShouldNotBeNull();
     }
     
@@ -145,7 +150,9 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     {
         // GIVEN configured realms with cluster properties
         await _fixture.InsertTestRealmAsync(1, "ClusterRealm", "127.0.0.1", 10300);
-        await Task.Delay(500);
+        
+        // Restart the service to load the newly inserted realm
+        await _fixture.RestartServiceAsync();
         
         var request = new GetClusterListRequest();
         
@@ -182,7 +189,9 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     {
         // GIVEN realms with specific network configuration
         await _fixture.InsertTestRealmAsync(1, "PropRealm", "192.168.1.1", 10300);
-        await Task.Delay(500);
+        
+        // Restart the service to load the newly inserted realm
+        await _fixture.RestartServiceAsync();
         
         var request = new GetClusterListRequest();
         
@@ -207,7 +216,9 @@ public class RealmManagementTests : IClassFixture<AccountCacherFixture>, IAsyncL
     {
         // GIVEN realms with active players online
         await _fixture.InsertTestRealmAsync(1, "PopulatedRealm", "127.0.0.1", 10300);
-        await Task.Delay(500);
+        
+        // Restart the service to load the newly inserted realm
+        await _fixture.RestartServiceAsync();
         
         // Update realm with player counts
         var updateRequest = new UpdateRealmRequest

@@ -14,6 +14,8 @@ public class AccountCacherFixture : IAsyncLifetime
 {
     private MySqlContainer? _mysqlContainer;
     private IHost? _host;
+    private AccountConfig? _config;
+    private int _port;
     public GrpcChannel? Channel { get; private set; }
     public AccountMgr.AccountMgrClient? Client { get; private set; }
     public string? ConnectionString { get; private set; }
@@ -41,7 +43,7 @@ public class AccountCacherFixture : IAsyncLifetime
         await InitializeDatabaseSchema();
         
         // Create AccountConfig
-        var config = new AccountConfig
+        _config = new AccountConfig
         {
             IConfiguredTheFile = true,
             AccountDB = new DatabaseInfo
@@ -62,33 +64,9 @@ public class AccountCacherFixture : IAsyncLifetime
         // Initialize logging
         Log.InitLog(new LogInfo { Info = true, Error = true, Debug = true, Tcp = false }, "AccountCacherTests");
         
-        // Build and start the host using the factory method from Program.cs
-        var port = Random.Shared.Next(6000, 7000); // Use a random port in a specific range
-        _host = Program.CreateHostBuilder(Array.Empty<string>(), config, port).Build();
-
-        await _host.StartAsync();
-        
-        // Wait for the host to be ready by checking application lifetime
-        var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
-        var tcs = new TaskCompletionSource();
-        lifetime.ApplicationStarted.Register(() => tcs.SetResult());
-        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        
-        // Use the port we configured
-        var address = $"https://localhost:{port}";
-        
-        // Create gRPC channel and client
-        var httpHandler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-        };
-        
-        Channel = GrpcChannel.ForAddress(address, new GrpcChannelOptions
-        {
-            HttpHandler = httpHandler
-        });
-        
-        Client = new AccountMgr.AccountMgrClient(Channel);
+        // Start the service
+        _port = Random.Shared.Next(6000, 7000); // Use a random port in a specific range
+        await StartServiceAsync();
     }
     
     public async ValueTask DisposeAsync()
@@ -109,6 +87,65 @@ public class AccountCacherFixture : IAsyncLifetime
         {
             await _mysqlContainer.DisposeAsync();
         }
+    }
+    
+    private async Task StartServiceAsync()
+    {
+        // Build and start the host using the factory method from Program.cs
+        _host = Program.CreateHostBuilder(Array.Empty<string>(), _config!, _port).Build();
+
+        await _host.StartAsync();
+        
+        // Wait for the host to be ready by checking application lifetime
+        var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
+        var tcs = new TaskCompletionSource();
+        lifetime.ApplicationStarted.Register(() => tcs.SetResult());
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        
+        // Use the port we configured
+        var address = $"https://localhost:{_port}";
+        
+        // Create gRPC channel and client
+        var httpHandler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+        
+        Channel = GrpcChannel.ForAddress(address, new GrpcChannelOptions
+        {
+            HttpHandler = httpHandler
+        });
+        
+        Client = new AccountMgr.AccountMgrClient(Channel);
+    }
+    
+    /// <summary>
+    /// Restarts the AccountCacher service to reload data from the database.
+    /// Use this after inserting realm data or other data that is loaded at startup.
+    /// </summary>
+    public async Task RestartServiceAsync()
+    {
+        // Dispose of existing client and channel
+        if (Channel != null)
+        {
+            await Channel.ShutdownAsync();
+            Channel.Dispose();
+            Channel = null;
+        }
+        
+        // Stop and dispose of the host
+        if (_host != null)
+        {
+            await _host.StopAsync();
+            _host.Dispose();
+            _host = null;
+        }
+        
+        // Wait a bit for resources to be released
+        await Task.Delay(500);
+        
+        // Start the service again
+        await StartServiceAsync();
     }
     
     private async Task InitializeDatabaseSchema()
