@@ -33,13 +33,12 @@ namespace FrameWork.NetWork.SourceGenerators
             if (symbol == null)
                 return null;
 
-            var baseType = symbol.BaseType;
-            while (baseType != null)
+            // Check if the class implements IPacketHandler interface
+            foreach (var iface in symbol.AllInterfaces)
             {
-                if (baseType.Name == "PacketHandler" &&
-                    baseType.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4")
+                if (iface.Name == "IPacketHandler" &&
+                    iface.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4")
                     return classDeclaration;
-                baseType = baseType.BaseType;
             }
 
             return null;
