@@ -106,7 +106,7 @@ public class BinaryPacketSerializerTests
     }
 
     // ──────────────────────────────────────────────
-    // Float roundtrip — known bug: ReadFloat has reversed range
+    // Float roundtrip — verifies correct ReadFloat range and sign handling
     // ──────────────────────────────────────────────
 
     [Fact]

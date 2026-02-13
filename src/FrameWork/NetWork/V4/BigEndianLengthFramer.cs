@@ -6,7 +6,7 @@ namespace FrameWork.NetWork.V4;
 
 /// <summary>
 /// Packet framer using a 4-byte big-endian length prefix.
-/// Wire format: [int32-BE payload-length][opcode byte][payload bytes]
+/// Wire format: [int32-BE (length = 4 + payload-length, excludes opcode)][opcode byte][payload bytes]
 /// </summary>
 public sealed class BigEndianLengthFramer : IPacketFramer
 {
