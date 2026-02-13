@@ -7,7 +7,7 @@ using LauncherServer.Dtos;
 
 namespace LauncherServer.Server;
 
-public partial class LauncherClient : PacketHandler
+public partial class LauncherClient : FrameWork.NetWork.V4.IPacketHandler
 {
     private readonly AccountMgr.AccountMgrClient _accountMgrClient;
     private readonly MythLoginServiceConfigManager _loginServiceConfigManager;

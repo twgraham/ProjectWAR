@@ -10,7 +10,7 @@ public class RpcSourceGeneratorSnapshotTests
     private static readonly string HandlerBaseCode = @"
 namespace FrameWork.NetWork.V4
 {
-    public abstract class PacketHandler { }
+    public interface IPacketHandler { }
 
     [System.AttributeUsage(System.AttributeTargets.Method)]
     public class RpcAttribute : System.Attribute
@@ -92,7 +92,7 @@ namespace TestNamespace
     public class NotifyRequest { }
     public class MyService { }
 
-    public partial class GameHandler : PacketHandler
+    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()

@@ -11,7 +11,7 @@ public class RpcSourceGeneratorTests
     private static readonly string HandlerBaseCode = @"
 namespace FrameWork.NetWork.V4
 {
-    public abstract class PacketHandler { }
+    public interface IPacketHandler { }
 
     [System.AttributeUsage(System.AttributeTargets.Method)]
     public class RpcAttribute : System.Attribute
@@ -63,7 +63,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -93,7 +93,7 @@ namespace TestNamespace
 {
     public class LoginRequest { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x10)]
         public void HandleLogin(LoginRequest request)
@@ -124,7 +124,7 @@ namespace TestNamespace
     public class LoginRequest { }
     public class LoginResponse { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public LoginResponse HandleLogin(LoginRequest request)
@@ -156,7 +156,7 @@ namespace TestNamespace
 {
     public class PingRequest { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public async Task HandlePing(PingRequest request)
@@ -189,7 +189,7 @@ namespace TestNamespace
     public class LoginRequest { }
     public class LoginResponse { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public async Task<LoginResponse> HandleLogin(LoginRequest request)
@@ -223,7 +223,7 @@ namespace TestNamespace
     public class MyService { }
     public class LoginResponse { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public async Task<LoginResponse> HandleLogin([FromServices] MyService svc)
@@ -251,7 +251,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing(IConnectionContext context)
@@ -280,7 +280,7 @@ namespace TestNamespace
     public class LoginResponse { }
     public class MyService { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public LoginResponse HandleLogin(LoginRequest request, IConnectionContext context, [FromServices] MyService svc)
@@ -309,7 +309,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -340,7 +340,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class HandlerA : PacketHandler
+    public partial class HandlerA : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -348,7 +348,7 @@ namespace TestNamespace
         }
     }
 
-    public partial class HandlerB : PacketHandler
+    public partial class HandlerB : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing2()
@@ -378,7 +378,7 @@ namespace TestNamespace
     public class Param1 { }
     public class Param2 { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleInvalid(Param1 p1, Param2 p2)
@@ -403,7 +403,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public class TestHandler : PacketHandler
+    public class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -449,7 +449,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         public void RegularMethod()
         {
@@ -475,7 +475,7 @@ namespace TestNamespace
     public class Request2 { }
     public class Response2 { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleMethod1(Request1 request)
@@ -521,7 +521,7 @@ namespace TestNamespace
     public class LoginRequest { }
     public class LoginResponse { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x10)]
         public LoginResponse HandleLogin(LoginRequest request)
@@ -550,7 +550,7 @@ namespace TestNamespace
     public class Svc1 { }
     public class Svc2 { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle([FromServices] Svc1 svc1, [FromServices] Svc2 svc2)
@@ -580,7 +580,7 @@ namespace TestNamespace
 {
     public class MyService { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public async Task HandleAsync([FromServices] MyService svc)
@@ -610,7 +610,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -638,7 +638,7 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""Chat"")]
-    public partial class ChatHandler : PacketHandler
+    public partial class ChatHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleChat()
@@ -669,7 +669,7 @@ namespace TestNamespace
     public class Request1 { }
     public class Request2 { }
 
-    public partial class HandlerA : PacketHandler
+    public partial class HandlerA : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle1(Request1 request)
@@ -677,7 +677,7 @@ namespace TestNamespace
         }
     }
 
-    public partial class HandlerB : PacketHandler
+    public partial class HandlerB : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x02)]
         public void Handle2(Request2 request)
@@ -712,7 +712,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -743,7 +743,7 @@ namespace Alpha
 {
     public class AlphaRequest { }
 
-    public partial class AlphaHandler : PacketHandler
+    public partial class AlphaHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle(AlphaRequest req) { }
@@ -754,7 +754,7 @@ namespace Beta
 {
     public class BetaRequest { }
 
-    public partial class BetaHandler : PacketHandler
+    public partial class BetaHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x02)]
         public void Handle(BetaRequest req) { }
@@ -781,7 +781,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x00)]
         public void HandleMin() { }
@@ -809,14 +809,14 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""Auth"")]
-    public partial class AuthHandler : PacketHandler
+    public partial class AuthHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleAuth() { }
     }
 
     [PacketGroup(""Game"")]
-    public partial class GameHandler : PacketHandler
+    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleGame() { }
@@ -846,14 +846,14 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""Auth"")]
-    public partial class AuthHandler : PacketHandler
+    public partial class AuthHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle() { }
     }
 
     [PacketGroup(""Game"")]
-    public partial class GameHandler : PacketHandler
+    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle() { }
@@ -874,7 +874,7 @@ namespace TestNamespace
 using System;
 using FrameWork.NetWork.V4;
 
-public partial class GlobalHandler : PacketHandler
+public partial class GlobalHandler : FrameWork.NetWork.V4.IPacketHandler
 {
     [Rpc(0x01)]
     public void HandlePing() { }
@@ -901,7 +901,7 @@ namespace TestNamespace
 {
     public class HeartbeatRequest { }
 
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x99)]
         public void HandleHeartbeat(HeartbeatRequest request) { }
@@ -930,7 +930,7 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : PacketHandler
+    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x05)]
         public void HandleDisconnect(IConnectionContext connection) { }
@@ -955,19 +955,19 @@ using FrameWork.NetWork.V4;
 
 namespace TestNamespace
 {
-    public partial class HandlerA : PacketHandler
+    public partial class HandlerA : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle1() { }
     }
 
-    public partial class HandlerB : PacketHandler
+    public partial class HandlerB : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x02)]
         public void Handle2() { }
     }
 
-    public partial class HandlerC : PacketHandler
+    public partial class HandlerC : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x03)]
         public void Handle3() { }
@@ -995,7 +995,7 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""My Group"")]
-    public partial class MyHandler : PacketHandler
+    public partial class MyHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleMessage()
@@ -1023,7 +1023,7 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""Auth-2.0"")]
-    public partial class AuthHandler : PacketHandler
+    public partial class AuthHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleAuth()
@@ -1051,7 +1051,7 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""class"")]
-    public partial class ClassHandler : PacketHandler
+    public partial class ClassHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleClass()
@@ -1079,7 +1079,7 @@ using FrameWork.NetWork.V4;
 namespace TestNamespace
 {
     [PacketGroup(""123Game"")]
-    public partial class GameHandler : PacketHandler
+    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleGame()

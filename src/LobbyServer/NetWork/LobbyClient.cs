@@ -5,7 +5,7 @@ using Google.Protobuf;
 
 namespace LobbyServer.NetWork;
 
-public partial class LobbyClient : PacketHandler
+public partial class LobbyClient : FrameWork.NetWork.V4.IPacketHandler
 {
     [Rpc((int)Opcodes.CMSG_VerifyProtocolReq, (int)Opcodes.SMSG_VerifyProtocolReply)]
     public VerifyProtocolReply CMSG_VerifyProtocolReq(IConnectionContext context)
