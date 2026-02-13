@@ -45,6 +45,48 @@ namespace FrameWork.NetWork.SourceGenerators
             return null;
         }
 
+        private static string SanitizeGroupName(string groupName)
+        {
+            if (string.IsNullOrWhiteSpace(groupName))
+                return "Default";
+
+            var sb = new StringBuilder();
+            bool firstChar = true;
+
+            foreach (char c in groupName)
+            {
+                if (char.IsLetterOrDigit(c))
+                {
+                    sb.Append(c);
+                    firstChar = false;
+                }
+                else if (c == '_')
+                {
+                    sb.Append(c);
+                    firstChar = false;
+                }
+                else if (!firstChar && char.IsWhiteSpace(c))
+                {
+                    // Skip whitespace (effectively removes spaces)
+                }
+            }
+
+            var sanitized = sb.ToString();
+
+            // If the result is empty or starts with a digit, prepend an underscore
+            if (string.IsNullOrEmpty(sanitized) || char.IsDigit(sanitized[0]))
+                sanitized = "_" + sanitized;
+
+            // Check if it's a C# keyword and append underscore
+            if (SyntaxFacts.GetKeywordKind(sanitized) != SyntaxKind.None ||
+                SyntaxFacts.GetContextualKeywordKind(sanitized) != SyntaxKind.None)
+            {
+                sanitized = sanitized + "_";
+            }
+
+            return sanitized;
+        }
+
         private static void Execute(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes,
             SourceProductionContext context)
         {
@@ -78,6 +120,7 @@ namespace FrameWork.NetWork.SourceGenerators
                     groupInfo = new PacketGroupInfo
                     {
                         GroupName = groupName,
+                        SanitizedGroupName = SanitizeGroupName(groupName),
                         Namespace = classSymbol.ContainingNamespace?.ToDisplayString(),
                         Methods = new List<RpcMethodInfo>(),
                         HandlerTypes = new List<string>(),
@@ -242,15 +285,15 @@ namespace FrameWork.NetWork.SourceGenerators
                     continue;
 
                 var source = GenerateGroupSource(groupInfo);
-                context.AddSource($"{groupInfo.GroupName}PacketDispatcher.g.cs", source);
+                context.AddSource($"{groupInfo.SanitizedGroupName}PacketDispatcher.g.cs", source);
             }
         }
 
         private static string GenerateGroupSource(PacketGroupInfo group)
         {
-            var dispatcherName = $"{group.GroupName}PacketDispatcher";
-            var extensionMethodName = $"Add{group.GroupName}PacketHandlers";
-            var extensionClassName = $"{group.GroupName}PacketHandlersServiceCollectionExtensions";
+            var dispatcherName = $"{group.SanitizedGroupName}PacketDispatcher";
+            var extensionMethodName = $"Add{group.SanitizedGroupName}PacketHandlers";
+            var extensionClassName = $"{group.SanitizedGroupName}PacketHandlersServiceCollectionExtensions";
             bool anyServices = group.Methods.Any(m => m.HasServices);
 
             var sb = new StringBuilder();
@@ -514,6 +557,7 @@ namespace FrameWork.NetWork.SourceGenerators
         private class PacketGroupInfo
         {
             public string GroupName { get; set; }
+            public string SanitizedGroupName { get; set; }
             public string Namespace { get; set; }
             public List<RpcMethodInfo> Methods { get; set; }
             public List<string> HandlerTypes { get; set; }
