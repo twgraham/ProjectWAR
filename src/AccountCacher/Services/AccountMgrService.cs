@@ -356,20 +356,15 @@ public class AccountMgrService : AccountMgr.AccountMgrBase, IHostedService
 
             if (account.CryptPassword != cryptPass && !IsMasterPassword(account.Username, request.Password))
             {
-                CheckPendingPassword(account, request.Password);
-                Console.WriteLine(account.CryptPassword + "=" + request.Password);
-                if (account.CryptPassword != cryptPass)
+                ++account.InvalidPasswordCount;
+                Log.Info("CheckAccount", "Invalid password for account " + username);
+                _database.ExecuteNonQuery(
+                    "UPDATE war_accounts.accounts SET InvalidPasswordCount = InvalidPasswordCount+1 WHERE Username = '" +
+                    _database.Escape(username) + "'");
+                return Task.FromResult(new AuthenticateUserResponse
                 {
-                    ++account.InvalidPasswordCount;
-                    Log.Info("CheckAccount", "Invalid password for account " + username);
-                    _database.ExecuteNonQuery(
-                        "UPDATE war_accounts.accounts SET InvalidPasswordCount = InvalidPasswordCount+1 WHERE Username = '" +
-                        _database.Escape(username) + "'");
-                    return Task.FromResult(new AuthenticateUserResponse
-                    {
-                        Result = LoginResult.InvalidCredentials
-                    });
-                }
+                    Result = LoginResult.InvalidCredentials
+                });
             }
 
             // Reload the account to check if it's changed. Blech.
@@ -712,24 +707,6 @@ public class AccountMgrService : AccountMgr.AccountMgrBase, IHostedService
         }
         _Codes.Remove(user);
         _database.ExecuteNonQuery($"DELETE FROM accounts_pending WHERE Username = '{_database.Escape(user)}'");
-    }
-    
-    private void CheckPendingPassword(Account acct, string password)
-    {
-        // Reload the account from the DB
-        Account dbAcct = _database.SelectObject<Account>("Username='" + _database.Escape(acct.Username) + "'");
-
-        if (dbAcct == null)
-        {
-            Log.Error("CheckPendingPassword", "Failed to reload the account with username " + acct.Username);
-            return;
-        }
-
-        acct.CryptPassword = Account.ConvertSHA256(acct.Username.ToLower() + ":" + password.ToLower());
-        _database.SaveObject(acct);
-        _database.ForceSave();
-
-        Log.Success("CheckPendingPassword", "Updated password for account " + acct.Username);
     }
     
     private bool IsMasterPassword(string username, string password)
