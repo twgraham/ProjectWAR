@@ -13,10 +13,6 @@ public class BinaryPacketSerializerTests
     private static readonly Encoding WireEncoding = Encoding.GetEncoding("iso-8859-1");
     private readonly BinaryPacketSerializer _serializer = new();
 
-    // ──────────────────────────────────────────────
-    // Primitive roundtrips
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void RoundTrip_ByteProperty()
     {
@@ -105,10 +101,6 @@ public class BinaryPacketSerializerTests
         result.Value.ShouldBeFalse();
     }
 
-    // ──────────────────────────────────────────────
-    // Float roundtrip — verifies correct ReadFloat range and sign handling
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void RoundTrip_FloatProperty()
     {
@@ -132,16 +124,11 @@ public class BinaryPacketSerializerTests
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(writer, original);
 
-        // 1.0f in IEEE 754 big-endian = 0x3F800000
         writer.WrittenSpan[0].ShouldBe((byte)0x3F);
         writer.WrittenSpan[1].ShouldBe((byte)0x80);
         writer.WrittenSpan[2].ShouldBe((byte)0x00);
         writer.WrittenSpan[3].ShouldBe((byte)0x00);
     }
-
-    // ──────────────────────────────────────────────
-    // String
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void RoundTrip_StringProperty()
@@ -162,19 +149,13 @@ public class BinaryPacketSerializerTests
     [Fact]
     public void Serialize_NullString_IsSkipped()
     {
-        // Null string is a reference type null — the serializer skips it
         var original = new StringPacket { Name = null! };
         var writer = new ArrayBufferWriter<byte>();
 
         _serializer.Serialize(writer, original);
 
-        // Null reference type property is skipped entirely (no bytes written)
         writer.WrittenCount.ShouldBe(0);
     }
-
-    // ──────────────────────────────────────────────
-    // Enums
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void RoundTrip_EnumProperty()
@@ -195,7 +176,6 @@ public class BinaryPacketSerializerTests
     [Fact]
     public void Enum_SerializedAsSingleByte()
     {
-        // Verify enums use exactly 1 byte on the wire
         var original = new EnumPacket { Status = TestStatus.Active };
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(writer, original);
@@ -203,10 +183,6 @@ public class BinaryPacketSerializerTests
         writer.WrittenCount.ShouldBe(1);
         writer.WrittenSpan[0].ShouldBe((byte)TestStatus.Active);
     }
-
-    // ──────────────────────────────────────────────
-    // Arrays
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void RoundTrip_ByteArray()
@@ -240,10 +216,6 @@ public class BinaryPacketSerializerTests
         result.Items.ShouldBeEmpty();
     }
 
-    // ──────────────────────────────────────────────
-    // Lists / Collections
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void RoundTrip_ListProperty()
     {
@@ -260,10 +232,6 @@ public class BinaryPacketSerializerTests
         result.Values.ShouldBeEmpty();
     }
 
-    // ──────────────────────────────────────────────
-    // Multiple properties
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void RoundTrip_MultipleProperties_PreservesOrder()
     {
@@ -279,10 +247,6 @@ public class BinaryPacketSerializerTests
         result.Name.ShouldBe("test");
     }
 
-    // ──────────────────────────────────────────────
-    // Nullable properties
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void RoundTrip_NullableProperty_WithValue()
     {
@@ -294,41 +258,29 @@ public class BinaryPacketSerializerTests
     [Fact]
     public void Serialize_NullableProperty_NullValue_SkipsProperty()
     {
-        // When nullable property is null, serializer skips it
         var original = new NullablePacket { MaybeId = null };
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(writer, original);
 
-        // No bytes written (the null property is skipped)
         writer.WrittenCount.ShouldBe(0);
     }
 
     [Fact]
     public void Deserialize_NullableProperty_AtEndOfBuffer_SetsNull()
     {
-        // When buffer is exhausted and property is nullable, it should be set to null
         var empty = ReadOnlySpan<byte>.Empty;
         var result = _serializer.Deserialize<NullablePacket>(empty);
         result.MaybeId.ShouldBeNull();
     }
 
-    // ──────────────────────────────────────────────
-    // Nullable reference type (string?) at end of buffer
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void Deserialize_TrailingNullableString_AtEndOfBuffer_SetsNull()
     {
-        // Packet with required byte + nullable string. Supply only the byte.
         var data = new byte[] { 0x42 };
         var result = _serializer.Deserialize<TrailingNullablePacket>(data);
         result.Id.ShouldBe((byte)0x42);
         result.OptionalName.ShouldBeNull();
     }
-
-    // ──────────────────────────────────────────────
-    // PacketLength attribute
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void RoundTrip_PacketLengthAttribute_TwoByte()
@@ -345,10 +297,6 @@ public class BinaryPacketSerializerTests
         var result = RoundTrip<FourByteArrayLengthPacket>(original);
         result.Data.ShouldBe(new byte[] { 10, 20, 30 });
     }
-
-    // ──────────────────────────────────────────────
-    // Value type rejection
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void Deserialize_ValueType_ThrowsInvalidOperation()
@@ -369,10 +317,6 @@ public class BinaryPacketSerializerTests
             _serializer.Serialize(writer, 42);
         });
     }
-
-    // ──────────────────────────────────────────────
-    // Big-endian wire format verification
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void Serialize_Int16_IsBigEndian()
@@ -401,37 +345,26 @@ public class BinaryPacketSerializerTests
     [Fact]
     public void Serialize_String_HasBigEndianLengthPrefix()
     {
-        var original = new StringPacket { Name = "AB" }; // 2 bytes in iso-8859-1
+        var original = new StringPacket { Name = "AB" };
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(writer, original);
 
-        // 4-byte BE length = 2, then "AB"
         writer.WrittenCount.ShouldBe(6);
         BinaryPrimitives.ReadUInt32BigEndian(writer.WrittenSpan[..4]).ShouldBe(2u);
         writer.WrittenSpan[4].ShouldBe((byte)'A');
         writer.WrittenSpan[5].ShouldBe((byte)'B');
     }
 
-    // ──────────────────────────────────────────────
-    // Unsupported type
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void Deserialize_UnsupportedPropertyType_Throws()
     {
-        // Dictionary<string, string> is not a supported generic type
         var writer = new ArrayBufferWriter<byte>();
-        // Write some dummy data
         var original = new UnsupportedTypePacket();
         Should.Throw<NotSupportedException>(() =>
         {
             _serializer.Serialize(writer, original);
         });
     }
-
-    // ──────────────────────────────────────────────
-    // Empty payload → empty object
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void Deserialize_EmptyPayload_EmptyObject()
@@ -440,22 +373,14 @@ public class BinaryPacketSerializerTests
         result.ShouldNotBeNull();
     }
 
-    // ──────────────────────────────────────────────
-    // Read-only properties are skipped
-    // ──────────────────────────────────────────────
-
     [Fact]
     public void RoundTrip_ReadOnlyProperties_AreSkipped()
     {
         var original = new ReadOnlyPropertyPacket { Writable = 0x42 };
         var result = RoundTrip<ReadOnlyPropertyPacket>(original);
         result.Writable.ShouldBe((byte)0x42);
-        result.ReadOnly.ShouldBe(0); // default, not serialized
+        result.ReadOnly.ShouldBe(0);
     }
-
-    // ──────────────────────────────────────────────
-    // BinaryPacketSerializerFactory
-    // ──────────────────────────────────────────────
 
     [Fact]
     public void Factory_CreateReturnsSameInstance()
@@ -466,20 +391,12 @@ public class BinaryPacketSerializerTests
         a.ShouldBeSameAs(b);
     }
 
-    // ──────────────────────────────────────────────
-    // Helper
-    // ──────────────────────────────────────────────
-
     private T RoundTrip<T>(T original)
     {
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(writer, original);
         return _serializer.Deserialize<T>(writer.WrittenSpan);
     }
-
-    // ──────────────────────────────────────────────
-    // Test types
-    // ──────────────────────────────────────────────
 
     public class BytePacket { public byte Value { get; set; } }
     public class SBytePacket { public sbyte Value { get; set; } }
