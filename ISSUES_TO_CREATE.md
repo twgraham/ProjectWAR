@@ -2,14 +2,14 @@
 
 This document contains issues identified in PR #10, #11, and #12 that should be created in the repository.
 
-## Issue 1: Implement bounded channels with backpressure in ClientConnection
+## Issue 1: Implement bounded channels with backpressure in Client
 
 **Source**: PR #10
 
-**Title**: Implement bounded channels with backpressure in ClientConnection
+**Title**: Implement bounded channels with backpressure in Client
 
 **Description**:
-`_receiveQueue` and `_sendQueue` in `ClientConnection.cs` use `Channel.CreateUnbounded()`, which allows unbounded memory growth from slow handlers or slow clients. This creates a DoS risk.
+`_receiveQueue` and `_sendQueue` in `Client.cs` use `Channel.CreateUnbounded()`, which allows unbounded memory growth from slow handlers or slow clients. This creates a DoS risk.
 
 **Problem**:
 - Current implementation uses `Channel.CreateUnbounded()` for both receive and send queues
@@ -23,20 +23,20 @@ Replace with `Channel.CreateBounded()` with:
 - Backpressure handling strategy
 - Consider different strategies for receive vs send queues
 
-**Location**: `src/FrameWork/NetWork/V4/ClientConnection.cs:83-84`
+**Location**: `src/FrameWork/NetWork/V4/Client.cs:74-75`
 
 **Labels**: enhancement, security
 
 ---
 
-## Issue 2: Fix potential deadlock in ClientConnection.Disconnect()
+## Issue 2: Fix potential deadlock in Client.Disconnect()
 
 **Source**: PR #11
 
-**Title**: Fix potential deadlock in ClientConnection.Disconnect()
+**Title**: Fix potential deadlock in Client.Disconnect()
 
 **Description**:
-The `ClientConnection.Disconnect()` method can cause a deadlock when called from within the receive/process/send loops.
+The `Client.Disconnect()` method can cause a deadlock when called from within the receive/process/send loops.
 
 **Problem**:
 ```csharp
@@ -55,20 +55,20 @@ public void Disconnect(DisconnectReason reason)
 - Use a flag-based approach to signal shutdown without blocking or
 - Ensure `Disconnect()` never blocks on the task that might call it
 
-**Location**: `ClientConnection.Disconnect()` method
+**Location**: `Client.Disconnect()` method in `src/FrameWork/NetWork/V4/Client.cs`
 
 **Labels**: bug, concurrency
 
 ---
 
-## Issue 3: Optimize or secure hex dump logging in ClientConnection
+## Issue 3: Optimize or secure hex dump logging in Client
 
 **Source**: PR #12 (comment ID: 2802402310)
 
 **Title**: Review and optimize hex dump logging
 
 **Description**:
-Hex dump logging in `ClientConnection` is expensive and may leak sensitive data.
+Hex dump logging in `Client` is expensive and may leak sensitive data.
 
 **Problem**:
 - Performance impact from generating hex dumps for every packet
@@ -104,7 +104,7 @@ The `Dispose()` method uses `Task.WaitAll` which can deadlock if called from a t
 - Use `Task.WhenAll` with async/await instead of `Task.WaitAll`
 - Implement cancellation token based shutdown instead of synchronous waiting
 
-**Location**: `ClientConnection.Dispose()` method
+**Location**: `Client.Dispose()` method in `src/FrameWork/NetWork/V4/Client.cs`
 
 **Labels**: bug, concurrency, refactoring
 
@@ -197,8 +197,9 @@ When multiple packet groups register `IPacketDispatcher`, only the last registra
 Total issues to create: **7**
 
 - **Security**: 2 issues (#1, #3)
-- **Concurrency/Deadlock**: 3 issues (#2, #4, #5)
+- **Concurrency/Deadlock**: 2 issues (#2, #4)
+- **Exception Handling**: 1 issue (#5)
 - **Lifecycle/Events**: 1 issue (#6)
 - **Architecture/DI**: 1 issue (#7)
 
-All issues are related to the `ClientConnection` and network handling code in `src/FrameWork/NetWork/V4/`.
+All issues are related to the `Client` class and network handling code in `src/FrameWork/NetWork/V4/`.
