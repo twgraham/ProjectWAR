@@ -175,6 +175,11 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown via cancellation token - exit cleanly
+            Disconnect(DisconnectReason.ServerShutdown);
+        }
         catch (SocketException)
         {
             Disconnect(DisconnectReason.SocketError);
