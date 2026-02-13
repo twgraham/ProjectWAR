@@ -51,24 +51,18 @@ namespace FrameWork.NetWork.SourceGenerators
                 return "Default";
 
             var sb = new StringBuilder();
-            bool firstChar = true;
 
             foreach (char c in groupName)
             {
                 if (char.IsLetterOrDigit(c))
                 {
                     sb.Append(c);
-                    firstChar = false;
                 }
                 else if (c == '_')
                 {
                     sb.Append(c);
-                    firstChar = false;
                 }
-                else if (!firstChar && char.IsWhiteSpace(c))
-                {
-                    // Skip whitespace (effectively removes spaces)
-                }
+                // Skip whitespace and other invalid characters
             }
 
             var sanitized = sb.ToString();

@@ -1062,18 +1062,7 @@ namespace TestNamespace
 
         var result = RunGenerator(source);
 
-        // Check for diagnostics first
-        var errors = result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
-        if (errors.Any())
-        {
-            foreach (var error in errors)
-            {
-                Console.WriteLine($"Error: {error.GetMessage()}");
-            }
-        }
-        
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
-        result.GeneratedTrees.ShouldNotBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
         // Group name "class" (keyword) should be sanitized to "class_"
         code.ShouldContain("class class_PacketDispatcher : IPacketDispatcher");
