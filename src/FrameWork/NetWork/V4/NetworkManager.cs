@@ -186,7 +186,7 @@ public sealed class NetworkManager : IHostedService, IDisposable
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _cancellationTokenSource?.Cancel();
+        Stop();
         return Task.CompletedTask;
     }
 }

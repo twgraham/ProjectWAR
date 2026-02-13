@@ -146,6 +146,15 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
                     try
                     {
                         var transformedLength = _byteTransformer.Transform(dataSpan, transformBuffer);
+
+                        // Validate transformed output length before copying back into the receive buffer
+                        if (transformedLength < 0 ||
+                            transformedLength > _receiveBuffer.Length ||
+                            transformedLength > transformBuffer.Length)
+                        {
+                            Disconnect(DisconnectReason.BufferOverrun);
+                            return;
+                        }
                         Buffer.BlockCopy(transformBuffer, 0, _receiveBuffer, 0, transformedLength);
                         bufferOffset = transformedLength;
                     }
