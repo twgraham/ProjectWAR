@@ -985,6 +985,118 @@ namespace TestNamespace
         code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.DefaultPacketDispatcher>()");
     }
 
+    [Fact]
+    public void SanitizesGroupNamesWithSpaces()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""My Group"")]
+    public partial class MyHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleMessage()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        // Group name "My Group" should be sanitized to "MyGroup"
+        code.ShouldContain("class MyGroupPacketDispatcher : IPacketDispatcher");
+        code.ShouldContain("AddMyGroupPacketHandlers(this IServiceCollection services)");
+    }
+
+    [Fact]
+    public void SanitizesGroupNamesWithPunctuation()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""Auth-2.0"")]
+    public partial class AuthHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleAuth()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        // Group name "Auth-2.0" should be sanitized to "Auth20"
+        code.ShouldContain("class Auth20PacketDispatcher : IPacketDispatcher");
+        code.ShouldContain("AddAuth20PacketHandlers(this IServiceCollection services)");
+    }
+
+    [Fact]
+    public void SanitizesGroupNamesWithCSharpKeywords()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""class"")]
+    public partial class ClassHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleClass()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        // Group name "class" (keyword) should be sanitized to "class_"
+        code.ShouldContain("class class_PacketDispatcher : IPacketDispatcher");
+        code.ShouldContain("Addclass_PacketHandlers(this IServiceCollection services)");
+    }
+
+    [Fact]
+    public void SanitizesGroupNamesStartingWithDigit()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""123Game"")]
+    public partial class GameHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleGame()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        // Group name "123Game" should be sanitized to "_123Game"
+        code.ShouldContain("class _123GamePacketDispatcher : IPacketDispatcher");
+        code.ShouldContain("Add_123GamePacketHandlers(this IServiceCollection services)");
+    }
+
     private GeneratorTestResult RunGenerator(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
