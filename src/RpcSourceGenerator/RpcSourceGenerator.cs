@@ -29,9 +29,6 @@ namespace FrameWork.NetWork.SourceGenerators
         {
             var classDeclaration = (ClassDeclarationSyntax)context.Node;
 
-            if (!classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
-                return null;
-
             var symbol = context.SemanticModel.GetDeclaredSymbol(classDeclaration);
             if (symbol == null)
                 return null;
@@ -54,15 +51,43 @@ namespace FrameWork.NetWork.SourceGenerators
             if (classes.IsDefaultOrEmpty)
                 return;
 
-            foreach (var classDeclaration in classes)
+            // Collect all handler info grouped by packet group
+            var groupedMethods = new Dictionary<string, PacketGroupInfo>();
+
+            foreach (var classDeclaration in classes.Distinct())
             {
                 var semanticModel = compilation.GetSemanticModel(classDeclaration.SyntaxTree);
                 var classSymbol = semanticModel.GetDeclaredSymbol(classDeclaration);
                 if (classSymbol == null)
                     continue;
 
-                var rpcMethods = new List<RpcMethodInfo>();
-                var opcodes = new HashSet<byte>();
+                // Determine packet group
+                var groupName = "Default";
+                var packetGroupAttr = classSymbol.GetAttributes()
+                    .FirstOrDefault(a => a.AttributeClass?.Name == "PacketGroupAttribute" &&
+                                         a.AttributeClass.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4");
+                if (packetGroupAttr != null && packetGroupAttr.ConstructorArguments.Length > 0)
+                {
+                    var nameArg = packetGroupAttr.ConstructorArguments[0].Value as string;
+                    if (!string.IsNullOrEmpty(nameArg))
+                        groupName = nameArg;
+                }
+
+                if (!groupedMethods.TryGetValue(groupName, out var groupInfo))
+                {
+                    groupInfo = new PacketGroupInfo
+                    {
+                        GroupName = groupName,
+                        Namespace = classSymbol.ContainingNamespace?.ToDisplayString(),
+                        Methods = new List<RpcMethodInfo>(),
+                        HandlerTypes = new List<string>(),
+                        Opcodes = new Dictionary<byte, (string HandlerName, string MethodName, Location Location)>()
+                    };
+                    groupedMethods[groupName] = groupInfo;
+                }
+
+                var className = classSymbol.ToDisplayString();
+                var hasRpcMethods = false;
 
                 foreach (var member in classSymbol.GetMembers().OfType<IMethodSymbol>())
                 {
@@ -91,20 +116,22 @@ namespace FrameWork.NetWork.SourceGenerators
                             responseOpcode = (byte)responseOpcodeValue;
                     }
 
-                    // Check for duplicate opcodes
-                    if (!opcodes.Add(opcode))
+                    // Per-group duplicate opcode detection
+                    if (groupInfo.Opcodes.TryGetValue(opcode, out var existing))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             new DiagnosticDescriptor(
                                 "RPC001",
                                 "Duplicate opcode",
-                                $"Opcode 0x{opcode:X2} is already used by another handler in class {classSymbol.Name}",
+                                $"Opcode 0x{opcode:X2} is already used by '{existing.HandlerName}.{existing.MethodName}'",
                                 "RpcGenerator",
                                 DiagnosticSeverity.Error,
                                 isEnabledByDefault: true),
                             member.Locations.FirstOrDefault()));
                         continue;
                     }
+
+                    groupInfo.Opcodes[opcode] = (classSymbol.Name, member.Name, member.Locations.FirstOrDefault());
 
                     // Classify parameters
                     var parameters = new List<RpcParameterInfo>();
@@ -113,7 +140,6 @@ namespace FrameWork.NetWork.SourceGenerators
 
                     foreach (var param in member.Parameters)
                     {
-                        // Check for [FromServices]
                         var fromServicesAttr = param.GetAttributes()
                             .FirstOrDefault(a =>
                                 a.AttributeClass?.Name == "FromServicesAttribute" &&
@@ -130,7 +156,6 @@ namespace FrameWork.NetWork.SourceGenerators
                             continue;
                         }
 
-                        // Check for IConnectionContext
                         if (param.Type.Name == "IConnectionContext" &&
                             param.Type.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4")
                         {
@@ -143,7 +168,6 @@ namespace FrameWork.NetWork.SourceGenerators
                             continue;
                         }
 
-                        // Request DTO parameter
                         if (requestParam != null)
                         {
                             context.ReportDiagnostic(Diagnostic.Create(
@@ -189,9 +213,11 @@ namespace FrameWork.NetWork.SourceGenerators
                         responseType = returnType;
                     }
 
-                    rpcMethods.Add(new RpcMethodInfo
+                    hasRpcMethods = true;
+                    groupInfo.Methods.Add(new RpcMethodInfo
                     {
                         MethodName = member.Name,
+                        HandlerTypeName = className,
                         Opcode = opcode,
                         ResponseOpcode = responseOpcode,
                         ResponseType = responseType?.ToDisplayString(),
@@ -202,19 +228,30 @@ namespace FrameWork.NetWork.SourceGenerators
                     });
                 }
 
-                if (rpcMethods.Count > 0)
+                if (hasRpcMethods && !groupInfo.HandlerTypes.Contains(className))
                 {
-                    var source = GenerateSource(classSymbol, rpcMethods);
-                    context.AddSource($"{classSymbol.Name}_RpcGenerated.g.cs", source);
+                    groupInfo.HandlerTypes.Add(className);
                 }
+            }
+
+            // Generate one dispatcher + extension method per group
+            foreach (var kvp in groupedMethods)
+            {
+                var groupInfo = kvp.Value;
+                if (groupInfo.Methods.Count == 0)
+                    continue;
+
+                var source = GenerateGroupSource(groupInfo);
+                context.AddSource($"{groupInfo.GroupName}PacketDispatcher.g.cs", source);
             }
         }
 
-        private static string GenerateSource(INamedTypeSymbol classSymbol, List<RpcMethodInfo> methods)
+        private static string GenerateGroupSource(PacketGroupInfo group)
         {
-            var namespaceName = classSymbol.ContainingNamespace?.ToDisplayString();
-            var className = classSymbol.Name;
-            bool anyServices = methods.Any(m => m.HasServices);
+            var dispatcherName = $"{group.GroupName}PacketDispatcher";
+            var extensionMethodName = $"Add{group.GroupName}PacketHandlers";
+            var extensionClassName = $"{group.GroupName}PacketHandlersServiceCollectionExtensions";
+            bool anyServices = group.Methods.Any(m => m.HasServices);
 
             var sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/>");
@@ -223,64 +260,88 @@ namespace FrameWork.NetWork.SourceGenerators
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using FrameWork.NetWork.V4;");
-            if (anyServices)
-                sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+            sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
             sb.AppendLine();
 
-            if (!string.IsNullOrEmpty(namespaceName))
+            // Dispatcher class in the first handler's namespace
+            if (!string.IsNullOrEmpty(group.Namespace))
             {
-                sb.AppendLine($"namespace {namespaceName}");
+                sb.AppendLine($"namespace {group.Namespace}");
                 sb.AppendLine("{");
             }
 
-            sb.AppendLine($"    partial class {className}");
+            sb.AppendLine($"    public sealed class {dispatcherName} : IPacketDispatcher");
             sb.AppendLine("    {");
-
-            // Generate the Dispatcher nested class
-            sb.AppendLine($"        public sealed class Dispatcher : IPacketDispatcher<{className}>");
+            sb.AppendLine("        public void Dispatch(");
+            sb.AppendLine("            byte opcode,");
+            sb.AppendLine("            ReadOnlyMemory<byte> payload,");
+            sb.AppendLine("            IServiceProvider services,");
+            sb.AppendLine("            IPacketSerializer serializer,");
+            sb.AppendLine("            IConnectionContext connection)");
             sb.AppendLine("        {");
-            sb.AppendLine($"            public void Dispatch(");
-            sb.AppendLine($"                {className} handler,");
-            sb.AppendLine("                byte opcode,");
-            sb.AppendLine("                ReadOnlyMemory<byte> payload,");
-            sb.AppendLine("                IServiceProvider services,");
-            sb.AppendLine("                IPacketSerializer serializer,");
-            sb.AppendLine("                IConnectionContext connection)");
+            sb.AppendLine("            switch (opcode)");
             sb.AppendLine("            {");
-            sb.AppendLine("                switch (opcode)");
-            sb.AppendLine("                {");
 
-            foreach (var method in methods.OrderBy(m => m.Opcode))
+            foreach (var method in group.Methods.OrderBy(m => m.Opcode))
             {
-                GenerateSwitchCase(sb, className, method);
+                GenerateSwitchCase(sb, method);
             }
 
-            sb.AppendLine("                    default:");
-            sb.AppendLine("                        break;");
-            sb.AppendLine("                }");
+            sb.AppendLine("                default:");
+            sb.AppendLine("                    break;");
             sb.AppendLine("            }");
+            sb.AppendLine("        }");
 
             // Generate async wrapper methods
-            foreach (var method in methods.Where(m => m.IsAsync).OrderBy(m => m.Opcode))
+            foreach (var method in group.Methods.Where(m => m.IsAsync).OrderBy(m => m.Opcode))
             {
-                GenerateAsyncWrapper(sb, className, method);
+                GenerateAsyncWrapper(sb, method);
             }
 
-            sb.AppendLine("        }"); // end Dispatcher class
-            sb.AppendLine("    }"); // end partial class
+            sb.AppendLine("    }"); // end dispatcher class
 
-            if (!string.IsNullOrEmpty(namespaceName))
+            if (!string.IsNullOrEmpty(group.Namespace))
             {
                 sb.AppendLine("}");
             }
 
+            sb.AppendLine();
+
+            // Extension method for IServiceCollection registration
+            sb.AppendLine("namespace Microsoft.Extensions.DependencyInjection");
+            sb.AppendLine("{");
+            sb.AppendLine($"    public static class {extensionClassName}");
+            sb.AppendLine("    {");
+
+            var dispatcherFullName = string.IsNullOrEmpty(group.Namespace)
+                ? dispatcherName
+                : $"{group.Namespace}.{dispatcherName}";
+
+            sb.AppendLine($"        public static IServiceCollection {extensionMethodName}(this IServiceCollection services)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            services.AddSingleton<IPacketDispatcher, {dispatcherFullName}>();");
+
+            foreach (var handler in group.HandlerTypes)
+            {
+                sb.AppendLine($"            services.AddScoped<{handler}>();");
+            }
+
+            sb.AppendLine("            return services;");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+
             return sb.ToString();
         }
 
-        private static void GenerateSwitchCase(StringBuilder sb, string className, RpcMethodInfo method)
+        private static void GenerateSwitchCase(StringBuilder sb, RpcMethodInfo method)
         {
-            sb.AppendLine($"                    case 0x{method.Opcode:X2}:");
-            sb.AppendLine("                    {");
+            sb.AppendLine($"                case 0x{method.Opcode:X2}:");
+            sb.AppendLine("                {");
+
+            // Resolve handler from connection-scoped services
+            sb.AppendLine(
+                $"                    var handler = services.GetRequiredService<{method.HandlerTypeName}>();");
 
             var requestParam = method.Parameters.FirstOrDefault(p => p.Kind == ParameterKind.Request);
             var serviceParams = method.Parameters.Where(p => p.Kind == ParameterKind.Service).ToList();
@@ -289,31 +350,28 @@ namespace FrameWork.NetWork.SourceGenerators
             if (requestParam != null)
             {
                 sb.AppendLine(
-                    $"                        var request = serializer.Deserialize<{requestParam.TypeName}>(payload.Span);");
+                    $"                    var request = serializer.Deserialize<{requestParam.TypeName}>(payload.Span);");
             }
 
-            // Create scope for services if needed
+            // Create scope for [FromServices] if needed
             bool needsScope = serviceParams.Count > 0;
             if (needsScope)
             {
                 if (method.IsAsync)
                 {
-                    // For async: scope is passed to wrapper and disposed there
                     sb.AppendLine(
-                        "                        var __scope = services.CreateScope();");
+                        "                    var __scope = services.CreateScope();");
                 }
                 else
                 {
-                    // For sync: scope is disposed at end of case block
                     sb.AppendLine(
-                        "                        using var __scope = services.CreateScope();");
+                        "                    using var __scope = services.CreateScope();");
                 }
 
-                // Resolve each service
                 foreach (var svc in serviceParams)
                 {
                     sb.AppendLine(
-                        $"                        var __svc_{svc.ParameterName} = __scope.ServiceProvider.GetRequiredService<{svc.TypeName}>();");
+                        $"                    var __svc_{svc.ParameterName} = __scope.ServiceProvider.GetRequiredService<{svc.TypeName}>();");
                 }
             }
 
@@ -322,7 +380,6 @@ namespace FrameWork.NetWork.SourceGenerators
 
             if (method.IsAsync)
             {
-                // Build async wrapper argument list
                 var wrapperArgs = new List<string> { "handler" };
                 if (requestParam != null) wrapperArgs.Add("request");
                 foreach (var svc in serviceParams) wrapperArgs.Add($"__svc_{svc.ParameterName}");
@@ -330,28 +387,28 @@ namespace FrameWork.NetWork.SourceGenerators
                 if (needsScope) wrapperArgs.Add("__scope");
 
                 sb.AppendLine(
-                    $"                        _ = DispatchAsync_{method.MethodName}({string.Join(", ", wrapperArgs)});");
+                    $"                    _ = DispatchAsync_{method.MethodName}({string.Join(", ", wrapperArgs)});");
             }
             else
             {
                 if (method.HasResponse)
                 {
-                    sb.AppendLine($"                        var response = handler.{method.MethodName}({args});");
-                    sb.AppendLine($"                        if (response != null)");
+                    sb.AppendLine($"                    var response = handler.{method.MethodName}({args});");
+                    sb.AppendLine($"                    if (response != null)");
                     sb.AppendLine(
-                        $"                            connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
+                        $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
                 }
                 else
                 {
-                    sb.AppendLine($"                        handler.{method.MethodName}({args});");
+                    sb.AppendLine($"                    handler.{method.MethodName}({args});");
                 }
             }
 
-            sb.AppendLine("                        break;");
-            sb.AppendLine("                    }");
+            sb.AppendLine("                    break;");
+            sb.AppendLine("                }");
         }
 
-        private static void GenerateAsyncWrapper(StringBuilder sb, string className, RpcMethodInfo method)
+        private static void GenerateAsyncWrapper(StringBuilder sb, RpcMethodInfo method)
         {
             var requestParam = method.Parameters.FirstOrDefault(p => p.Kind == ParameterKind.Request);
             var serviceParams = method.Parameters.Where(p => p.Kind == ParameterKind.Service).ToList();
@@ -359,8 +416,7 @@ namespace FrameWork.NetWork.SourceGenerators
 
             sb.AppendLine();
 
-            // Build parameters for the wrapper method
-            var wrapperParams = new List<string> { $"{className} handler" };
+            var wrapperParams = new List<string> { $"{method.HandlerTypeName} handler" };
             if (requestParam != null)
                 wrapperParams.Add($"{requestParam.TypeName} request");
             foreach (var svc in serviceParams)
@@ -370,41 +426,40 @@ namespace FrameWork.NetWork.SourceGenerators
                 wrapperParams.Add("IServiceScope __scope");
 
             sb.AppendLine(
-                $"            private static async Task DispatchAsync_{method.MethodName}({string.Join(", ", wrapperParams)})");
+                $"        private static async Task DispatchAsync_{method.MethodName}({string.Join(", ", wrapperParams)})");
+            sb.AppendLine("        {");
+            sb.AppendLine("            try");
             sb.AppendLine("            {");
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
 
-            // Build handler call argument list in declaration order
             var args = BuildArgumentList(method.Parameters);
 
             if (method.HasResponse)
             {
-                sb.AppendLine($"                    var response = await handler.{method.MethodName}({args});");
-                sb.AppendLine($"                    if (response != null)");
+                sb.AppendLine($"                var response = await handler.{method.MethodName}({args});");
+                sb.AppendLine($"                if (response != null)");
                 sb.AppendLine(
-                    $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
+                    $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
             }
             else
             {
-                sb.AppendLine($"                    await handler.{method.MethodName}({args});");
-            }
-
-            sb.AppendLine("                }");
-            sb.AppendLine("                catch (Exception ex)");
-            sb.AppendLine("                {");
-            sb.AppendLine($"                    connection.OnDispatchError(0x{method.Opcode:X2}, ex);");
-            sb.AppendLine("                }");
-
-            if (needsScope)
-            {
-                sb.AppendLine("                finally");
-                sb.AppendLine("                {");
-                sb.AppendLine("                    __scope.Dispose();");
-                sb.AppendLine("                }");
+                sb.AppendLine($"                await handler.{method.MethodName}({args});");
             }
 
             sb.AppendLine("            }");
+            sb.AppendLine("            catch (Exception ex)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                connection.OnDispatchError(0x{method.Opcode:X2}, ex);");
+            sb.AppendLine("            }");
+
+            if (needsScope)
+            {
+                sb.AppendLine("            finally");
+                sb.AppendLine("            {");
+                sb.AppendLine("                __scope.Dispose();");
+                sb.AppendLine("            }");
+            }
+
+            sb.AppendLine("        }");
         }
 
         private static string BuildArgumentList(List<RpcParameterInfo> parameters)
@@ -446,6 +501,7 @@ namespace FrameWork.NetWork.SourceGenerators
         private class RpcMethodInfo
         {
             public string MethodName { get; set; }
+            public string HandlerTypeName { get; set; }
             public byte Opcode { get; set; }
             public byte ResponseOpcode { get; set; }
             public string ResponseType { get; set; }
@@ -453,6 +509,15 @@ namespace FrameWork.NetWork.SourceGenerators
             public bool IsAsync { get; set; }
             public List<RpcParameterInfo> Parameters { get; set; }
             public bool HasServices { get; set; }
+        }
+
+        private class PacketGroupInfo
+        {
+            public string GroupName { get; set; }
+            public string Namespace { get; set; }
+            public List<RpcMethodInfo> Methods { get; set; }
+            public List<string> HandlerTypes { get; set; }
+            public Dictionary<byte, (string HandlerName, string MethodName, Location Location)> Opcodes { get; set; }
         }
     }
 }

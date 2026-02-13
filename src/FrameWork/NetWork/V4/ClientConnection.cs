@@ -15,11 +15,10 @@ namespace FrameWork.NetWork.V4;
 
 /// <summary>
 /// Manages the TCP transport for a single client connection.
-/// Handles I/O loops, packet framing, and dispatches packets to the handler via the generated dispatcher.
+/// Handles I/O loops, packet framing, and dispatches packets to handlers via the generated dispatcher.
 /// Implements <see cref="IConnectionContext"/> so handlers can interact with the connection.
 /// </summary>
-internal sealed class ClientConnection<THandler> : IConnectionContext, IDisposable
-    where THandler : PacketHandler
+internal sealed class ClientConnection : IConnectionContext, IDisposable
 {
     private readonly TcpClient _tcpClient;
     private readonly NetworkStream _stream;
@@ -28,8 +27,7 @@ internal sealed class ClientConnection<THandler> : IConnectionContext, IDisposab
     private readonly Channel<ReadOnlyMemory<byte>> _sendQueue;
     private readonly IPacketFramer _framer;
     private readonly IPacketSerializer _serializer;
-    private readonly THandler _handler;
-    private readonly IPacketDispatcher<THandler> _dispatcher;
+    private readonly IPacketDispatcher _dispatcher;
     private readonly IServiceScope _connectionScope;
     private readonly IByteTransformer? _byteTransformer;
     private readonly int _errorThreshold;
@@ -68,8 +66,7 @@ internal sealed class ClientConnection<THandler> : IConnectionContext, IDisposab
         TcpClient tcpClient,
         IPacketFramer framer,
         IPacketSerializer serializer,
-        THandler handler,
-        IPacketDispatcher<THandler> dispatcher,
+        IPacketDispatcher dispatcher,
         IServiceScope connectionScope,
         IByteTransformer? byteTransformer = null,
         int receiveBufferSize = 65536,
@@ -79,7 +76,6 @@ internal sealed class ClientConnection<THandler> : IConnectionContext, IDisposab
         _stream = tcpClient.GetStream();
         _framer = framer ?? throw new ArgumentNullException(nameof(framer));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
-        _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _connectionScope = connectionScope ?? throw new ArgumentNullException(nameof(connectionScope));
         _byteTransformer = byteTransformer;
@@ -218,7 +214,6 @@ internal sealed class ClientConnection<THandler> : IConnectionContext, IDisposab
                 try
                 {
                     _dispatcher.Dispatch(
-                        _handler,
                         envelope.Opcode,
                         envelope.Payload,
                         _connectionScope.ServiceProvider,

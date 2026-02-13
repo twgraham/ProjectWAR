@@ -20,6 +20,7 @@
     <Project Path="src/WorldServer/WorldServer.csproj" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/FrameWork.Tests/FrameWork.Tests.csproj" />
     <Project Path="test/LobbyServer.Tests/LobbyServer.Tests.csproj" />
     <Project Path="test/RpcSourceGenerator.Tests/RpcSourceGenerator.Tests.csproj" />
   </Folder>

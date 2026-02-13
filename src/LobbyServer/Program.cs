@@ -28,16 +28,15 @@ try
 
             s.AddSingleton<IPacketSerializerFactory, ProtobufPacketSerializer.Factory>();
             s.AddSingleton<IPacketFramer, VarintLengthFramer>();
-            s.AddSingleton<IPacketDispatcher<LobbyClient>, LobbyClient.Dispatcher>();
-            s.AddScoped<LobbyClient>();
+            s.AddDefaultPacketHandlers();
 
-            s.AddSingleton(p => new NetworkManager<LobbyClient>(
+            s.AddSingleton(p => new NetworkManager(
                 IPEndPoint.Parse($"127.0.0.1:{Config.ClientPort}"),
                 p.GetRequiredService<IServiceScopeFactory>(),
                 p.GetRequiredService<IPacketFramer>(),
                 p.GetRequiredService<IPacketSerializerFactory>(),
-                p.GetRequiredService<IPacketDispatcher<LobbyClient>>()));
-            s.AddHostedService(p => p.GetRequiredService<NetworkManager<LobbyClient>>());
+                p.GetRequiredService<IPacketDispatcher>()));
+            s.AddHostedService(p => p.GetRequiredService<NetworkManager>());
         });
 
     var host = builder.Build();

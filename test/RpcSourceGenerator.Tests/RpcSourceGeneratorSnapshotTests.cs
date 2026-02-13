@@ -24,6 +24,13 @@ namespace FrameWork.NetWork.V4
     [System.AttributeUsage(System.AttributeTargets.Parameter)]
     public class FromServicesAttribute : System.Attribute { }
 
+    [System.AttributeUsage(System.AttributeTargets.Class, Inherited = false)]
+    public class PacketGroupAttribute : System.Attribute
+    {
+        public string GroupName { get; }
+        public PacketGroupAttribute(string groupName = ""Default"") { GroupName = groupName; }
+    }
+
     public interface IPacketSerializer
     {
         T Deserialize<T>(System.ReadOnlySpan<byte> data);
@@ -39,9 +46,9 @@ namespace FrameWork.NetWork.V4
         void OnDispatchError(byte opcode, System.Exception exception);
     }
 
-    public interface IPacketDispatcher<in THandler> where THandler : PacketHandler
+    public interface IPacketDispatcher
     {
-        void Dispatch(THandler handler, byte opcode, System.ReadOnlyMemory<byte> payload,
+        void Dispatch(byte opcode, System.ReadOnlyMemory<byte> payload,
             System.IServiceProvider services, IPacketSerializer serializer, IConnectionContext connection);
     }
 }
@@ -53,10 +60,18 @@ namespace Microsoft.Extensions.DependencyInjection
         System.IServiceProvider ServiceProvider { get; }
     }
 
+    public interface IServiceCollection { }
+
     public static class ServiceProviderServiceExtensions
     {
         public static IServiceScope CreateScope(this System.IServiceProvider provider) => null;
         public static T GetRequiredService<T>(this System.IServiceProvider provider) => default;
+    }
+
+    public static class ServiceCollectionServiceExtensions
+    {
+        public static IServiceCollection AddSingleton<TService, TImplementation>(this IServiceCollection services) => services;
+        public static IServiceCollection AddScoped<TService>(this IServiceCollection services) => services;
     }
 }";
 

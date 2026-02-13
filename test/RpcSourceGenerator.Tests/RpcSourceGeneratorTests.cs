@@ -25,6 +25,13 @@ namespace FrameWork.NetWork.V4
     [System.AttributeUsage(System.AttributeTargets.Parameter)]
     public class FromServicesAttribute : System.Attribute { }
 
+    [System.AttributeUsage(System.AttributeTargets.Class, Inherited = false)]
+    public class PacketGroupAttribute : System.Attribute
+    {
+        public string GroupName { get; }
+        public PacketGroupAttribute(string groupName = ""Default"") { GroupName = groupName; }
+    }
+
     public interface IPacketSerializer
     {
         T Deserialize<T>(System.ReadOnlySpan<byte> data);
@@ -40,9 +47,9 @@ namespace FrameWork.NetWork.V4
         void OnDispatchError(byte opcode, System.Exception exception);
     }
 
-    public interface IPacketDispatcher<in THandler> where THandler : PacketHandler
+    public interface IPacketDispatcher
     {
-        void Dispatch(THandler handler, byte opcode, System.ReadOnlyMemory<byte> payload,
+        void Dispatch(byte opcode, System.ReadOnlyMemory<byte> payload,
             System.IServiceProvider services, IPacketSerializer serializer, IConnectionContext connection);
     }
 }";
@@ -72,7 +79,7 @@ namespace TestNamespace
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("case 0x01:");
         code.ShouldContain("handler.HandlePing()");
-        code.ShouldContain("class Dispatcher : IPacketDispatcher<TestHandler>");
+        code.ShouldContain("class DefaultPacketDispatcher : IPacketDispatcher");
     }
 
     [Fact]
@@ -294,7 +301,7 @@ namespace TestNamespace
     }
 
     [Fact]
-    public void ReportsDiagnostic_ForDuplicateOpcodes()
+    public void ReportsDiagnostic_ForDuplicateOpcodes_WithinSameHandler()
     {
         var source = @"
 using System;
@@ -322,6 +329,41 @@ namespace TestNamespace
         error.ShouldNotBeNull();
         error.Severity.ShouldBe(DiagnosticSeverity.Error);
         Assert.Contains("0x01", error.GetMessage());
+    }
+
+    [Fact]
+    public void ReportsDiagnostic_ForDuplicateOpcodes_AcrossHandlers()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class HandlerA : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandlePing()
+        {
+        }
+    }
+
+    public partial class HandlerB : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandlePing2()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        var error = result.Diagnostics.FirstOrDefault(d => d.Id == "RPC001");
+        error.ShouldNotBeNull();
+        error.Severity.ShouldBe(DiagnosticSeverity.Error);
+        Assert.Contains("0x01", error.GetMessage());
+        Assert.Contains("HandlerA.HandlePing", error.GetMessage());
     }
 
     [Fact]
@@ -353,7 +395,7 @@ namespace TestNamespace
     }
 
     [Fact]
-    public void IgnoresNonPartialClass()
+    public void IncludesNonPartialHandlerClass()
     {
         var source = @"
 using System;
@@ -371,7 +413,9 @@ namespace TestNamespace
 }";
 
         var result = RunGenerator(source);
-        result.GeneratedTrees.ShouldBeEmpty();
+        result.GeneratedTrees.ShouldHaveSingleItem();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x01:");
     }
 
     [Fact]
@@ -555,6 +599,390 @@ namespace TestNamespace
         Assert.DoesNotContain("using var __scope", code);
         // Wrapper should dispose scope in finally
         code.ShouldContain("__scope.Dispose()");
+    }
+
+    [Fact]
+    public void GeneratesServiceCollectionExtensionMethod()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandlePing()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("AddDefaultPacketHandlers(this IServiceCollection services)");
+        code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.DefaultPacketDispatcher>()");
+        code.ShouldContain("services.AddScoped<TestNamespace.TestHandler>()");
+    }
+
+    [Fact]
+    public void GeneratesNamedPacketGroup()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""Chat"")]
+    public partial class ChatHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleChat()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("class ChatPacketDispatcher : IPacketDispatcher");
+        code.ShouldContain("AddChatPacketHandlers(this IServiceCollection services)");
+        code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.ChatPacketDispatcher>()");
+        code.ShouldContain("services.AddScoped<TestNamespace.ChatHandler>()");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_WithMultipleHandlersInSameGroup()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public class Request1 { }
+    public class Request2 { }
+
+    public partial class HandlerA : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void Handle1(Request1 request)
+        {
+        }
+    }
+
+    public partial class HandlerB : PacketHandler
+    {
+        [Rpc(0x02)]
+        public void Handle2(Request2 request)
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        result.GeneratedTrees.ShouldHaveSingleItem();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Both opcodes in single dispatcher
+        code.ShouldContain("case 0x01:");
+        code.ShouldContain("case 0x02:");
+        // Handler resolution from services
+        code.ShouldContain("services.GetRequiredService<TestNamespace.HandlerA>()");
+        code.ShouldContain("services.GetRequiredService<TestNamespace.HandlerB>()");
+        // Both handlers registered
+        code.ShouldContain("services.AddScoped<TestNamespace.HandlerA>()");
+        code.ShouldContain("services.AddScoped<TestNamespace.HandlerB>()");
+    }
+
+    [Fact]
+    public void ResolvesHandlerFromServices_PerOpcode()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandlePing()
+        {
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("var handler = services.GetRequiredService<TestNamespace.TestHandler>();");
+    }
+
+    // ──────────────────────────────────────────────
+    // Additional edge-case tests
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public void GeneratesDispatcher_HandlersInDifferentNamespaces_SameGroup()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace Alpha
+{
+    public class AlphaRequest { }
+
+    public partial class AlphaHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void Handle(AlphaRequest req) { }
+    }
+}
+
+namespace Beta
+{
+    public class BetaRequest { }
+
+    public partial class BetaHandler : PacketHandler
+    {
+        [Rpc(0x02)]
+        public void Handle(BetaRequest req) { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        result.GeneratedTrees.ShouldHaveSingleItem();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x01:");
+        code.ShouldContain("case 0x02:");
+        code.ShouldContain("services.AddScoped<Alpha.AlphaHandler>()");
+        code.ShouldContain("services.AddScoped<Beta.BetaHandler>()");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_BoundaryOpcodeValues()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x00)]
+        public void HandleMin() { }
+
+        [Rpc(0xFF)]
+        public void HandleMax() { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x00:");
+        code.ShouldContain("case 0xFF:");
+    }
+
+    [Fact]
+    public void GeneratesSeparateDispatchers_ForDifferentGroups()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""Auth"")]
+    public partial class AuthHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleAuth() { }
+    }
+
+    [PacketGroup(""Game"")]
+    public partial class GameHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void HandleGame() { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        // Two groups should produce two generated files
+        result.GeneratedTrees.Length.ShouldBe(2);
+
+        var allCode = string.Join("\n", result.GeneratedTrees.Select(t => t.ToString()));
+        allCode.ShouldContain("class AuthPacketDispatcher : IPacketDispatcher");
+        allCode.ShouldContain("class GamePacketDispatcher : IPacketDispatcher");
+        allCode.ShouldContain("AddAuthPacketHandlers(this IServiceCollection services)");
+        allCode.ShouldContain("AddGamePacketHandlers(this IServiceCollection services)");
+    }
+
+    [Fact]
+    public void DuplicateOpcodes_AcrossDifferentGroups_DoesNotReportError()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    [PacketGroup(""Auth"")]
+    public partial class AuthHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void Handle() { }
+    }
+
+    [PacketGroup(""Game"")]
+    public partial class GameHandler : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void Handle() { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        // Same opcode in different groups is OK
+        result.Diagnostics.Where(d => d.Id == "RPC001").ShouldBeEmpty();
+        result.GeneratedTrees.Length.ShouldBe(2);
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_HandlerWithNoNamespace()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+public partial class GlobalHandler : PacketHandler
+{
+    [Rpc(0x01)]
+    public void HandlePing() { }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        result.GeneratedTrees.ShouldHaveSingleItem();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x01:");
+        code.ShouldContain("class DefaultPacketDispatcher : IPacketDispatcher");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_OnlyRequestParam_NoResponse_NoServices()
+    {
+        // Simplest fire-and-forget RPC with just a request
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public class HeartbeatRequest { }
+
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x99)]
+        public void HandleHeartbeat(HeartbeatRequest request) { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x99:");
+        code.ShouldContain("serializer.Deserialize<TestNamespace.HeartbeatRequest>(payload.Span)");
+        code.ShouldContain("handler.HandleHeartbeat(request)");
+        // Should NOT contain scope creation (no services)
+        code.ShouldNotContain("CreateScope");
+        // Should NOT contain response sending
+        code.ShouldNotContain("SendResponse");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_ConnectionContextOnly_NoRequestNoResponse()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class TestHandler : PacketHandler
+    {
+        [Rpc(0x05)]
+        public void HandleDisconnect(IConnectionContext connection) { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("handler.HandleDisconnect(connection)");
+        // No deserialization needed
+        code.ShouldNotContain("Deserialize");
+    }
+
+    [Fact]
+    public void ServiceCollectionExtension_RegistersMultipleHandlers()
+    {
+        var source = @"
+using System;
+using FrameWork.NetWork.V4;
+
+namespace TestNamespace
+{
+    public partial class HandlerA : PacketHandler
+    {
+        [Rpc(0x01)]
+        public void Handle1() { }
+    }
+
+    public partial class HandlerB : PacketHandler
+    {
+        [Rpc(0x02)]
+        public void Handle2() { }
+    }
+
+    public partial class HandlerC : PacketHandler
+    {
+        [Rpc(0x03)]
+        public void Handle3() { }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+        // All three handlers should be registered in the DI extension
+        code.ShouldContain("services.AddScoped<TestNamespace.HandlerA>()");
+        code.ShouldContain("services.AddScoped<TestNamespace.HandlerB>()");
+        code.ShouldContain("services.AddScoped<TestNamespace.HandlerC>()");
+        code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.DefaultPacketDispatcher>()");
     }
 
     private GeneratorTestResult RunGenerator(string source)

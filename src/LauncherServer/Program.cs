@@ -37,16 +37,15 @@ try
             s.AddSingleton<IPacketSerializerContext, LauncherSerializerContext>();
             s.AddSingleton<IPacketSerializerFactory, BinaryPacketSerializerFactory>();
             s.AddSingleton<IPacketFramer, BigEndianLengthFramer>();
-            s.AddSingleton<IPacketDispatcher<LauncherClient>, LauncherClient.Dispatcher>();
-            s.AddScoped<LauncherClient>();
+            s.AddDefaultPacketHandlers();
 
-            s.AddSingleton(p => new NetworkManager<LauncherClient>(
+            s.AddSingleton(p => new NetworkManager(
                 IPEndPoint.Parse($"127.0.0.1:{config.LauncherServerPort}"),
                 p.GetRequiredService<IServiceScopeFactory>(),
                 p.GetRequiredService<IPacketFramer>(),
                 p.GetRequiredService<IPacketSerializerFactory>(),
-                p.GetRequiredService<IPacketDispatcher<LauncherClient>>()));
-            s.AddHostedService(p => p.GetRequiredService<NetworkManager<LauncherClient>>());
+                p.GetRequiredService<IPacketDispatcher>()));
+            s.AddHostedService(p => p.GetRequiredService<NetworkManager>());
         });
 
     var host = builder.Build();

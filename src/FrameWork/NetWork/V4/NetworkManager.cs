@@ -13,15 +13,14 @@ namespace FrameWork.NetWork.V4;
 /// Manages TCP server endpoints and client connections.
 /// Handles connection acceptance, DI scope creation, and client lifecycle management.
 /// </summary>
-public sealed class NetworkManager<THandler> : IHostedService, IDisposable
-    where THandler : PacketHandler
+public sealed class NetworkManager : IHostedService, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IPacketFramer _framer;
     private readonly IPacketSerializerFactory _serializerFactory;
-    private readonly IPacketDispatcher<THandler> _dispatcher;
+    private readonly IPacketDispatcher _dispatcher;
     private readonly IByteTransformer? _byteTransformer;
-    private readonly ConcurrentDictionary<int, ClientConnection<THandler>> _connections = new();
+    private readonly ConcurrentDictionary<int, ClientConnection> _connections = new();
     private readonly TcpListener _listener;
     private bool _isStarted;
     private CancellationTokenSource? _cancellationTokenSource;
@@ -64,7 +63,7 @@ public sealed class NetworkManager<THandler> : IHostedService, IDisposable
         IServiceScopeFactory scopeFactory,
         IPacketFramer framer,
         IPacketSerializerFactory serializerFactory,
-        IPacketDispatcher<THandler> dispatcher,
+        IPacketDispatcher dispatcher,
         IByteTransformer? byteTransformer = null)
     {
         _listener = new TcpListener(endpoint);
@@ -93,15 +92,12 @@ public sealed class NetworkManager<THandler> : IHostedService, IDisposable
                 // Create a connection-scoped DI scope
                 var connectionScope = _scopeFactory.CreateScope();
 
-                // Resolve the handler from the connection scope
-                var handler = connectionScope.ServiceProvider.GetRequiredService<THandler>();
-
                 // Create a per-connection serializer instance
                 var serializer = _serializerFactory.Create();
 
                 // Create the connection (owns the scope lifetime)
-                var connection = new ClientConnection<THandler>(
-                    tcpClient, _framer, serializer, handler, _dispatcher,
+                var connection = new ClientConnection(
+                    tcpClient, _framer, serializer, _dispatcher,
                     connectionScope, _byteTransformer,
                     ReceiveBufferSize, ErrorThreshold);
 
@@ -130,7 +126,7 @@ public sealed class NetworkManager<THandler> : IHostedService, IDisposable
         }
     }
 
-    private void OnConnectionDisconnected(int connectionId, ClientConnection<THandler> connection, DisconnectReason reason)
+    private void OnConnectionDisconnected(int connectionId, ClientConnection connection, DisconnectReason reason)
     {
         if (_connections.TryRemove(connectionId, out _))
         {

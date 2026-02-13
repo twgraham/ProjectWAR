@@ -148,7 +148,7 @@ namespace FrameWork.NetWork.V4
             {
                 var elementType = propertyType.GetElementType()!;
                 if (elementType == typeof(byte))
-                    return reader.ReadByteArray();
+                    return reader.ReadByteArray(lengthSize);
                 // Use generic method for arrays
                 return ReadArrayGeneric(ref reader, elementType, lengthSize);
             }
@@ -444,7 +444,7 @@ namespace FrameWork.NetWork.V4
 
             public float ReadFloat()
             {
-                var value = BitConverter.ToSingle(_span[(_position + 4).._position]);
+                var value = BinaryPrimitives.ReadSingleBigEndian(_span.Slice(_position, 4));
                 _position += 4;
                 return value;
             }
@@ -560,9 +560,7 @@ namespace FrameWork.NetWork.V4
 
             public void WriteFloat(float value)
             {
-                var span = _writer.GetSpan(4);
-                BitConverter.TryWriteBytes(span, value);
-                span.Reverse();
+                BinaryPrimitives.WriteSingleBigEndian(_writer.GetSpan(4), value);
                 _writer.Advance(4);
             }
 
