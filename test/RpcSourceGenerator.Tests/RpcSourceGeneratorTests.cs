@@ -4,12 +4,12 @@ using Microsoft.CodeAnalysis.CSharp;
 using FrameWork.NetWork.SourceGenerators;
 using Shouldly;
 
-namespace Tests.RpcSourceGenerator;
+namespace RpcSourceGenerator.Tests;
 
 public class RpcSourceGeneratorTests
 {
     private static readonly string HandlerBaseCode = @"
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     public interface IPacketHandler { }
 
@@ -59,11 +59,11 @@ namespace FrameWork.NetWork.V4
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -87,13 +87,13 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class LoginRequest { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x10)]
         public void HandleLogin(LoginRequest request)
@@ -117,14 +117,14 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class LoginRequest { }
     public class LoginResponse { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public LoginResponse HandleLogin(LoginRequest request)
@@ -150,13 +150,13 @@ namespace TestNamespace
         var source = @"
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class PingRequest { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public async Task HandlePing(PingRequest request)
@@ -182,14 +182,14 @@ namespace TestNamespace
         var source = @"
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class LoginRequest { }
     public class LoginResponse { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public async Task<LoginResponse> HandleLogin(LoginRequest request)
@@ -216,14 +216,14 @@ namespace TestNamespace
         var source = @"
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class MyService { }
     public class LoginResponse { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public async Task<LoginResponse> HandleLogin([FromServices] MyService svc)
@@ -247,11 +247,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing(IConnectionContext context)
@@ -272,7 +272,7 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -280,7 +280,7 @@ namespace TestNamespace
     public class LoginResponse { }
     public class MyService { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x10, 0x11)]
         public LoginResponse HandleLogin(LoginRequest request, IConnectionContext context, [FromServices] MyService svc)
@@ -305,11 +305,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -336,11 +336,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class HandlerA : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerA : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -348,7 +348,7 @@ namespace TestNamespace
         }
     }
 
-    public partial class HandlerB : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerB : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing2()
@@ -371,14 +371,14 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class Param1 { }
     public class Param2 { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleInvalid(Param1 p1, Param2 p2)
@@ -399,11 +399,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -423,7 +423,7 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -445,11 +445,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         public void RegularMethod()
         {
@@ -467,7 +467,7 @@ namespace TestNamespace
         var source = @"
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -475,7 +475,7 @@ namespace TestNamespace
     public class Request2 { }
     public class Response2 { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleMethod1(Request1 request)
@@ -514,14 +514,14 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class LoginRequest { }
     public class LoginResponse { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x10)]
         public LoginResponse HandleLogin(LoginRequest request)
@@ -543,14 +543,14 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class Svc1 { }
     public class Svc2 { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle([FromServices] Svc1 svc1, [FromServices] Svc2 svc2)
@@ -574,13 +574,13 @@ namespace TestNamespace
         var source = @"
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class MyService { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public async Task HandleAsync([FromServices] MyService svc)
@@ -606,11 +606,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -623,9 +623,9 @@ namespace TestNamespace
 
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
-        code.ShouldContain("AddDefaultPacketHandlers(this IServiceCollection services)");
-        code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.DefaultPacketDispatcher>()");
-        code.ShouldContain("services.AddScoped<TestNamespace.TestHandler>()");
+        code.ShouldContain("AddDefaultPacketHandlers(this IServerNetworkingBuilder services)");
+        code.ShouldContain("services.WithPacketDispatcher<TestNamespace.DefaultPacketDispatcher>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.TestHandler>()");
     }
 
     [Fact]
@@ -633,12 +633,12 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""Chat"")]
-    public partial class ChatHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class ChatHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleChat()
@@ -652,9 +652,9 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("class ChatPacketDispatcher : IPacketDispatcher");
-        code.ShouldContain("AddChatPacketHandlers(this IServiceCollection services)");
-        code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.ChatPacketDispatcher>()");
-        code.ShouldContain("services.AddScoped<TestNamespace.ChatHandler>()");
+        code.ShouldContain("AddChatPacketHandlers(this IServerNetworkingBuilder services)");
+        code.ShouldContain("services.WithPacketDispatcher<TestNamespace.ChatPacketDispatcher>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.ChatHandler>()");
     }
 
     [Fact]
@@ -662,14 +662,14 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class Request1 { }
     public class Request2 { }
 
-    public partial class HandlerA : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerA : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle1(Request1 request)
@@ -677,7 +677,7 @@ namespace TestNamespace
         }
     }
 
-    public partial class HandlerB : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerB : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x02)]
         public void Handle2(Request2 request)
@@ -699,8 +699,8 @@ namespace TestNamespace
         code.ShouldContain("services.GetRequiredService<TestNamespace.HandlerA>()");
         code.ShouldContain("services.GetRequiredService<TestNamespace.HandlerB>()");
         // Both handlers registered
-        code.ShouldContain("services.AddScoped<TestNamespace.HandlerA>()");
-        code.ShouldContain("services.AddScoped<TestNamespace.HandlerB>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.HandlerA>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.HandlerB>()");
     }
 
     [Fact]
@@ -708,11 +708,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
@@ -737,13 +737,13 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace Alpha
 {
     public class AlphaRequest { }
 
-    public partial class AlphaHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class AlphaHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle(AlphaRequest req) { }
@@ -754,7 +754,7 @@ namespace Beta
 {
     public class BetaRequest { }
 
-    public partial class BetaHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class BetaHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x02)]
         public void Handle(BetaRequest req) { }
@@ -768,8 +768,8 @@ namespace Beta
         var code = result.GeneratedTrees[0].ToString();
         code.ShouldContain("case 0x01:");
         code.ShouldContain("case 0x02:");
-        code.ShouldContain("services.AddScoped<Alpha.AlphaHandler>()");
-        code.ShouldContain("services.AddScoped<Beta.BetaHandler>()");
+        code.ShouldContain("services.AddHandler<Alpha.AlphaHandler>()");
+        code.ShouldContain("services.AddHandler<Beta.BetaHandler>()");
     }
 
     [Fact]
@@ -777,11 +777,11 @@ namespace Beta
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x00)]
         public void HandleMin() { }
@@ -804,19 +804,19 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""Auth"")]
-    public partial class AuthHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class AuthHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleAuth() { }
     }
 
     [PacketGroup(""Game"")]
-    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class GameHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleGame() { }
@@ -832,8 +832,8 @@ namespace TestNamespace
         var allCode = string.Join("\n", result.GeneratedTrees.Select(t => t.ToString()));
         allCode.ShouldContain("class AuthPacketDispatcher : IPacketDispatcher");
         allCode.ShouldContain("class GamePacketDispatcher : IPacketDispatcher");
-        allCode.ShouldContain("AddAuthPacketHandlers(this IServiceCollection services)");
-        allCode.ShouldContain("AddGamePacketHandlers(this IServiceCollection services)");
+        allCode.ShouldContain("AddAuthPacketHandlers(this IServerNetworkingBuilder services)");
+        allCode.ShouldContain("AddGamePacketHandlers(this IServerNetworkingBuilder services)");
     }
 
     [Fact]
@@ -841,19 +841,19 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""Auth"")]
-    public partial class AuthHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class AuthHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle() { }
     }
 
     [PacketGroup(""Game"")]
-    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class GameHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle() { }
@@ -872,9 +872,9 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
-public partial class GlobalHandler : FrameWork.NetWork.V4.IPacketHandler
+public partial class GlobalHandler : Core.Infrastructure.Network.IPacketHandler
 {
     [Rpc(0x01)]
     public void HandlePing() { }
@@ -895,13 +895,13 @@ public partial class GlobalHandler : FrameWork.NetWork.V4.IPacketHandler
         // Simplest fire-and-forget RPC with just a request
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     public class HeartbeatRequest { }
 
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x99)]
         public void HandleHeartbeat(HeartbeatRequest request) { }
@@ -926,11 +926,11 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class TestHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x05)]
         public void HandleDisconnect(IConnectionContext connection) { }
@@ -951,23 +951,23 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
-    public partial class HandlerA : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerA : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void Handle1() { }
     }
 
-    public partial class HandlerB : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerB : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x02)]
         public void Handle2() { }
     }
 
-    public partial class HandlerC : FrameWork.NetWork.V4.IPacketHandler
+    public partial class HandlerC : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x03)]
         public void Handle3() { }
@@ -979,10 +979,10 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
         // All three handlers should be registered in the DI extension
-        code.ShouldContain("services.AddScoped<TestNamespace.HandlerA>()");
-        code.ShouldContain("services.AddScoped<TestNamespace.HandlerB>()");
-        code.ShouldContain("services.AddScoped<TestNamespace.HandlerC>()");
-        code.ShouldContain("services.AddSingleton<IPacketDispatcher, TestNamespace.DefaultPacketDispatcher>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.HandlerA>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.HandlerB>()");
+        code.ShouldContain("services.AddHandler<TestNamespace.HandlerC>()");
+        code.ShouldContain("services.WithPacketDispatcher<TestNamespace.DefaultPacketDispatcher>()");
     }
 
     [Fact]
@@ -990,12 +990,12 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""My Group"")]
-    public partial class MyHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class MyHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleMessage()
@@ -1010,7 +1010,7 @@ namespace TestNamespace
         var code = result.GeneratedTrees[0].ToString();
         // Group name "My Group" should be sanitized to "MyGroup"
         code.ShouldContain("class MyGroupPacketDispatcher : IPacketDispatcher");
-        code.ShouldContain("AddMyGroupPacketHandlers(this IServiceCollection services)");
+        code.ShouldContain("AddMyGroupPacketHandlers(this IServerNetworkingBuilder services)");
     }
 
     [Fact]
@@ -1018,12 +1018,12 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""Auth-2.0"")]
-    public partial class AuthHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class AuthHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleAuth()
@@ -1038,7 +1038,7 @@ namespace TestNamespace
         var code = result.GeneratedTrees[0].ToString();
         // Group name "Auth-2.0" should be sanitized to "Auth20"
         code.ShouldContain("class Auth20PacketDispatcher : IPacketDispatcher");
-        code.ShouldContain("AddAuth20PacketHandlers(this IServiceCollection services)");
+        code.ShouldContain("AddAuth20PacketHandlers(this IServerNetworkingBuilder services)");
     }
 
     [Fact]
@@ -1046,12 +1046,12 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""class"")]
-    public partial class ClassHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class ClassHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleClass()
@@ -1066,7 +1066,7 @@ namespace TestNamespace
         var code = result.GeneratedTrees[0].ToString();
         // Group name "class" (keyword) should be sanitized to "class_"
         code.ShouldContain("class class_PacketDispatcher : IPacketDispatcher");
-        code.ShouldContain("Addclass_PacketHandlers(this IServiceCollection services)");
+        code.ShouldContain("Addclass_PacketHandlers(this IServerNetworkingBuilder services)");
     }
 
     [Fact]
@@ -1074,12 +1074,12 @@ namespace TestNamespace
     {
         var source = @"
 using System;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
     [PacketGroup(""123Game"")]
-    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class GameHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandleGame()
@@ -1094,7 +1094,7 @@ namespace TestNamespace
         var code = result.GeneratedTrees[0].ToString();
         // Group name "123Game" should be sanitized to "_123Game"
         code.ShouldContain("class _123GamePacketDispatcher : IPacketDispatcher");
-        code.ShouldContain("Add_123GamePacketHandlers(this IServiceCollection services)");
+        code.ShouldContain("Add_123GamePacketHandlers(this IServerNetworkingBuilder services)");
     }
 
     private GeneratorTestResult RunGenerator(string source)

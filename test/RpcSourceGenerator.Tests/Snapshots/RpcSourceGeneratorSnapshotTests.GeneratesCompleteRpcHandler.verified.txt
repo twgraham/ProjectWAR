@@ -1,7 +1,7 @@
 ﻿
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace TestNamespace
@@ -109,10 +109,10 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     public static class DefaultPacketHandlersServiceCollectionExtensions
     {
-        public static IServiceCollection AddDefaultPacketHandlers(this IServiceCollection services)
+        public static IServerNetworkingBuilder AddDefaultPacketHandlers(this IServerNetworkingBuilder services)
         {
-            services.AddSingleton<IPacketDispatcher, TestNamespace.DefaultPacketDispatcher>();
-            services.AddScoped<TestNamespace.GameHandler>();
+            services.WithPacketDispatcher<TestNamespace.DefaultPacketDispatcher>();
+            services.AddHandler<TestNamespace.GameHandler>();
             return services;
         }
     }

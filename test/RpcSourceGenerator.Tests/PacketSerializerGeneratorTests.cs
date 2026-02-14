@@ -4,12 +4,12 @@ using Microsoft.CodeAnalysis.CSharp;
 using FrameWork.NetWork.SourceGenerators;
 using Shouldly;
 
-namespace Tests.RpcSourceGenerator;
+namespace RpcSourceGenerator.Tests;
 
 public class PacketSerializerGeneratorTests
 {
     private static readonly string AttributeCode = @"
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     [System.AttributeUsage(System.AttributeTargets.Class)]
     public class PacketSerializerContextAttribute : System.Attribute
@@ -29,7 +29,7 @@ namespace FrameWork.NetWork.V4
     public void GeneratesSerializer_ForSimpleType()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -61,7 +61,7 @@ namespace TestNamespace
     public void GeneratesSerializer_ForNestedTypes()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -100,7 +100,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Collections.Generic;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -136,7 +136,7 @@ namespace TestNamespace
     public void GeneratesSerializer_WithNullableProperties()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -165,7 +165,7 @@ namespace TestNamespace
     public void GeneratesSerializer_WithEnums()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -200,7 +200,7 @@ namespace TestNamespace
     public void GeneratesSerializer_WithPrimitiveTypes()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -235,7 +235,7 @@ namespace TestNamespace
     public void IgnoresNonPartialClass()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -260,7 +260,7 @@ namespace TestNamespace
     public void GeneratesSerializer_ForMultipleRootTypes()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -284,18 +284,13 @@ namespace TestNamespace
         
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
-        
-        
-        
-        
-        
     }
 
     [Fact]
     public void GeneratesSerializer_WithArrays()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -325,7 +320,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Collections.Generic;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {

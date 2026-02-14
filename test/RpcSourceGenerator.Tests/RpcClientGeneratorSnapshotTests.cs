@@ -3,12 +3,12 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using FrameWork.NetWork.SourceGenerators;
 
-namespace Tests.RpcSourceGenerator;
+namespace RpcSourceGenerator.Tests;
 
 public class RpcClientGeneratorSnapshotTests
 {
     private static readonly string ClientBaseCode = @"
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     public abstract class Client
     {
@@ -33,7 +33,7 @@ namespace FrameWork.NetWork.V4
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {

@@ -4,12 +4,12 @@ using Microsoft.CodeAnalysis.CSharp;
 using FrameWork.NetWork.SourceGenerators;
 using Shouldly;
 
-namespace Tests.RpcSourceGenerator;
+namespace RpcSourceGenerator.Tests;
 
 public class RpcClientGeneratorTests
 {
     private static readonly string ClientBaseCode = @"
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     public abstract class Client
     {
@@ -34,7 +34,7 @@ namespace FrameWork.NetWork.V4
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -63,7 +63,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -91,7 +91,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -116,7 +116,7 @@ namespace TestNamespace
     public void GeneratesClientMethod_Synchronous_WithResponse()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -143,7 +143,7 @@ namespace TestNamespace
     public void GeneratesClientMethod_Synchronous_FireAndForget()
     {
         var source = @"
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -171,7 +171,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -210,7 +210,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -237,7 +237,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -260,7 +260,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -300,7 +300,7 @@ namespace TestNamespace
     {
         var source = @"
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {

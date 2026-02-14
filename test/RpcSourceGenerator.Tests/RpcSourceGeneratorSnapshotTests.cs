@@ -3,12 +3,12 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using FrameWork.NetWork.SourceGenerators;
 
-namespace Tests.RpcSourceGenerator;
+namespace RpcSourceGenerator.Tests;
 
 public class RpcSourceGeneratorSnapshotTests
 {
     private static readonly string HandlerBaseCode = @"
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     public interface IPacketHandler { }
 
@@ -81,7 +81,7 @@ namespace Microsoft.Extensions.DependencyInjection
         var source = @"
 using System;
 using System.Threading.Tasks;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 
 namespace TestNamespace
 {
@@ -92,7 +92,7 @@ namespace TestNamespace
     public class NotifyRequest { }
     public class MyService { }
 
-    public partial class GameHandler : FrameWork.NetWork.V4.IPacketHandler
+    public partial class GameHandler : Core.Infrastructure.Network.IPacketHandler
     {
         [Rpc(0x01)]
         public void HandlePing()
