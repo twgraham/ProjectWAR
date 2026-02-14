@@ -35,23 +35,30 @@ try
     if (!Log.InitLog(configuration.LogLevel, "AccountCacher"))
         ConsoleMgr.WaitAndExit(2000);
 
-    var builder = Host.CreateDefaultBuilder()
-        .ConfigureWebHostDefaults(builder =>
-        {
-            builder.ConfigureKestrel(opts =>
-                    opts.ListenLocalhost(6800, o => { o.UseHttps(); }))
-                .ConfigureServices(s => s.ConfigureServices(configuration))
-                .Configure(app =>
-                {
-                    app.UseRouting();
-                    app.UseEndpoints(endpoints => { endpoints.MapGrpcService<AccountMgrService>(); });
-                });
-        });
-
-    var host = builder.Build();
+    var host = Program.CreateHostBuilder(Array.Empty<string>(), configuration, 6800).Build();
     await host.RunAsync();
 }
 catch (Exception ex)
 {
     Console.WriteLine(ex.Message);
+}
+
+// Make the Program class accessible and expose a factory method
+public partial class Program
+{
+    public static IHostBuilder CreateHostBuilder(string[] args, AccountConfig configuration, int port = 6800)
+    {
+        return Host.CreateDefaultBuilder(args)
+            .ConfigureWebHostDefaults(builder =>
+            {
+                builder.ConfigureKestrel(opts =>
+                        opts.ListenLocalhost(port, o => { o.UseHttps(); }))
+                    .ConfigureServices(s => s.ConfigureServices(configuration))
+                    .Configure(app =>
+                    {
+                        app.UseRouting();
+                        app.UseEndpoints(endpoints => { endpoints.MapGrpcService<AccountMgrService>(); });
+                    });
+            });
+    }
 }
