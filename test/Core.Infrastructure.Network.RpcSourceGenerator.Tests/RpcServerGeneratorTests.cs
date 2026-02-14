@@ -1,12 +1,11 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using FrameWork.NetWork.SourceGenerators;
 using Shouldly;
 
-namespace RpcSourceGenerator.Tests;
+namespace Core.Infrastructure.Network.RpcSourceGenerator.Tests;
 
-public class RpcSourceGeneratorTests
+public class RpcServerGeneratorTests
 {
     private static readonly string HandlerBaseCode = @"
 namespace Core.Infrastructure.Network
@@ -1111,7 +1110,7 @@ namespace TestNamespace
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        var generator = new FrameWork.NetWork.SourceGenerators.RpcSourceGenerator();
+        var generator = new global::RpcSourceGenerator.RpcServerGenerator();
         var driver = CSharpGeneratorDriver.Create(generator);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 

@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using FrameWork.NetWork.SourceGenerators;
+using RpcSourceGenerator;
 
-namespace RpcSourceGenerator.Tests;
+namespace Core.Infrastructure.Network.RpcSourceGenerator.Tests;
 
 public class RpcClientGeneratorSnapshotTests
 {
@@ -84,7 +84,7 @@ namespace TestNamespace
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        var generator = new FrameWork.NetWork.SourceGenerators.RpcClientGenerator();
+        var generator = new RpcClientGenerator();
         var driver = CSharpGeneratorDriver.Create(generator);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 

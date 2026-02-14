@@ -1,15 +1,15 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace FrameWork.NetWork.SourceGenerators
+namespace RpcSourceGenerator
 {
     [Generator]
-    public class RpcSourceGenerator : IIncrementalGenerator
+    public class RpcServerGenerator : IIncrementalGenerator
     {
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -51,7 +51,7 @@ namespace FrameWork.NetWork.SourceGenerators
 
             var sb = new StringBuilder();
 
-            foreach (char c in groupName)
+            foreach (var c in groupName)
             {
                 if (char.IsLetterOrDigit(c))
                 {
@@ -115,8 +115,8 @@ namespace FrameWork.NetWork.SourceGenerators
                         GroupName = groupName,
                         SanitizedGroupName = SanitizeGroupName(groupName),
                         Namespace = classSymbol.ContainingNamespace?.ToDisplayString(),
-                        Methods = new List<RpcMethodInfo>(),
-                        HandlerTypes = new List<string>(),
+                        Methods = [],
+                        HandlerTypes = [],
                         Opcodes = new Dictionary<byte, (string HandlerName, string MethodName, Location Location)>()
                     };
                     groupedMethods[groupName] = groupInfo;
@@ -142,9 +142,9 @@ namespace FrameWork.NetWork.SourceGenerators
                     if (opcodeValue == null)
                         continue;
 
-                    byte opcode = (byte)opcodeValue;
+                    var opcode = (byte)opcodeValue;
 
-                    byte responseOpcode = opcode;
+                    var responseOpcode = opcode;
                     if (rpcAttribute.ConstructorArguments.Length > 1)
                     {
                         var responseOpcodeValue = rpcAttribute.ConstructorArguments[1].Value;
@@ -172,7 +172,7 @@ namespace FrameWork.NetWork.SourceGenerators
                     // Classify parameters
                     var parameters = new List<RpcParameterInfo>();
                     RpcParameterInfo requestParam = null;
-                    bool hasValidationError = false;
+                    var hasValidationError = false;
 
                     foreach (var param in member.Parameters)
                     {
@@ -233,8 +233,8 @@ namespace FrameWork.NetWork.SourceGenerators
 
                     // Determine return type
                     var returnType = member.ReturnType;
-                    bool isAsync = returnType.Name == "Task" || returnType.Name == "ValueTask";
-                    bool hasResponse = false;
+                    var isAsync = returnType.Name == "Task" || returnType.Name == "ValueTask";
+                    var hasResponse = false;
                     ITypeSymbol responseType = null;
 
                     if (isAsync && returnType is INamedTypeSymbol namedReturnType &&
@@ -389,7 +389,7 @@ namespace FrameWork.NetWork.SourceGenerators
             }
 
             // Create scope for [FromServices] if needed
-            bool needsScope = serviceParams.Count > 0;
+            var needsScope = serviceParams.Count > 0;
             if (needsScope)
             {
                 if (method.IsAsync)
@@ -429,7 +429,7 @@ namespace FrameWork.NetWork.SourceGenerators
                 if (method.HasResponse)
                 {
                     sb.AppendLine($"                    var response = handler.{method.MethodName}({args});");
-                    sb.AppendLine($"                    if (response != null)");
+                    sb.AppendLine("                    if (response != null)");
                     sb.AppendLine(
                         $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
                 }
@@ -447,7 +447,7 @@ namespace FrameWork.NetWork.SourceGenerators
         {
             var requestParam = method.Parameters.FirstOrDefault(p => p.Kind == ParameterKind.Request);
             var serviceParams = method.Parameters.Where(p => p.Kind == ParameterKind.Service).ToList();
-            bool needsScope = serviceParams.Count > 0;
+            var needsScope = serviceParams.Count > 0;
 
             sb.AppendLine();
 
@@ -471,7 +471,7 @@ namespace FrameWork.NetWork.SourceGenerators
             if (method.HasResponse)
             {
                 sb.AppendLine($"                var response = await handler.{method.MethodName}({args});");
-                sb.AppendLine($"                if (response != null)");
+                sb.AppendLine("                if (response != null)");
                 sb.AppendLine(
                     $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
             }

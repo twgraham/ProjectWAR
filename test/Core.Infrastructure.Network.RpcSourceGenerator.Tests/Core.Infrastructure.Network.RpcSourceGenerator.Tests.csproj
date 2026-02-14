@@ -28,7 +28,7 @@
   <ItemGroup>
     <!-- Reference the generator project normally for testing, not as an analyzer -->
     <ProjectReference Include="..\..\src\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
-    <ProjectReference Include="..\..\src\RpcSourceGenerator\RpcSourceGenerator.csproj" />
+    <ProjectReference Include="..\..\src\Core.Infrastructure.Network.RpcSourceGenerators\Core.Infrastructure.Network.RpcSourceGenerators.csproj" />
   </ItemGroup>
 
 </Project>

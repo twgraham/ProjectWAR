@@ -1,13 +1,13 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace FrameWork.NetWork.SourceGenerators
+namespace RpcSourceGenerator
 {
     [Generator]
     public class PacketSerializerGenerator : IIncrementalGenerator
@@ -15,9 +15,9 @@ namespace FrameWork.NetWork.SourceGenerators
         // Track collection types that need helper methods
         private class CollectionMethodTracker
         {
-            public HashSet<string> DeserializeMethods { get; } = new HashSet<string>();
-            public HashSet<string> SerializeMethods { get; } = new HashSet<string>();
-            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize)> CollectionInfo { get; } = new Dictionary<string, (ITypeSymbol, ITypeSymbol, int)>();
+            public HashSet<string> DeserializeMethods { get; } = [];
+            public HashSet<string> SerializeMethods { get; } = [];
+            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize)> CollectionInfo { get; } = new();
         }
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -33,7 +33,7 @@ namespace FrameWork.NetWork.SourceGenerators
             var compilationAndContexts = context.CompilationProvider.Combine(contextClasses.Collect());
 
             // Generate source for each context
-            context.RegisterSourceOutput(compilationAndContexts, static (spc, source) => Execute(source.Left, source.Right!, spc));
+            context.RegisterSourceOutput(compilationAndContexts, static (spc, source) => Execute(source.Left, source.Right, spc));
         }
 
         private static ClassDeclarationSyntax? GetContextClassOrNull(GeneratorSyntaxContext context)
@@ -128,13 +128,9 @@ namespace FrameWork.NetWork.SourceGenerators
                     var propType = prop.Type;
                     
                     // Get underlying type for nullables
-                    if (propType is INamedTypeSymbol { IsGenericType: true } nullableType)
+                    if (propType is INamedTypeSymbol { IsGenericType: true, ConstructedFrom.SpecialType: SpecialType.System_Nullable_T } nullableType)
                     {
-                        var genericDef = nullableType.ConstructedFrom;
-                        if (genericDef.SpecialType == SpecialType.System_Nullable_T)
-                        {
-                            propType = nullableType.TypeArguments[0];
-                        }
+                        propType = nullableType.TypeArguments[0];
                     }
 
                     // Check if this property type needs its own serializer
@@ -313,7 +309,7 @@ namespace FrameWork.NetWork.SourceGenerators
             sb.AppendLine($"            return new {fullTypeName}");
             sb.AppendLine("            {");
             
-            for (int i = 0; i < properties.Count; i++)
+            for (var i = 0; i < properties.Count; i++)
             {
                 var prop = properties[i];
                 var propType = prop.Type;
@@ -331,14 +327,9 @@ namespace FrameWork.NetWork.SourceGenerators
                 if (underlyingType.TypeKind == TypeKind.Enum)
                 {
                     var enumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    if (isNullable)
-                    {
-                        sb.Append($"                {prop.Name} = reader.IsAtEnd() ? null : ({enumTypeName})reader.ReadByte()");
-                    }
-                    else
-                    {
-                        sb.Append($"                {prop.Name} = ({enumTypeName})reader.ReadByte()");
-                    }
+                    sb.Append(isNullable
+                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : ({enumTypeName})reader.ReadByte()"
+                        : $"                {prop.Name} = ({enumTypeName})reader.ReadByte()");
                 }
                 else if (IsCollectionType(underlyingType, out var elementType))
                 {
@@ -353,14 +344,9 @@ namespace FrameWork.NetWork.SourceGenerators
                 {
                     // Custom reference type - call its deserializer passing the reader by reference
                     var customTypeSafeName = GetSafeTypeName(customType);
-                    if (isNullable)
-                    {
-                        sb.Append($"                {prop.Name} = reader.IsAtEnd() ? null : Deserialize{customTypeSafeName}(ref reader)");
-                    }
-                    else
-                    {
-                        sb.Append($"                {prop.Name} = Deserialize{customTypeSafeName}(ref reader)");
-                    }
+                    sb.Append(isNullable
+                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : Deserialize{customTypeSafeName}(ref reader)"
+                        : $"                {prop.Name} = Deserialize{customTypeSafeName}(ref reader)");
                 }
                 else if (isNullable)
                 {
@@ -560,26 +546,28 @@ namespace FrameWork.NetWork.SourceGenerators
         {
             elementType = null;
 
-            // Check for arrays (except byte[] which is handled specially)
-            if (type is IArrayTypeSymbol arrayType)
+            switch (type)
             {
-                elementType = arrayType.ElementType;
-                return elementType.SpecialType != SpecialType.System_Byte;
-            }
-
-            // Check for generic collections
-            if (type is INamedTypeSymbol { IsGenericType: true } namedType)
-            {
-                var genericDef = namedType.ConstructedFrom;
-                var genericDefString = genericDef.ToDisplayString();
-
-                if (genericDefString == "System.Collections.Generic.List<T>" ||
-                    genericDefString == "System.Collections.Generic.IList<T>" ||
-                    genericDefString == "System.Collections.Generic.ICollection<T>" ||
-                    genericDefString == "System.Collections.Generic.IEnumerable<T>")
+                // Check for arrays (except byte[] which is handled specially)
+                case IArrayTypeSymbol arrayType:
+                    elementType = arrayType.ElementType;
+                    return elementType.SpecialType != SpecialType.System_Byte;
+                // Check for generic collections
+                case INamedTypeSymbol { IsGenericType: true } namedType:
                 {
-                    elementType = namedType.TypeArguments[0];
-                    return true;
+                    var genericDef = namedType.ConstructedFrom;
+                    var genericDefString = genericDef.ToDisplayString();
+
+                    if (genericDefString is "System.Collections.Generic.List<T>" 
+                        or "System.Collections.Generic.IList<T>" 
+                        or "System.Collections.Generic.ICollection<T>"
+                        or "System.Collections.Generic.IEnumerable<T>")
+                    {
+                        elementType = namedType.TypeArguments[0];
+                        return true;
+                    }
+
+                    break;
                 }
             }
 
@@ -666,11 +654,11 @@ namespace FrameWork.NetWork.SourceGenerators
             
             // Create array to hold elements
             sb.AppendLine($"            var array = new {elementTypeName}[length];");
-            sb.AppendLine($"            for (int i = 0; i < length; i++)");
+            sb.AppendLine("            for (int i = 0; i < length; i++)");
             sb.AppendLine("            {");
             
             // Generate element reading code
-            sb.Append($"                array[i] = ");
+            sb.Append("                array[i] = ");
             GenerateElementRead(sb, elementType);
             sb.AppendLine(";");
             
@@ -680,20 +668,15 @@ namespace FrameWork.NetWork.SourceGenerators
             // Convert to appropriate collection type if needed
             if (collectionType is IArrayTypeSymbol)
             {
-                sb.AppendLine($"            return array;");
+                sb.AppendLine("            return array;");
             }
-            else if (collectionType is INamedTypeSymbol namedType && namedType.IsGenericType)
+            else if (collectionType is INamedTypeSymbol { IsGenericType: true } namedType)
             {
                 var genericDef = namedType.ConstructedFrom.ToDisplayString();
-                if (genericDef == "System.Collections.Generic.List<T>")
-                {
-                    sb.AppendLine($"            return new System.Collections.Generic.List<{elementTypeName}>(array);");
-                }
-                else
-                {
+                sb.AppendLine(genericDef == "System.Collections.Generic.List<T>"
+                    ? $"            return new System.Collections.Generic.List<{elementTypeName}>(array);"
                     // For IList<T>, ICollection<T>, IEnumerable<T>, return as array
-                    sb.AppendLine($"            return array;");
-                }
+                    : "            return array;");
             }
             
             sb.AppendLine("        }");
@@ -708,15 +691,9 @@ namespace FrameWork.NetWork.SourceGenerators
             
             // Get count - handle different collection types
             string countExpression;
-            if (collectionType is IArrayTypeSymbol)
-            {
-                countExpression = "collection.Length";
-            }
-            else
-            {
+            countExpression = collectionType is IArrayTypeSymbol ? "collection.Length" :
                 // For List<T> and other collections, use Count property
-                countExpression = "collection.Count";
-            }
+                "collection.Count";
             
             // Write length validation and length bytes
             sb.AppendLine($"            var count = {countExpression};");
@@ -724,10 +701,10 @@ namespace FrameWork.NetWork.SourceGenerators
             sb.AppendLine();
             
             // Loop through and write each element
-            sb.AppendLine($"            foreach (var item in collection)");
+            sb.AppendLine("            foreach (var item in collection)");
             sb.AppendLine("            {");
             
-            sb.Append($"                ");
+            sb.Append("                ");
             GenerateElementWrite(sb, elementType, "item");
             sb.AppendLine(";");
             
@@ -772,12 +749,8 @@ namespace FrameWork.NetWork.SourceGenerators
         private static string GetEmptyCollectionExpression(ITypeSymbol collectionType, ITypeSymbol elementType)
         {
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            
-            if (collectionType is IArrayTypeSymbol)
-            {
-                return $"System.Array.Empty<{elementTypeName}>()";
-            }
-            else if (collectionType is INamedTypeSymbol namedType && namedType.IsGenericType)
+
+            if (collectionType is INamedTypeSymbol { IsGenericType: true } namedType)
             {
                 var genericDef = namedType.ConstructedFrom.ToDisplayString();
                 if (genericDef == "System.Collections.Generic.List<T>")
@@ -785,7 +758,7 @@ namespace FrameWork.NetWork.SourceGenerators
                     return $"new System.Collections.Generic.List<{elementTypeName}>()";
                 }
             }
-            
+
             return $"System.Array.Empty<{elementTypeName}>()";
         }
 
@@ -800,7 +773,7 @@ namespace FrameWork.NetWork.SourceGenerators
             }
             
             // Handle nested collections
-            if (IsCollectionType(elementType, out var nestedElementType))
+            if (IsCollectionType(elementType, out _))
             {
                 // For nested collections, recursively call the collection deserialize method
                 // This will be handled by the tracker system
@@ -847,7 +820,7 @@ namespace FrameWork.NetWork.SourceGenerators
             }
             
             // Handle nested collections
-            if (IsCollectionType(elementType, out var nestedElementType))
+            if (IsCollectionType(elementType, out _))
             {
                 // For nested collections, would need to call collection serialize method
                 throw new NotSupportedException("Nested collections are not yet supported in discrete methods");
