@@ -37,7 +37,7 @@ namespace FrameWork.NetWork.SourceGenerators
             foreach (var iface in symbol.AllInterfaces)
             {
                 if (iface.Name == "IPacketHandler" &&
-                    iface.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4")
+                    iface.ContainingNamespace?.ToString() == "Core.Infrastructure.Network")
                     return classDeclaration;
             }
 
@@ -100,7 +100,7 @@ namespace FrameWork.NetWork.SourceGenerators
                 var groupName = "Default";
                 var packetGroupAttr = classSymbol.GetAttributes()
                     .FirstOrDefault(a => a.AttributeClass?.Name == "PacketGroupAttribute" &&
-                                         a.AttributeClass.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4");
+                                         a.AttributeClass.ContainingNamespace?.ToString() == "Core.Infrastructure.Network");
                 if (packetGroupAttr != null && packetGroupAttr.ConstructorArguments.Length > 0)
                 {
                     var nameArg = packetGroupAttr.ConstructorArguments[0].Value as string;
@@ -130,7 +130,7 @@ namespace FrameWork.NetWork.SourceGenerators
                     var rpcAttribute = member.GetAttributes()
                         .FirstOrDefault(a => a.AttributeClass?.Name == "RpcAttribute" &&
                                              a.AttributeClass.ContainingNamespace?.ToString() ==
-                                             "FrameWork.NetWork.V4");
+                                             "Core.Infrastructure.Network");
 
                     if (rpcAttribute == null)
                         continue;
@@ -179,7 +179,7 @@ namespace FrameWork.NetWork.SourceGenerators
                         var fromServicesAttr = param.GetAttributes()
                             .FirstOrDefault(a =>
                                 a.AttributeClass?.Name == "FromServicesAttribute" &&
-                                a.AttributeClass.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4");
+                                a.AttributeClass.ContainingNamespace?.ToString() == "Core.Infrastructure.Network");
 
                         if (fromServicesAttr != null)
                         {
@@ -193,7 +193,7 @@ namespace FrameWork.NetWork.SourceGenerators
                         }
 
                         if (param.Type.Name == "IConnectionContext" &&
-                            param.Type.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4")
+                            param.Type.ContainingNamespace?.ToString() == "Core.Infrastructure.Network")
                         {
                             parameters.Add(new RpcParameterInfo
                             {
@@ -294,7 +294,7 @@ namespace FrameWork.NetWork.SourceGenerators
             sb.AppendLine();
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Threading.Tasks;");
-            sb.AppendLine("using FrameWork.NetWork.V4;");
+            sb.AppendLine("using Core.Infrastructure.Network;");
             sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
             sb.AppendLine();
 
@@ -352,13 +352,13 @@ namespace FrameWork.NetWork.SourceGenerators
                 ? dispatcherName
                 : $"{group.Namespace}.{dispatcherName}";
 
-            sb.AppendLine($"        public static IServiceCollection {extensionMethodName}(this IServiceCollection services)");
+            sb.AppendLine($"        public static IServerNetworkingBuilder {extensionMethodName}(this IServerNetworkingBuilder services)");
             sb.AppendLine("        {");
-            sb.AppendLine($"            services.AddSingleton<IPacketDispatcher, {dispatcherFullName}>();");
+            sb.AppendLine($"            services.WithPacketDispatcher<{dispatcherFullName}>();");
 
             foreach (var handler in group.HandlerTypes)
             {
-                sb.AppendLine($"            services.AddScoped<{handler}>();");
+                sb.AppendLine($"            services.AddHandler<{handler}>();");
             }
 
             sb.AppendLine("            return services;");

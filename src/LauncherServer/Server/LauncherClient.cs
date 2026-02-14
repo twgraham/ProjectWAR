@@ -1,32 +1,35 @@
 using System;
 using System.Linq;
-using FrameWork;
-using FrameWork.NetWork.V4;
+using Core.Infrastructure.Network;
 using LauncherServer.Config;
 using LauncherServer.Dtos;
+using Microsoft.Extensions.Logging;
 
 namespace LauncherServer.Server;
 
-public partial class LauncherClient : FrameWork.NetWork.V4.IPacketHandler
+public class LauncherClient : IPacketHandler
 {
     private readonly AccountMgr.AccountMgrClient _accountMgrClient;
     private readonly MythLoginServiceConfigManager _loginServiceConfigManager;
     private readonly LauncherConfig _config;
+    private readonly ILogger<LauncherClient> _logger;
 
     public LauncherClient(
         AccountMgr.AccountMgrClient accountMgrClient,
         MythLoginServiceConfigManager loginServiceConfigManager,
-        LauncherConfig config)
+        LauncherConfig config,
+        ILogger<LauncherClient> logger)
     {
         _accountMgrClient = accountMgrClient;
         _loginServiceConfigManager = loginServiceConfigManager;
         _config = config;
+        _logger = logger;
     }
 
     [Rpc(Opcodes.CL_CHECK, Opcodes.LCR_CHECK)]
     public CheckVersionResponse CL_CHECK(CheckVersionRequest packet)
     {
-        Log.Debug("CL_CHECK", "Launcher Version : " + packet.Version);
+        _logger.LogDebug("Launcher Version : {Version}", packet.Version);
 
         if (packet.Version != _config.Version)
         {
@@ -39,7 +42,7 @@ public partial class LauncherClient : FrameWork.NetWork.V4.IPacketHandler
 
         if ((packet.Options & 1) == 1)
         {
-            Log.Debug("CHECK", "Has mythic file info");
+            _logger.LogDebug("Has mythic file info");
             if (packet.MythLoginServiceConfigLength != (ulong)_loginServiceConfigManager.Content.Length)
             {
                 return new CheckVersionResponse
@@ -52,7 +55,7 @@ public partial class LauncherClient : FrameWork.NetWork.V4.IPacketHandler
 
         if ((packet.Options & 2) == 2)
         {
-            Log.Debug("CHECK", "Has system info");
+            _logger.LogDebug("Has system info");
         }
 
         return new CheckVersionResponse { Result = (byte)CheckResult.LAUNCHER_OK };
@@ -108,7 +111,7 @@ public partial class LauncherClient : FrameWork.NetWork.V4.IPacketHandler
 
         if (authResult.Result == LoginResult.Success)
         {
-            Log.Debug("CL_START", "Sending token to client : " + startRequest.Username + " token : " + authResult.Token);
+            _logger.LogDebug("Sending token to client : {Username}", startRequest.Username);
             response.AuthToken = authResult.Token;
         }
 

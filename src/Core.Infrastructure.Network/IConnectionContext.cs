@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Provides context about the current connection. Passed to RPC handler methods as a parameter.

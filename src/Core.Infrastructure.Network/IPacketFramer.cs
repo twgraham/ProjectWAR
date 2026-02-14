@@ -1,6 +1,4 @@
-using System;
-
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Defines the wire-level packet framing protocol (length headers, opcode extraction, packet creation).

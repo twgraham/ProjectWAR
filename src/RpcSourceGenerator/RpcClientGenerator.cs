@@ -43,7 +43,7 @@ namespace FrameWork.NetWork.SourceGenerators
             var baseType = symbol.BaseType;
             while (baseType != null)
             {
-                if (baseType.Name == "Client" && baseType.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4")
+                if (baseType.Name == "Client" && baseType.ContainingNamespace?.ToString() == "Core.Infrastructure.Network")
                     return classDeclaration;
                 baseType = baseType.BaseType;
             }
@@ -74,7 +74,7 @@ namespace FrameWork.NetWork.SourceGenerators
 
                     var rpcAttribute = member.GetAttributes()
                         .FirstOrDefault(a => a.AttributeClass?.Name == "RpcAttribute" && 
-                                           a.AttributeClass.ContainingNamespace?.ToString() == "FrameWork.NetWork.V4");
+                                           a.AttributeClass.ContainingNamespace?.ToString() == "Core.Infrastructure.Network");
 
                     if (rpcAttribute == null)
                         continue;

@@ -1,14 +1,10 @@
-using System;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Abstract base class for TCP clients.
@@ -106,11 +102,6 @@ public abstract class Client : IDisposable
     
     protected abstract ReadOnlyMemory<byte> CreatePacket<T>(byte opcode, T payload);
 
-    public string? GetRemoteAddress()
-    {
-        return ((IPEndPoint)_tcpClient.Client.RemoteEndPoint)?.ToString();
-    }
-
     /// <summary>
     /// Processes a packet with the given opcode and payload.
     /// This method is overridden by the source generator in derived classes.
@@ -183,21 +174,19 @@ public abstract class Client : IDisposable
         }
         finally
         {
-            // _receiveQueue.Writer.Complete();
+            _receiveQueue.Writer.Complete();
         }
     }
 
     private async Task<int> ExtractAndQueuePacketsAsync(int bufferLength, CancellationToken cancellationToken)
     {
         var buffer = new ReadOnlyMemory<byte>(_receiveBuffer, 0, bufferLength);
-        Log.Debug("Client", $"Buffer hex: {Convert.ToHexString(buffer.Span)}");
 
         while (TryExtractPacket(ref buffer, out var packetData))
         {
             // Extract opcode and payload
             var opcode = ExtractOpcode(packetData.Span, out var payloadOffset);
             var payloadSlice = packetData[payloadOffset..];
-            Log.Info("Client", $"Received packet with opcode 0x{opcode:X2} and payload size {payloadSlice.Length} bytes");
 
             // Copy payload to a new array — the ReadOnlyMemory slice points into _receiveBuffer
             // which may be overwritten by a subsequent read before ProcessLoopAsync consumes it.
@@ -277,7 +266,6 @@ public abstract class Client : IDisposable
         {
             await foreach (var data in _sendQueue.Reader.ReadAllAsync(cancellationToken))
             {
-                Log.Debug("Client", $"Buffer response hex: {Convert.ToHexString(data.Span)}");
                 try
                 {
                     await _stream.WriteAsync(data, cancellationToken).ConfigureAwait(false);

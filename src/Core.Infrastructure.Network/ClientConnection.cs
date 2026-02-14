@@ -1,17 +1,12 @@
-using System;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Manages the TCP transport for a single client connection.
@@ -29,6 +24,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
     private readonly IPacketSerializer _serializer;
     private readonly IPacketDispatcher _dispatcher;
     private readonly IServiceScope _connectionScope;
+    private readonly ILogger<ClientConnection> _logger;
     private readonly IByteTransformer? _byteTransformer;
     private readonly int _errorThreshold;
     private readonly ConcurrentDictionary<string, object> _items = new();
@@ -68,6 +64,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         IPacketSerializer serializer,
         IPacketDispatcher dispatcher,
         IServiceScope connectionScope,
+        ILogger<ClientConnection> logger,
         IByteTransformer? byteTransformer = null,
         int receiveBufferSize = 65536,
         int errorThreshold = 3)
@@ -78,6 +75,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _connectionScope = connectionScope ?? throw new ArgumentNullException(nameof(connectionScope));
+        _logger = logger;
         _byteTransformer = byteTransformer;
         _receiveBuffer = new byte[receiveBufferSize];
         _receiveQueue = Channel.CreateUnbounded<PacketEnvelope>();
@@ -111,7 +109,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
     public void OnDispatchError(byte opcode, Exception exception)
     {
-        Log.Error("Connection", $"Handler error for opcode 0x{opcode:X2}: {exception}");
+        _logger.LogError(exception, "Handler error for opcode 0x{Opcode:X2}", opcode);
         var errors = Interlocked.Increment(ref _errorCount);
         if (errors >= _errorThreshold)
             Disconnect(DisconnectReason.TooManyErrors);
@@ -193,13 +191,13 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
     private async Task<int> ExtractAndQueuePacketsAsync(int bufferLength, CancellationToken cancellationToken)
     {
         var buffer = new ReadOnlyMemory<byte>(_receiveBuffer, 0, bufferLength);
-        Log.Debug("Connection", $"Buffer hex: {Convert.ToHexString(buffer.Span)}");
+        _logger.LogDebug("Buffer hex: {Buffer}", Convert.ToHexString(buffer.Span));
 
         while (_framer.TryExtractPacket(ref buffer, out var packetData))
         {
             var opcode = _framer.ExtractOpcode(packetData.Span, out var payloadOffset);
             var payloadSlice = packetData[payloadOffset..];
-            Log.Info("Connection", $"Received packet with opcode 0x{opcode:X2} and payload size {payloadSlice.Length} bytes");
+            _logger.LogInformation("Received packet with opcode 0x{Opcode:X2} and payload size {PayloadLength} bytes", opcode, payloadSlice.Length);
 
             // Copy payload — the slice points into _receiveBuffer which may be overwritten
             var payloadCopy = payloadSlice.ToArray();
@@ -236,7 +234,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
                 }
                 catch (InvalidOperationException ex)
                 {
-                    Log.Error("Connection", $"Deserialization error for opcode 0x{envelope.Opcode:X2}: {ex.Message}");
+                    _logger.LogError(ex, "Deserialization error for opcode 0x{Opcode:X2}", envelope.Opcode);
                     Disconnect(DisconnectReason.MalformedPacket);
                     return;
                 }
@@ -258,7 +256,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         {
             await foreach (var data in _sendQueue.Reader.ReadAllAsync(cancellationToken))
             {
-                Log.Debug("Connection", $"Sending packet hex: {Convert.ToHexString(data.Span)}");
+                _logger.LogDebug("Sending packet hex: {SendBuffer}", Convert.ToHexString(data.Span));
                 try
                 {
                     await _stream.WriteAsync(data, cancellationToken).ConfigureAwait(false);

@@ -1,11 +1,10 @@
-using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Text;
 using FastGenericNew;
 
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     /// <summary>
     /// Binary packet serializer that uses reflection to serialize/deserialize structs.

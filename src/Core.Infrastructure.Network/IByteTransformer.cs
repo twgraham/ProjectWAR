@@ -1,6 +1,4 @@
-using System;
-
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     /// <summary>
     /// Transforms raw bytes (e.g., decryption, decompression) before packet processing.

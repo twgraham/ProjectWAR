@@ -1,4 +1,4 @@
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     /// <summary>
     /// Specifies the reason a client was disconnected.

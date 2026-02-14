@@ -10,6 +10,7 @@
   <Folder Name="/src/">
     <Project Path="src/AccountCacher/AccountCacher.csproj" />
     <Project Path="src/Common/Common.csproj" />
+    <Project Path="src/Core.Infrastructure.Network/Core.Infrastructure.Network.csproj" />
     <Project Path="src/FrameWork/FrameWork.csproj" />
     <Project Path="src/Launcher/Launcher.csproj" />
     <Project Path="src/LauncherServer.Dtos/LauncherServer.Dtos.csproj" />
@@ -20,7 +21,7 @@
     <Project Path="src/WorldServer/WorldServer.csproj" />
   </Folder>
   <Folder Name="/test/">
-    <Project Path="test/FrameWork.Tests/FrameWork.Tests.csproj" />
+    <Project Path="test/Core.Infrastructure.Network.Tests/Core.Infrastructure.Network.Tests.csproj" />
     <Project Path="test/LobbyServer.Tests/LobbyServer.Tests.csproj" />
     <Project Path="test/RpcSourceGenerator.Tests/RpcSourceGenerator.Tests.csproj" />
   </Folder>

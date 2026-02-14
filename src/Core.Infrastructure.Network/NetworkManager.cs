@@ -1,13 +1,9 @@
-using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Manages TCP server endpoints and client connections.
@@ -15,11 +11,7 @@ namespace FrameWork.NetWork.V4;
 /// </summary>
 public sealed class NetworkManager : IHostedService, IDisposable
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IPacketFramer _framer;
-    private readonly IPacketSerializerFactory _serializerFactory;
-    private readonly IPacketDispatcher _dispatcher;
-    private readonly IByteTransformer? _byteTransformer;
+    private readonly ClientConnectionFactory _connectionFactory;
     private readonly ConcurrentDictionary<int, ClientConnection> _connections = new();
     private readonly TcpListener _listener;
     private bool _isStarted;
@@ -58,20 +50,10 @@ public sealed class NetworkManager : IHostedService, IDisposable
     /// </summary>
     public event Action<IConnectionContext, DisconnectReason>? ClientDisconnected;
 
-    public NetworkManager(
-        IPEndPoint endpoint,
-        IServiceScopeFactory scopeFactory,
-        IPacketFramer framer,
-        IPacketSerializerFactory serializerFactory,
-        IPacketDispatcher dispatcher,
-        IByteTransformer? byteTransformer = null)
+    internal NetworkManager(IPEndPoint endpoint, ClientConnectionFactory connectionFactory)
     {
+        _connectionFactory = connectionFactory;
         _listener = new TcpListener(endpoint);
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _framer = framer ?? throw new ArgumentNullException(nameof(framer));
-        _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
-        _byteTransformer = byteTransformer;
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -89,17 +71,7 @@ public sealed class NetworkManager : IHostedService, IDisposable
                     continue;
                 }
 
-                // Create a connection-scoped DI scope
-                var connectionScope = _scopeFactory.CreateScope();
-
-                // Create a per-connection serializer instance
-                var serializer = _serializerFactory.Create();
-
-                // Create the connection (owns the scope lifetime)
-                var connection = new ClientConnection(
-                    tcpClient, _framer, serializer, _dispatcher,
-                    connectionScope, _byteTransformer,
-                    ReceiveBufferSize, ErrorThreshold);
+                var connection = _connectionFactory.Create(tcpClient, ReceiveBufferSize, ErrorThreshold);
 
                 var connectionId = Interlocked.Increment(ref _nextConnectionId);
 

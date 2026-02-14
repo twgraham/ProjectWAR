@@ -1,8 +1,7 @@
-using System;
 using System.Buffers;
 using System.Buffers.Binary;
 
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Packet framer using a 4-byte big-endian length prefix.

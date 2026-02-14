@@ -1,6 +1,4 @@
-using System;
-
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     /// <summary>
     /// Marks a class as a packet serializer context for source generation.

@@ -1,4 +1,4 @@
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     /// <summary>
     /// Factory for creating packet serializer instances.

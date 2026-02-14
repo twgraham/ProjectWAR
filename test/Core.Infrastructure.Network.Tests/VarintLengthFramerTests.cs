@@ -1,9 +1,6 @@
-using System;
-using System.Buffers;
-using FrameWork.NetWork.V4;
 using Shouldly;
 
-namespace FrameWork.Tests;
+namespace Core.Infrastructure.Network.Tests;
 
 public class VarintLengthFramerTests
 {

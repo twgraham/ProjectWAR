@@ -1,6 +1,4 @@
-using System;
-
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Marks a parameter on an RPC handler method for dependency injection from the service provider.

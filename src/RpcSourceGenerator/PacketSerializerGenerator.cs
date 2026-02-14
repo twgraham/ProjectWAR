@@ -51,7 +51,7 @@ namespace FrameWork.NetWork.SourceGenerators
 
             var hasContextAttribute = symbol.GetAttributes()
                 .Any(a => a.AttributeClass?.Name == "PacketSerializerContextAttribute" &&
-                         a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "FrameWork.NetWork.V4");
+                         a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
 
             return hasContextAttribute ? classDeclaration : null;
         }
@@ -211,7 +211,7 @@ namespace FrameWork.NetWork.SourceGenerators
             sb.AppendLine();
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Buffers;");
-            sb.AppendLine("using FrameWork.NetWork.V4;");
+            sb.AppendLine("using Core.Infrastructure.Network;");
             sb.AppendLine();
 
             if (!string.IsNullOrEmpty(namespaceName))
@@ -285,7 +285,7 @@ namespace FrameWork.NetWork.SourceGenerators
             // Generate collection helper methods
             GenerateCollectionHelperMethods(sb, tracker);
 
-            // SpanReader and SpanWriter are internal in FrameWork.NetWork.V4.BinaryPacketSerializer
+            // SpanReader and SpanWriter are internal in Core.Infrastructure.Network.BinaryPacketSerializer
             // and will be used by the generated code
 
             sb.AppendLine("    }");
@@ -591,7 +591,7 @@ namespace FrameWork.NetWork.SourceGenerators
             // Look for PacketLength attribute
             var packetLengthAttr = property.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.Name == "PacketLengthAttribute" &&
-                                    a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "FrameWork.NetWork.V4");
+                                    a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
             
             if (packetLengthAttr is { ConstructorArguments.Length: > 0 })
             {

@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FrameWork\FrameWork.csproj" />
+    <ProjectReference Include="..\..\src\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
   </ItemGroup>
 
 </Project>

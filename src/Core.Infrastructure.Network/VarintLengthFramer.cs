@@ -1,7 +1,6 @@
-using System;
 using System.Buffers;
 
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Packet framer using variable-length (varint) size prefix.

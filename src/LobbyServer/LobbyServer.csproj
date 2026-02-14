@@ -18,7 +18,7 @@
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\Common\Common.csproj" />
-      <ProjectReference Include="..\FrameWork\FrameWork.csproj" />
+      <ProjectReference Include="..\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
       <ProjectReference Include="..\RpcSourceGenerator\RpcSourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
     <ItemGroup>

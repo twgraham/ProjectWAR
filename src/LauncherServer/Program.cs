@@ -1,9 +1,8 @@
 using System;
-using System.IO;
 using System.Net;
 using System.Net.Http;
+using Core.Infrastructure.Network;
 using FrameWork;
-using FrameWork.NetWork.V4;
 using Grpc.Net.Client;
 using LauncherServer;
 using LauncherServer.Config;
@@ -33,19 +32,12 @@ try
             };
             s.AddSingleton(config);
             s.AddSingleton(mythLoginServiceConfigManager);
-            s.AddSingleton<LauncherSerializerContext>();
             s.AddSingleton<IPacketSerializerContext, LauncherSerializerContext>();
-            s.AddSingleton<IPacketSerializerFactory, BinaryPacketSerializerFactory>();
-            s.AddSingleton<IPacketFramer, BigEndianLengthFramer>();
-            s.AddDefaultPacketHandlers();
 
-            s.AddSingleton(p => new NetworkManager(
-                IPEndPoint.Parse($"127.0.0.1:{config.LauncherServerPort}"),
-                p.GetRequiredService<IServiceScopeFactory>(),
-                p.GetRequiredService<IPacketFramer>(),
-                p.GetRequiredService<IPacketSerializerFactory>(),
-                p.GetRequiredService<IPacketDispatcher>()));
-            s.AddHostedService(p => p.GetRequiredService<NetworkManager>());
+            s.AddServerNetworking(IPEndPoint.Parse($"127.0.0.1:{config.LauncherServerPort}"))
+                .WithPacketFramer<BigEndianLengthFramer>()
+                .WithPacketSerializerFactory<BinaryPacketSerializerFactory>()
+                .AddDefaultPacketHandlers();
         });
 
     var host = builder.Build();

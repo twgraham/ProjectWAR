@@ -1,6 +1,4 @@
-using System;
-
-namespace FrameWork.NetWork.V4
+namespace Core.Infrastructure.Network
 {
     /// <summary>
     /// Specifies the number of bytes used to encode the length of a collection property in a packet.

@@ -1,6 +1,4 @@
-using System;
-
-namespace FrameWork.NetWork.V4;
+namespace Core.Infrastructure.Network;
 
 /// <summary>
 /// Assigns a packet handler to a named packet group.
