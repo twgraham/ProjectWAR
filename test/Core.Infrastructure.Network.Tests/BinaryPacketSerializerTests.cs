@@ -572,20 +572,6 @@ public class BinaryPacketSerializerTests
         result.ReadOnly.ShouldBe(0);
     }
 
-    [Fact]
-    public void Factory_CreateReturnsSameInstance()
-    {
-        // GIVEN: A BinaryPacketSerializerFactory instance
-        var factory = new BinaryPacketSerializerFactory();
-
-        // WHEN: Calling Create() multiple times
-        var a = factory.Create();
-        var b = factory.Create();
-
-        // THEN: The factory returns the same singleton instance
-        a.ShouldBeSameAs(b);
-    }
-
     private T RoundTrip<T>(T original)
     {
         var writer = new ArrayBufferWriter<byte>();

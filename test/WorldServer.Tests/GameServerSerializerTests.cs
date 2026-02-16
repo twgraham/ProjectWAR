@@ -119,19 +119,4 @@ public class GameServerSerializerTests
     }
 
     #endregion
-
-    #region Factory
-
-    [Fact]
-    public void Factory_ReturnsSameInstance()
-    {
-        var factory = new GameServerSerializer.Factory();
-
-        var a = factory.Create();
-        var b = factory.Create();
-
-        a.ShouldBeSameAs(b);
-    }
-
-    #endregion
 }

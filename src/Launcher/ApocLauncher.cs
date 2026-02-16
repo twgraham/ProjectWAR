@@ -45,10 +45,9 @@ public partial class ApocLauncher : Form
         LaunchLocalServer = SafeReadAppSettings("LaunchLocal", false);
 
         // Initialize launcher services
-        var serializerContext = new LauncherSerializerContext();
-        var serializerFactory = new BinaryPacketSerializerFactory(serializerContext);
+        var serializer = new BinaryPacketSerializer(new LauncherSerializerContext());
             
-        _launcherService = new LauncherService(TestServerIP, TestServerPort, serializerFactory);
+        _launcherService = new LauncherService(TestServerIP, TestServerPort, serializer);
         _launcherService.Disconnected += OnDisconnected;
 
         InitializeComponent();

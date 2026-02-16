@@ -7,23 +7,17 @@ namespace Core.Infrastructure.Network;
 internal class ClientConnectionFactory
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IPacketFramer _framer;
-    private readonly IPacketSerializerFactory _serializerFactory;
     private readonly IPacketDispatcher _dispatcher;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IByteTransformer? _byteTransformer;
     
     public ClientConnectionFactory(
         IServiceScopeFactory scopeFactory,
-        IPacketFramer framer,
-        IPacketSerializerFactory serializerFactory,
         IPacketDispatcher dispatcher,
         ILoggerFactory loggerFactory,
         IByteTransformer? byteTransformer = null)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _framer = framer ?? throw new ArgumentNullException(nameof(framer));
-        _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _loggerFactory = loggerFactory;
         _byteTransformer = byteTransformer;
@@ -35,11 +29,14 @@ internal class ClientConnectionFactory
         var connectionScope = _scopeFactory.CreateScope();
 
         // Create a per-connection serializer instance
-        var serializer = _serializerFactory.Create();
+        var serializer = connectionScope.ServiceProvider.GetRequiredService<IPacketSerializer>();
+
+        // Resolve a per-connection framer so it can hold reusable buffers safely
+        var framer = connectionScope.ServiceProvider.GetRequiredService<IPacketFramer>();
 
         // Create the connection (owns the scope lifetime)
         var connection = new ClientConnection(
-            tcpClient, _framer, serializer, _dispatcher,
+            tcpClient, framer, serializer, _dispatcher,
             connectionScope, _loggerFactory.CreateLogger<ClientConnection>(), _byteTransformer,
             receiveBufferSize, errorThreshold);
 

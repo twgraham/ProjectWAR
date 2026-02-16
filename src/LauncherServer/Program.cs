@@ -36,7 +36,7 @@ try
 
             s.AddServerNetworking(IPEndPoint.Parse($"127.0.0.1:{config.LauncherServerPort}"))
                 .WithPacketFramer<BigEndianLengthFramer>()
-                .WithPacketSerializerFactory<BinaryPacketSerializerFactory>()
+                .WithPacketSerializer<BinaryPacketSerializer>()
                 .AddDefaultPacketHandlers();
         });
 

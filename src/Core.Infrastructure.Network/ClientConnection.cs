@@ -136,25 +136,27 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
                 bufferOffset += bytesRead;
 
-                // Apply byte transformation if configured
+                // Apply byte transformation only to newly received bytes.
+                // Leftover bytes from previous iterations are already transformed.
                 if (_byteTransformer != null)
                 {
-                    var dataSpan = new ReadOnlySpan<byte>(_receiveBuffer, 0, bufferOffset);
-                    var transformBuffer = ArrayPool<byte>.Shared.Rent(bufferOffset * 2);
+                    var newDataSpan = new ReadOnlySpan<byte>(_receiveBuffer, bufferOffset - bytesRead, bytesRead);
+                    var transformBuffer = ArrayPool<byte>.Shared.Rent(bytesRead * 2);
                     try
                     {
-                        var transformedLength = _byteTransformer.Transform(dataSpan, transformBuffer);
+                        var transformedLength = _byteTransformer.Transform(newDataSpan, transformBuffer);
 
                         // Validate transformed output length before copying back into the receive buffer
                         if (transformedLength < 0 ||
-                            transformedLength > _receiveBuffer.Length ||
+                            transformedLength > _receiveBuffer.Length - (bufferOffset - bytesRead) ||
                             transformedLength > transformBuffer.Length)
                         {
                             Disconnect(DisconnectReason.BufferOverrun);
                             return;
                         }
-                        Buffer.BlockCopy(transformBuffer, 0, _receiveBuffer, 0, transformedLength);
-                        bufferOffset = transformedLength;
+
+                        Buffer.BlockCopy(transformBuffer, 0, _receiveBuffer, bufferOffset - bytesRead, transformedLength);
+                        bufferOffset = (bufferOffset - bytesRead) + transformedLength;
                     }
                     finally
                     {
@@ -191,18 +193,24 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
     private async Task<int> ExtractAndQueuePacketsAsync(int bufferLength, CancellationToken cancellationToken)
     {
         var buffer = new ReadOnlyMemory<byte>(_receiveBuffer, 0, bufferLength);
-        _logger.LogDebug("Buffer hex: {Buffer}", Convert.ToHexString(buffer.Span));
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Buffer hex: {Buffer}", Convert.ToHexString(buffer.Span));
 
         while (_framer.TryExtractPacket(ref buffer, out var packetData))
         {
             var opcode = _framer.ExtractOpcode(packetData.Span, out var payloadOffset);
             var payloadSlice = packetData[payloadOffset..];
-            _logger.LogInformation("Received packet with opcode 0x{Opcode:X2} and payload size {PayloadLength} bytes", opcode, payloadSlice.Length);
 
-            // Copy payload — the slice points into _receiveBuffer which may be overwritten
-            var payloadCopy = payloadSlice.ToArray();
+            if (_logger.IsEnabled(LogLevel.Trace))
+                _logger.LogTrace("Received packet with opcode 0x{Opcode:X2} and payload size {PayloadLength} bytes", opcode, payloadSlice.Length);
 
-            await _receiveQueue.Writer.WriteAsync(new PacketEnvelope(opcode, payloadCopy), cancellationToken)
+            // Copy payload into pooled memory — the slice points into _receiveBuffer
+            // which may be overwritten by a subsequent read before ProcessLoopAsync consumes it.
+            var owner = MemoryPool<byte>.Shared.Rent(payloadSlice.Length);
+            payloadSlice.Span.CopyTo(owner.Memory.Span);
+
+            await _receiveQueue.Writer.WriteAsync(new PacketEnvelope(opcode, owner, payloadSlice.Length), cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -242,6 +250,10 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
                 {
                     OnDispatchError(envelope.Opcode, ex);
                 }
+                finally
+                {
+                    envelope.Dispose();
+                }
             }
         }
         catch (OperationCanceledException)
@@ -252,15 +264,29 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
     private async Task SendLoopAsync(CancellationToken cancellationToken)
     {
+        const int maxWritesBeforeFlush = 32;
+
         try
         {
+            var writesSinceFlush = 0;
+
             await foreach (var data in _sendQueue.Reader.ReadAllAsync(cancellationToken))
             {
-                _logger.LogDebug("Sending packet hex: {SendBuffer}", Convert.ToHexString(data.Span));
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("Sending packet hex: {SendBuffer}", Convert.ToHexString(data.Span));
+
                 try
                 {
                     await _stream.WriteAsync(data, cancellationToken).ConfigureAwait(false);
-                    await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    writesSinceFlush++;
+
+                    // Flush when the queue is momentarily empty or after a batch limit
+                    // to prevent data from sitting unflushed under sustained load.
+                    if (_sendQueue.Reader.Count == 0 || writesSinceFlush >= maxWritesBeforeFlush)
+                    {
+                        await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                        writesSinceFlush = 0;
+                    }
                 }
                 catch (IOException)
                 {

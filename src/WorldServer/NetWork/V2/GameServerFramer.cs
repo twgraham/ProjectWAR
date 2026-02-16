@@ -34,6 +34,8 @@ public sealed class GameServerFramer : IPacketFramer
     private const int OpcodeOffsetInHeader = 7; // Opcode is the last byte of the 8-byte header
     private const int PayloadSizeAdjustment = 2; // payload length = packetSize + 2
 
+    private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
+
     /// <inheritdoc />
     public bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
     {
@@ -68,15 +70,16 @@ public sealed class GameServerFramer : IPacketFramer
     /// <inheritdoc />
     public ReadOnlyMemory<byte> CreatePacket<T>(byte opcode, T payload, IPacketSerializer serializer)
     {
-        var payloadWriter = new ArrayBufferWriter<byte>();
-        serializer.Serialize(payloadWriter, payload);
-        var payloadSize = payloadWriter.WrittenCount;
+        // Reuse the instance writer — safe because each connection gets its own framer
+        _payloadWriter.ResetWrittenCount();
+        serializer.Serialize(_payloadWriter, payload);
+        var payloadSize = _payloadWriter.WrittenCount;
 
         // Outgoing: [uint16 BE payloadSize][opcode][payload]
         var packet = new byte[SizePrefix + OpcodeSize + payloadSize];
         BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(0, SizePrefix), (ushort)payloadSize);
         packet[SizePrefix] = opcode;
-        payloadWriter.WrittenSpan.CopyTo(packet.AsSpan(SizePrefix + OpcodeSize));
+        _payloadWriter.WrittenSpan.CopyTo(packet.AsSpan(SizePrefix + OpcodeSize));
 
         return packet;
     }

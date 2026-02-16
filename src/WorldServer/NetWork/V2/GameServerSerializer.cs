@@ -60,17 +60,4 @@ public class GameServerSerializer : IPacketSerializer
         span[0] = response.Status;
         writer.Advance(1);
     }
-
-    /// <summary>
-    /// Factory for creating GameServerSerializer instances.
-    /// </summary>
-    public class Factory : IPacketSerializerFactory
-    {
-        private readonly GameServerSerializer _sharedInstance = new();
-
-        /// <summary>
-        /// Returns a shared serializer instance (thread-safe, stateless).
-        /// </summary>
-        public IPacketSerializer Create() => _sharedInstance;
-    }
 }

@@ -19,7 +19,7 @@ public class LauncherService : IDisposable
     
     private readonly string _host;
     private readonly int _port;
-    private readonly IPacketSerializerFactory _serializerFactory;
+    private readonly IPacketSerializer _serializer;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     
     private LauncherProxy _proxy;
@@ -35,11 +35,11 @@ public class LauncherService : IDisposable
     /// </summary>
     public bool IsConnected => _proxy != null && !_disposed;
 
-    public LauncherService(string host, int port, IPacketSerializerFactory serializerFactory)
+    public LauncherService(string host, int port, IPacketSerializer serializer)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _port = port;
-        _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
+        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public class LauncherService : IDisposable
                 throw new InvalidOperationException($"Could not connect to launcher server at {_host}:{_port}", ex);
             }
 
-            _proxy = new LauncherProxy(tcpClient, _serializerFactory);
+            _proxy = new LauncherProxy(tcpClient, _serializer);
             _proxy.Disconnected += OnProxyDisconnected;
             _proxy.Start(cancellationToken);
 

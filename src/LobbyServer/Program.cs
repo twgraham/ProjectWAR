@@ -28,7 +28,7 @@ try
             
             s.AddServerNetworking(IPEndPoint.Parse($"127.0.0.1:{config.ClientPort}"))
                 .WithPacketFramer<VarintLengthFramer>()
-                .WithPacketSerializerFactory<ProtobufPacketSerializer.Factory>()
+                .WithPacketSerializer<ProtobufPacketSerializer>()
                 .AddDefaultPacketHandlers();
         });
 

@@ -24,29 +24,4 @@ public class ProtobufPacketSerializer : IPacketSerializer
 
         protobufMessage.WriteTo(writer);
     }
-    
-    /// <summary>
-    /// Factory for creating BinaryPacketSerializer instances.
-    /// </summary>
-    public class Factory : IPacketSerializerFactory
-    {
-        private readonly ProtobufPacketSerializer _sharedInstance;
-
-        /// <summary>
-        /// Creates a new BinaryPacketSerializerFactory
-        /// </summary>
-        public Factory()
-        {
-            _sharedInstance = new ProtobufPacketSerializer();
-        }
-
-        /// <summary>
-        /// Creates or returns a cached serializer instance.
-        /// BinaryPacketSerializer is thread-safe and can be reused.
-        /// </summary>
-        public IPacketSerializer Create()
-        {
-            return _sharedInstance;
-        }
-    }
 }

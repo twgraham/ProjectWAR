@@ -633,30 +633,4 @@ namespace Core.Infrastructure.Network
             }
         }
     }
-
-    /// <summary>
-    /// Factory for creating BinaryPacketSerializer instances.
-    /// </summary>
-    public class BinaryPacketSerializerFactory : IPacketSerializerFactory
-    {
-        private readonly BinaryPacketSerializer _sharedInstance;
-
-        /// <summary>
-        /// Creates a new BinaryPacketSerializerFactory
-        /// </summary>
-        /// <param name="context">Optional source-generated context for optimized serialization</param>
-        public BinaryPacketSerializerFactory(IPacketSerializerContext? context = null)
-        {
-            _sharedInstance = new BinaryPacketSerializer(context);
-        }
-
-        /// <summary>
-        /// Creates or returns a cached serializer instance.
-        /// BinaryPacketSerializer is thread-safe and can be reused.
-        /// </summary>
-        public IPacketSerializer Create()
-        {
-            return _sharedInstance;
-        }
-    }
 }

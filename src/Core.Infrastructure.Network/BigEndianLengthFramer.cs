@@ -12,6 +12,8 @@ public sealed class BigEndianLengthFramer : IPacketFramer
     private const int LengthSize = sizeof(int);
     private const int OpcodeSize = sizeof(byte);
 
+    private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
+
     public bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
     {
         packet = default;
@@ -46,21 +48,18 @@ public sealed class BigEndianLengthFramer : IPacketFramer
 
     public ReadOnlyMemory<byte> CreatePacket<T>(byte opcode, T payload, IPacketSerializer serializer)
     {
-        var writer = new ArrayBufferWriter<byte>();
+        // Reuse the instance writer — safe because each connection gets its own framer
+        _payloadWriter.ResetWrittenCount();
+        serializer.Serialize(_payloadWriter, payload);
+        var payloadSize = _payloadWriter.WrittenCount;
 
-        // Reserve 4 bytes for length header
-        var lengthSpan = writer.GetSpan(LengthSize);
-        writer.Advance(LengthSize);
+        // Assemble final packet: [int32 BE length][opcode][payload]
+        var packetLength = LengthSize + payloadSize; // length field value = LengthSize + payloadSize, excludes opcode
+        var packet = new byte[LengthSize + OpcodeSize + payloadSize];
+        BinaryPrimitives.WriteInt32BigEndian(packet.AsSpan(0, LengthSize), packetLength);
+        packet[LengthSize] = opcode;
+        _payloadWriter.WrittenSpan.CopyTo(packet.AsSpan(LengthSize + OpcodeSize));
 
-        // Write opcode
-        writer.Write(new[] { opcode });
-
-        // Serialize payload
-        serializer.Serialize(writer, payload);
-
-        // Write the length into the reserved header
-        BinaryPrimitives.WriteInt32BigEndian(lengthSpan, writer.WrittenCount - OpcodeSize);
-
-        return writer.WrittenMemory;
+        return packet;
     }
 }
