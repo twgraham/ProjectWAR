@@ -10,6 +10,11 @@ public interface IConnectionContext
     /// Gets the remote endpoint address of the connection (e.g. "127.0.0.1:54321").
     /// </summary>
     string? RemoteAddress { get; }
+    
+    /// <summary>
+    /// The packet framer associated with this connection, used for serializing and framing response packets.
+    /// </summary>
+    IPacketFramer PacketFramer { get; }
 
     /// <summary>
     /// Sends a serialized response packet to the connected client.

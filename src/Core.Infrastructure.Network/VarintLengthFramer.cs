@@ -12,7 +12,7 @@ public sealed class VarintLengthFramer : IPacketFramer
 
     private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
 
-    public bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
+    public bool TryExtractPacket(ref Memory<byte> buffer, out ReadOnlyMemory<byte> packet)
     {
         packet = default;
 
@@ -74,7 +74,7 @@ public sealed class VarintLengthFramer : IPacketFramer
         return packet;
     }
 
-    private static int ReadVarint(ref ReadOnlyMemory<byte> buffer)
+    private static int ReadVarint(ref Memory<byte> buffer)
     {
         var size = 0;
         var byteCount = 0;

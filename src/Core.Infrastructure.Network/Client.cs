@@ -17,7 +17,6 @@ public abstract class Client : IDisposable
     private readonly byte[] _receiveBuffer;
     private readonly Channel<PacketEnvelope> _receiveQueue;
     private readonly Channel<ReadOnlyMemory<byte>> _sendQueue;
-    private readonly IByteTransformer _byteTransformer;
     private readonly int _errorThreshold;
     private Task _receiveTask;
     private Task _processTask;
@@ -49,20 +48,17 @@ public abstract class Client : IDisposable
     /// </summary>
     /// <param name="tcpClient">The connected TcpClient.</param>
     /// <param name="serializer">The packet serializer.</param>
-    /// <param name="byteTransformer">Optional byte transformer for encryption/decryption.</param>
     /// <param name="receiveBufferSize">Size of the receive ring buffer in bytes.</param>
     /// <param name="errorThreshold">Number of handler errors before disconnection.</param>
     protected Client(
         TcpClient tcpClient,
         IPacketSerializer serializer,
-        IByteTransformer byteTransformer = null,
         int receiveBufferSize = 65536,
         int errorThreshold = 3)
     {
         _tcpClient = tcpClient ?? throw new ArgumentNullException(nameof(tcpClient));
         _stream = _tcpClient.GetStream();
         Serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
-        _byteTransformer = byteTransformer;
         _receiveBuffer = new byte[receiveBufferSize];
         _receiveQueue = Channel.CreateUnbounded<PacketEnvelope>();
         _sendQueue = Channel.CreateUnbounded<ReadOnlyMemory<byte>>();
@@ -131,34 +127,6 @@ public abstract class Client : IDisposable
 
                 // Update buffer tracking
                 bufferOffset += bytesRead;
-
-                // Apply byte transformation only to newly received bytes.
-                // Leftover bytes from previous iterations are already transformed.
-                if (_byteTransformer != null)
-                {
-                    var newDataSpan = new ReadOnlySpan<byte>(_receiveBuffer, bufferOffset - bytesRead, bytesRead);
-                    var transformBuffer = ArrayPool<byte>.Shared.Rent(bytesRead * 2);
-                    try
-                    {
-                        var transformedLength = _byteTransformer.Transform(newDataSpan, transformBuffer);
-
-                        // Validate transformed output length before copying back
-                        if (transformedLength < 0 ||
-                            transformedLength > _receiveBuffer.Length - (bufferOffset - bytesRead) ||
-                            transformedLength > transformBuffer.Length)
-                        {
-                            Disconnect(DisconnectReason.BufferOverrun);
-                            return;
-                        }
-
-                        Buffer.BlockCopy(transformBuffer, 0, _receiveBuffer, bufferOffset - bytesRead, transformedLength);
-                        bufferOffset = (bufferOffset - bytesRead) + transformedLength;
-                    }
-                    finally
-                    {
-                        ArrayPool<byte>.Shared.Return(transformBuffer);
-                    }
-                }
 
                 // Extract and queue packets from buffer
                 bufferOffset = await ExtractAndQueuePacketsAsync(bufferOffset, cancellationToken).ConfigureAwait(false);

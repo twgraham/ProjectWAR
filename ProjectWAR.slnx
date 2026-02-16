@@ -10,6 +10,7 @@
   <Folder Name="/src/">
     <Project Path="src/AccountCacher/AccountCacher.csproj" />
     <Project Path="src/Common/Common.csproj" />
+    <Project Path="src/Core.Infrastructure.Cryptography/Core.Infrastructure.Cryptography.csproj" />
     <Project Path="src/Core.Infrastructure.Network.RpcSourceGenerators/Core.Infrastructure.Network.RpcSourceGenerators.csproj" />
     <Project Path="src/Core.Infrastructure.Network/Core.Infrastructure.Network.csproj" />
     <Project Path="src/FrameWork/FrameWork.csproj" />

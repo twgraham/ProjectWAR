@@ -11,7 +11,7 @@ public class VarintLengthFramerTests
     {
         // GIVEN: A buffer with a varint length header (0x03) followed by opcode and 3 payload bytes
         var data = new byte[] { 0x03, 0xAA, 0x01, 0x02, 0x03 };
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Extracting a packet from the buffer
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();
@@ -30,7 +30,7 @@ public class VarintLengthFramerTests
     {
         // GIVEN: A buffer with varint length 0 indicating no payload, followed by opcode
         var data = new byte[] { 0x00, 0xFF };
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Extracting a packet
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();
@@ -45,7 +45,7 @@ public class VarintLengthFramerTests
     public void TryExtractPacket_EmptyBuffer_ReturnsFalse()
     {
         // GIVEN: An empty buffer with no data
-        var buffer = ReadOnlyMemory<byte>.Empty;
+        var buffer = Memory<byte>.Empty;
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails and returns false with empty packet
@@ -57,7 +57,7 @@ public class VarintLengthFramerTests
     public void TryExtractPacket_SingleByte_ReturnsFalse()
     {
         // GIVEN: A buffer with only a varint length header (0x05) but no opcode or payload
-        var buffer = new ReadOnlyMemory<byte>(new byte[] { 0x05 });
+        var buffer = new Memory<byte>(new byte[] { 0x05 });
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails because opcode is missing and buffer remains unchanged
@@ -70,7 +70,7 @@ public class VarintLengthFramerTests
     {
         // GIVEN: A buffer declaring 5 bytes payload but only 4 bytes available total
         var data = new byte[] { 0x05, 0x01, 0xAA, 0xBB };
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails due to incomplete payload and buffer remains unchanged
@@ -91,7 +91,7 @@ public class VarintLengthFramerTests
         data[1] = 0x01;
         data[2] = 0x42;
         Array.Copy(payload, 0, data, 3, payloadSize);
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Extracting a packet
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();
@@ -107,7 +107,7 @@ public class VarintLengthFramerTests
     {
         // GIVEN: A buffer containing two complete packets back-to-back
         var data = new byte[] { 0x01, 0xAA, 0x11, 0x02, 0xBB, 0x22, 0x33 };
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Extracting the first packet
         _framer.TryExtractPacket(ref buffer, out var packet1).ShouldBeTrue();
@@ -130,7 +130,7 @@ public class VarintLengthFramerTests
     public void TryExtractPacket_ZeroLengthMissingOpcode_ReturnsFalse()
     {
         // GIVEN: A buffer with varint length 0 but missing the required opcode byte
-        var buffer = new ReadOnlyMemory<byte>(new byte[] { 0x00 });
+        var buffer = new Memory<byte>(new byte[] { 0x00 });
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails because opcode byte is required even with zero payload
@@ -142,7 +142,7 @@ public class VarintLengthFramerTests
     {
         // GIVEN: A buffer with a varint that decodes to a negative or overflow value
         var data = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x01, 0x00 };
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails due to invalid varint encoding
@@ -182,7 +182,7 @@ public class VarintLengthFramerTests
 
         // WHEN: Creating a packet and then extracting it back
         var packetBytes = _framer.CreatePacket((byte)0x10, original, serializer);
-        var buffer = packetBytes;
+        Memory<byte> buffer = packetBytes.ToArray();
 
         _framer.TryExtractPacket(ref buffer, out var extracted).ShouldBeTrue();
 
@@ -204,7 +204,7 @@ public class VarintLengthFramerTests
 
         // WHEN: Creating and extracting a packet with empty payload
         var packetBytes = _framer.CreatePacket((byte)0x01, original, serializer);
-        var buffer = packetBytes;
+        Memory<byte> buffer = packetBytes.ToArray();
 
         _framer.TryExtractPacket(ref buffer, out var extracted).ShouldBeTrue();
 

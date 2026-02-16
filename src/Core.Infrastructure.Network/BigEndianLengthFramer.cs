@@ -14,7 +14,7 @@ public sealed class BigEndianLengthFramer : IPacketFramer
 
     private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
 
-    public bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
+    public bool TryExtractPacket(ref Memory<byte> buffer, out ReadOnlyMemory<byte> packet)
     {
         packet = default;
 

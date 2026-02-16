@@ -37,6 +37,7 @@
             <Project>{8bc085cd-429b-41d1-bb47-9621fd32ec23}</Project>
             <Name>Common</Name>
         </ProjectReference>
+        <ProjectReference Include="..\Core.Infrastructure.Cryptography\Core.Infrastructure.Cryptography.csproj" />
         <ProjectReference Include="..\FrameWork\FrameWork.csproj">
             <Project>{d5c98f3a-d5d2-4aed-a5a7-06d2de095095}</Project>
             <Name>FrameWork</Name>

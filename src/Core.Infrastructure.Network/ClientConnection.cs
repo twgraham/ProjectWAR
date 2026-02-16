@@ -20,12 +20,10 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
     private readonly byte[] _receiveBuffer;
     private readonly Channel<PacketEnvelope> _receiveQueue;
     private readonly Channel<ReadOnlyMemory<byte>> _sendQueue;
-    private readonly IPacketFramer _framer;
     private readonly IPacketSerializer _serializer;
     private readonly IPacketDispatcher _dispatcher;
     private readonly IServiceScope _connectionScope;
     private readonly ILogger<ClientConnection> _logger;
-    private readonly IByteTransformer? _byteTransformer;
     private readonly int _errorThreshold;
     private readonly ConcurrentDictionary<string, object> _items = new();
 
@@ -56,6 +54,8 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         }
     }
 
+    public IPacketFramer PacketFramer { get; }
+
     public IDictionary<string, object> Items => _items;
 
     public ClientConnection(
@@ -65,18 +65,16 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         IPacketDispatcher dispatcher,
         IServiceScope connectionScope,
         ILogger<ClientConnection> logger,
-        IByteTransformer? byteTransformer = null,
         int receiveBufferSize = 65536,
         int errorThreshold = 3)
     {
         _tcpClient = tcpClient ?? throw new ArgumentNullException(nameof(tcpClient));
         _stream = tcpClient.GetStream();
-        _framer = framer ?? throw new ArgumentNullException(nameof(framer));
+        PacketFramer = framer ?? throw new ArgumentNullException(nameof(framer));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _connectionScope = connectionScope ?? throw new ArgumentNullException(nameof(connectionScope));
         _logger = logger;
-        _byteTransformer = byteTransformer;
         _receiveBuffer = new byte[receiveBufferSize];
         _receiveQueue = Channel.CreateUnbounded<PacketEnvelope>();
         _sendQueue = Channel.CreateUnbounded<ReadOnlyMemory<byte>>();
@@ -96,7 +94,7 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
     public void SendResponse<T>(byte opcode, T response)
     {
-        var packet = _framer.CreatePacket(opcode, response, _serializer);
+        var packet = PacketFramer.CreatePacket(opcode, response, _serializer);
         _sendQueue.Writer.TryWrite(packet);
     }
 
@@ -136,34 +134,6 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
                 bufferOffset += bytesRead;
 
-                // Apply byte transformation only to newly received bytes.
-                // Leftover bytes from previous iterations are already transformed.
-                if (_byteTransformer != null)
-                {
-                    var newDataSpan = new ReadOnlySpan<byte>(_receiveBuffer, bufferOffset - bytesRead, bytesRead);
-                    var transformBuffer = ArrayPool<byte>.Shared.Rent(bytesRead * 2);
-                    try
-                    {
-                        var transformedLength = _byteTransformer.Transform(newDataSpan, transformBuffer);
-
-                        // Validate transformed output length before copying back into the receive buffer
-                        if (transformedLength < 0 ||
-                            transformedLength > _receiveBuffer.Length - (bufferOffset - bytesRead) ||
-                            transformedLength > transformBuffer.Length)
-                        {
-                            Disconnect(DisconnectReason.BufferOverrun);
-                            return;
-                        }
-
-                        Buffer.BlockCopy(transformBuffer, 0, _receiveBuffer, bufferOffset - bytesRead, transformedLength);
-                        bufferOffset = (bufferOffset - bytesRead) + transformedLength;
-                    }
-                    finally
-                    {
-                        ArrayPool<byte>.Shared.Return(transformBuffer);
-                    }
-                }
-
                 // Extract and queue packets
                 bufferOffset = await ExtractAndQueuePacketsAsync(bufferOffset, cancellationToken)
                     .ConfigureAwait(false);
@@ -192,14 +162,14 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
     private async Task<int> ExtractAndQueuePacketsAsync(int bufferLength, CancellationToken cancellationToken)
     {
-        var buffer = new ReadOnlyMemory<byte>(_receiveBuffer, 0, bufferLength);
+        var buffer = new Memory<byte>(_receiveBuffer, 0, bufferLength);
 
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("Buffer hex: {Buffer}", Convert.ToHexString(buffer.Span));
 
-        while (_framer.TryExtractPacket(ref buffer, out var packetData))
+        while (PacketFramer.TryExtractPacket(ref buffer, out var packetData))
         {
-            var opcode = _framer.ExtractOpcode(packetData.Span, out var payloadOffset);
+            var opcode = PacketFramer.ExtractOpcode(packetData.Span, out var payloadOffset);
             var payloadSlice = packetData[payloadOffset..];
 
             if (_logger.IsEnabled(LogLevel.Trace))

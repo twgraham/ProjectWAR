@@ -71,7 +71,7 @@ public class GameServerFramerTests
         var payload = new byte[262];
         payload[0] = 0x01; // cipher
         var rawPacket = BuildIncomingPacket(0x5C, payload);
-        var buffer = new ReadOnlyMemory<byte>(rawPacket);
+        var buffer = new Memory<byte>(rawPacket);
 
         var result = _framer.TryExtractPacket(ref buffer, out var packet);
 
@@ -85,7 +85,7 @@ public class GameServerFramerTests
     [Fact]
     public void TryExtractPacket_InsufficientSizePrefix_ReturnsFalse()
     {
-        var buffer = new ReadOnlyMemory<byte>([0x01]); // Only 1 byte, need at least 2
+        var buffer = new Memory<byte>([0x01]); // Only 1 byte, need at least 2
 
         var result = _framer.TryExtractPacket(ref buffer, out _);
 
@@ -100,7 +100,7 @@ public class GameServerFramerTests
         var rawPacket = BuildIncomingPacket(0x5C, payload);
         // Truncate the packet
         var truncated = rawPacket[..^5];
-        var buffer = new ReadOnlyMemory<byte>(truncated);
+        var buffer = new Memory<byte>(truncated);
 
         var result = _framer.TryExtractPacket(ref buffer, out _);
 
@@ -113,7 +113,7 @@ public class GameServerFramerTests
     {
         // packetSize = 0, payload = 2 bytes (the minimum)
         var rawPacket = BuildMinimalIncomingPacket(0x0B, 0xAA, 0xBB);
-        var buffer = new ReadOnlyMemory<byte>(rawPacket);
+        var buffer = new Memory<byte>(rawPacket);
 
         var result = _framer.TryExtractPacket(ref buffer, out var packet);
 
@@ -133,7 +133,7 @@ public class GameServerFramerTests
         var combined = new byte[raw1.Length + raw2.Length];
         raw1.CopyTo(combined, 0);
         raw2.CopyTo(combined, raw1.Length);
-        var buffer = new ReadOnlyMemory<byte>(combined);
+        var buffer = new Memory<byte>(combined);
 
         // Extract first packet
         var result1 = _framer.TryExtractPacket(ref buffer, out var packet1);
@@ -152,7 +152,7 @@ public class GameServerFramerTests
     [Fact]
     public void TryExtractPacket_EmptyBuffer_ReturnsFalse()
     {
-        var buffer = ReadOnlyMemory<byte>.Empty;
+        var buffer = Memory<byte>.Empty;
 
         var result = _framer.TryExtractPacket(ref buffer, out _);
 
@@ -169,7 +169,7 @@ public class GameServerFramerTests
         // Build a packet and extract it
         var payload = new byte[4];
         var rawPacket = BuildIncomingPacket(0x5C, payload);
-        var buffer = new ReadOnlyMemory<byte>(rawPacket);
+        var buffer = new Memory<byte>(rawPacket);
         _framer.TryExtractPacket(ref buffer, out var packet);
 
         var opcode = _framer.ExtractOpcode(packet.Span, out var payloadOffset);
@@ -184,7 +184,7 @@ public class GameServerFramerTests
         // Create payload with known content
         var payload = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
         var rawPacket = BuildIncomingPacket(0x0B, payload);
-        var buffer = new ReadOnlyMemory<byte>(rawPacket);
+        var buffer = new Memory<byte>(rawPacket);
         _framer.TryExtractPacket(ref buffer, out var packet);
 
         _framer.ExtractOpcode(packet.Span, out var payloadOffset);
@@ -199,7 +199,7 @@ public class GameServerFramerTests
         // Verify the extracted packet contains the full header
         var payload = new byte[2];
         var rawPacket = BuildIncomingPacket(0x5C, payload, sequenceId: 0x1234, sessionId: 0x5678);
-        var buffer = new ReadOnlyMemory<byte>(rawPacket);
+        var buffer = new Memory<byte>(rawPacket);
         _framer.TryExtractPacket(ref buffer, out var packet);
 
         // SequenceID at offset 0-1
@@ -264,7 +264,7 @@ public class GameServerFramerTests
             inPayload[i] = (byte)(i & 0xFF);
 
         var rawIncoming = BuildIncomingPacket(0x5C, inPayload);
-        var buffer = new ReadOnlyMemory<byte>(rawIncoming);
+        var buffer = new Memory<byte>(rawIncoming);
 
         // Extract incoming
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();

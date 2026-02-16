@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
+using Core.Infrastructure.Cryptography;
 using Core.Infrastructure.Network;
 
 namespace WorldServer.NetWork.V2;
@@ -33,11 +34,15 @@ public sealed class GameServerFramer : IPacketFramer
     private const int OpcodeSize = sizeof(byte);
     private const int OpcodeOffsetInHeader = 7; // Opcode is the last byte of the 8-byte header
     private const int PayloadSizeAdjustment = 2; // payload length = packetSize + 2
-
+    
+    private byte[]? _key;
+    
+    public bool IsEncryptionEnabled => _key != null;
+    
     private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
 
     /// <inheritdoc />
-    public bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
+    public bool TryExtractPacket(ref Memory<byte> buffer, out ReadOnlyMemory<byte> packet)
     {
         packet = default;
 
@@ -51,9 +56,15 @@ public sealed class GameServerFramer : IPacketFramer
         if (buffer.Length < totalLength)
             return false;
 
-        // Return [8-byte header][payload] — the size prefix is consumed/stripped.
+        // Slice out [8-byte header][payload] — the size prefix is consumed/stripped.
         // ExtractOpcode knows the opcode sits at offset 7 within this slice.
-        packet = buffer.Slice(SizePrefix, HeaderSize + payloadLength);
+        var mutablePacket = buffer.Slice(SizePrefix, HeaderSize + payloadLength);
+        
+        // Decrypt in-place (length-preserving!) — zero allocations
+        if (IsEncryptionEnabled)
+            MythicRc4.Decrypt(new ReadOnlySpan<byte>(_key), mutablePacket.Span);
+        
+        packet = mutablePacket; // implicit Memory<byte> → ReadOnlyMemory<byte>
         buffer = buffer[totalLength..];
         return true;
     }
@@ -74,13 +85,25 @@ public sealed class GameServerFramer : IPacketFramer
         _payloadWriter.ResetWrittenCount();
         serializer.Serialize(_payloadWriter, payload);
         var payloadSize = _payloadWriter.WrittenCount;
-
+        
         // Outgoing: [uint16 BE payloadSize][opcode][payload]
         var packet = new byte[SizePrefix + OpcodeSize + payloadSize];
         BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(0, SizePrefix), (ushort)payloadSize);
         packet[SizePrefix] = opcode;
         _payloadWriter.WrittenSpan.CopyTo(packet.AsSpan(SizePrefix + OpcodeSize));
+        
+        // Decrypt in-place (length-preserving!)
+        if (IsEncryptionEnabled)
+            MythicRc4.Encrypt(new ReadOnlySpan<byte>(_key), packet.AsSpan()[(SizePrefix + OpcodeSize)..]);
 
         return packet;
+    }
+    
+    public void SetEncryptionKey(ReadOnlySpan<byte> keyData)
+    {
+        if (keyData.Length != 256)
+            throw new ArgumentException("RC4 key must be 256 bytes");
+            
+        _key = keyData.ToArray();
     }
 }

@@ -37,10 +37,11 @@ public class AuthenticationHandler : IPacketHandler
         }
         else if (request.Cipher == 1)
         {
-            // TODO: Install RC4 encryption on the connection.
-            // The old code did: cclient.AddCrypt("RC4Crypto", new CryptKey(key), new CryptKey(key));
-            // In the new architecture, this would likely be done via an IByteTransformer
-            // that supports per-connection key installation.
+            if (context.PacketFramer is GameServerFramer framer)
+            {
+                framer.SetEncryptionKey(request.Key);
+            }
+            
             _logger.LogWarning("RC4 encryption requested but not yet implemented in V2 networking");
         }
     }
