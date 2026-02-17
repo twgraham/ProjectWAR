@@ -22,6 +22,7 @@
     <Project Path="src/WorldServer/WorldServer.csproj" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/Core.Infrastructure.Cryptography.Tests/Core.Infrastructure.Cryptography.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.RpcSourceGenerator.Tests/Core.Infrastructure.Network.RpcSourceGenerator.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.Tests/Core.Infrastructure.Network.Tests.csproj" />
     <Project Path="test/LobbyServer.Tests/LobbyServer.Tests.csproj" />
