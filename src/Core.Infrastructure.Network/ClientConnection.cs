@@ -32,6 +32,9 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
     private Task? _sendTask;
     private CancellationTokenSource? _clientCancellation;
     private int _errorCount;
+    private volatile bool _disconnectRequested;
+    private DisconnectReason? _pendingDisconnectReason;
+    private string? _pendingDisconnectReasonMessage;
     private bool _disposed;
 
     /// <summary>
@@ -97,10 +100,53 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         var packet = PacketFramer.CreatePacket(opcode, response, _serializer);
         _sendQueue.Writer.TryWrite(packet);
     }
+    
+    public void Disconnect(string message, bool flush = false)
+    {
+        Disconnect(DisconnectReason.ServerInitiated, message, flush: flush);
+    }
 
-    public void Disconnect(DisconnectReason reason)
+    public void Disconnect(DisconnectReason reason, string? message = null, bool flush = false)
     {
         if (_disposed) return;
+
+        if (flush)
+        {
+            if (_disconnectRequested) return; // already flushing
+            
+            _logger.LogInformation("Disconnect request received. Will flush queued packets beforehand. Reason: {Reason}, Message: {Message}", reason, message);
+            
+            _disconnectRequested = true;
+            _pendingDisconnectReason = reason;
+            _pendingDisconnectReasonMessage = message;
+
+            // Stop accepting new packets from the network.
+            _receiveQueue.Writer.TryComplete();
+
+            // Enqueue a zero-length sentinel. The send loop will drain all preceding
+            // packets, then detect the sentinel and perform the actual teardown.
+            _sendQueue.Writer.TryWrite(ReadOnlyMemory<byte>.Empty);
+            _sendQueue.Writer.TryComplete();
+        }
+        else
+        {
+            // During a graceful flush, suppress non-flush disconnect attempts from
+            // other loops (e.g. receive loop hitting ChannelClosedException).
+            if (_disconnectRequested) return;
+            
+            _logger.LogInformation("Disconnecting client connection. Reason: {Reason}, Message: {Message}", reason, message);
+            ForceDisconnect(reason);
+        }
+    }
+
+    /// <summary>
+    /// Unconditionally tears down the connection. Used by the send loop after
+    /// the disconnect sentinel has been processed.
+    /// </summary>
+    private void ForceDisconnect(DisconnectReason reason)
+    {
+        if (_disposed) return;
+        _logger.LogInformation("Disconnecting");
         Disconnected?.Invoke(reason);
         Dispose();
     }
@@ -201,6 +247,14 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
         {
             await foreach (var envelope in _receiveQueue.Reader.ReadAllAsync(cancellationToken))
             {
+                // When a graceful disconnect is in progress, drain without dispatching
+                // so the send loop can flush remaining packets undisturbed.
+                if (_disconnectRequested)
+                {
+                    envelope.Dispose();
+                    continue;
+                }
+
                 try
                 {
                     _dispatcher.Dispatch(
@@ -242,6 +296,25 @@ internal sealed class ClientConnection : IConnectionContext, IDisposable
 
             await foreach (var data in _sendQueue.Reader.ReadAllAsync(cancellationToken))
             {
+                // A zero-length memory is the disconnect sentinel written by
+                // Disconnect(reason, flush: true). Flush any buffered data, then
+                // tear down the connection.
+                if (data.Length == 0)
+                {
+                    if (writesSinceFlush > 0)
+                        await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+
+                    var disconnectReason = _pendingDisconnectReason ?? DisconnectReason.ServerInitiated;
+
+                    if (_pendingDisconnectReason == null)
+                    {
+                        _logger.LogError("Flush disconnect triggered without pending reason, defaulting to ServerInitiated");
+                    }
+                    
+                    ForceDisconnect(disconnectReason);
+                    return;
+                }
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug("Sending packet hex: {SendBuffer}", Convert.ToHexString(data.Span));
 

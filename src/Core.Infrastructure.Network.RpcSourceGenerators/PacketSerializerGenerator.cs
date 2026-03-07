@@ -323,6 +323,18 @@ namespace RpcSourceGenerator
                     underlyingType = namedNullable.TypeArguments[0];
                 }
 
+                // Handle CString attribute for fixed-length C-style strings
+                var cstringLen = GetCStringLength(prop);
+                if (cstringLen.HasValue && underlyingType.SpecialType == SpecialType.System_String)
+                {
+                    sb.Append(isNullable
+                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : reader.ReadCString({cstringLen.Value})"
+                        : $"                {prop.Name} = reader.ReadCString({cstringLen.Value})");
+
+                    sb.AppendLine(isLast ? "" : ",");
+                    continue;
+                }
+
                 // Check if it's an enum - handle specially because cast needs to wrap reader.ReadByte()
                 if (underlyingType.TypeKind == TypeKind.Enum)
                 {
@@ -497,6 +509,24 @@ namespace RpcSourceGenerator
                 return;
             }
 
+            // Handle CString attribute on string properties
+            var cstrLen = GetCStringLength(property);
+            if (cstrLen.HasValue && underlyingType.SpecialType == SpecialType.System_String)
+            {
+                if (needsCast)
+                {
+                    sb.AppendLine($"            if ({valueExpression} != null)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                writer.WriteCString({value}, {cstrLen.Value});");
+                    sb.AppendLine("            }");
+                }
+                else
+                {
+                    sb.AppendLine($"            writer.WriteCString({value}, {cstrLen.Value});");
+                }
+                return;
+            }
+
             // Handle nullable primitives
             if (needsCast)
             {
@@ -591,6 +621,21 @@ namespace RpcSourceGenerator
             
             // Default to 1 byte
             return 1;
+        }
+
+        private static int? GetCStringLength(IPropertySymbol property)
+        {
+            var cstrAttr = property.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name == "CStringAttribute" &&
+                                     a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+
+            if (cstrAttr is { ConstructorArguments.Length: > 0 })
+            {
+                if (cstrAttr.ConstructorArguments[0].Value is int len)
+                    return len;
+            }
+
+            return null;
         }
 
         // Register a collection deserialize method and return its name

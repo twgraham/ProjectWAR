@@ -1,0 +1,29 @@
+using Microsoft.Extensions.DependencyInjection;
+
+namespace WorldServer.NetWork.V2;
+
+/// <summary>
+/// Extension methods for registering the game session infrastructure in the DI container.
+/// </summary>
+public static class GameSessionServiceExtensions
+{
+    /// <summary>
+    /// Registers the <see cref="SessionRegistry"/> (singleton) and
+    /// <see cref="SessionLifecycleService"/> (<see cref="Microsoft.Extensions.Hosting.IHostedService"/>)
+    /// into the DI container.
+    /// <para>
+    /// <see cref="SessionLifecycleService"/> is registered as a hosted service so the
+    /// host eagerly starts it during application startup, wiring event handlers on
+    /// <see cref="Core.Infrastructure.Network.NetworkManager"/> before it begins
+    /// accepting connections.
+    /// </para>
+    /// </summary>
+    public static IServiceCollection AddGameSessions(this IServiceCollection services)
+    {
+        services.AddSingleton<SessionRegistry>();
+        services.AddSingleton<PlayerService>();
+        services.AddHostedService<SessionLifecycleService>();
+
+        return services;
+    }
+}

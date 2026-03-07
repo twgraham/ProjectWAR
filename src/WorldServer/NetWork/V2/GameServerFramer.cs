@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using Core.Infrastructure.Cryptography;
 using Core.Infrastructure.Network;
+using Microsoft.Extensions.Logging;
 
 namespace WorldServer.NetWork.V2;
 
@@ -34,12 +35,19 @@ public sealed class GameServerFramer : IPacketFramer
     private const int OpcodeSize = sizeof(byte);
     private const int OpcodeOffsetInHeader = 7; // Opcode is the last byte of the 8-byte header
     private const int PayloadSizeAdjustment = 2; // payload length = packetSize + 2
+
+    private readonly ILogger<GameServerFramer> _logger;
     
     private byte[]? _key;
     
     public bool IsEncryptionEnabled => _key != null;
     
     private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
+    
+    public GameServerFramer(ILogger<GameServerFramer> logger)
+    {
+        _logger = logger;
+    }
 
     /// <inheritdoc />
     public bool TryExtractPacket(ref Memory<byte> buffer, out ReadOnlyMemory<byte> packet)
@@ -58,14 +66,23 @@ public sealed class GameServerFramer : IPacketFramer
 
         // Slice out [8-byte header][payload] — the size prefix is consumed/stripped.
         // ExtractOpcode knows the opcode sits at offset 7 within this slice.
-        var mutablePacket = buffer.Slice(SizePrefix, HeaderSize + payloadLength);
+        var mutablePacket = buffer[..(SizePrefix + HeaderSize + payloadLength)];
         
         // Decrypt in-place (length-preserving!) — zero allocations
         if (IsEncryptionEnabled)
-            MythicRc4.Decrypt(new ReadOnlySpan<byte>(_key), mutablePacket.Span);
-        
-        packet = mutablePacket; // implicit Memory<byte> → ReadOnlyMemory<byte>
+            MythicRc4.Decrypt(new ReadOnlySpan<byte>(_key), mutablePacket.Span[SizePrefix..]);
+
         buffer = buffer[totalLength..];
+
+        var computedChecksum = mutablePacket.Span[..^PayloadSizeAdjustment].ComputeChecksum();
+        var checksum = BinaryPrimitives.ReadUInt16BigEndian(mutablePacket.Span[^PayloadSizeAdjustment..].ToArray());
+        if (computedChecksum != checksum)
+        {
+            _logger.LogInformation("Invalid checksum: computed {ComputedChecksum:X4}, expected {Checksum:X4}", computedChecksum, checksum);
+            return false; // Invalid checksum, discard packet
+        }
+        packet = mutablePacket[SizePrefix..^PayloadSizeAdjustment]; // implicit Memory<byte> → ReadOnlyMemory<byte>
+
         return true;
     }
 

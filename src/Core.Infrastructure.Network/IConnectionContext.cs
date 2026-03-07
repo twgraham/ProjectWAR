@@ -29,7 +29,11 @@ public interface IConnectionContext
     /// Disconnects the client with the specified reason.
     /// </summary>
     /// <param name="reason">The reason for disconnection.</param>
-    void Disconnect(DisconnectReason reason);
+    /// <param name="flush">
+    /// When <c>true</c>, all previously enqueued packets are sent before the connection is closed
+    /// (graceful shutdown). When <c>false</c> (default), the connection is torn down immediately.
+    /// </param>
+    void Disconnect(string reason, bool flush = false);
 
     /// <summary>
     /// Gets a key/value collection for storing per-connection state (e.g. auth tokens, session data).
@@ -44,4 +48,19 @@ public interface IConnectionContext
     /// <param name="opcode">The opcode whose handler threw.</param>
     /// <param name="exception">The exception that occurred.</param>
     void OnDispatchError(byte opcode, Exception exception);
+    
+    TItem Get<TItem>(string key) => (TItem)Items[key];
+    
+    bool TryGetValue<TItem>(string key, out TItem? value)
+    {
+        var result = Items.TryGetValue(key, out var obj);
+        
+        if (!result || obj is not TItem item) {
+            value = default!;
+            return false;
+        }
+
+        value = item;
+        return true;
+    }
 }

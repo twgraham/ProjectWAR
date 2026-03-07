@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using Core.Infrastructure.Network;
+using MELT;
+using Microsoft.Extensions.Logging;
 using Shouldly;
 using WorldServer.NetWork.V2;
 
@@ -8,7 +10,7 @@ namespace WorldServer.Tests;
 
 public class GameServerFramerTests
 {
-    private readonly GameServerFramer _framer = new();
+    private readonly GameServerFramer _framer = new(TestLoggerFactory.Create().CreateLogger<GameServerFramer>());
 
     #region Helpers
 
@@ -25,8 +27,8 @@ public class GameServerFramerTests
         byte unk2 = 0)
     {
         // packetSize = payload.Length - 2 (the protocol defines payload length = packetSize + 2)
-        var packetSize = (ushort)(payload.Length - 2);
-        var totalLength = 2 + 8 + payload.Length; // sizePrefix + header + payload
+        var packetSize = (ushort)payload.Length;
+        var totalLength = 2 + 8 + payload.Length + 2; // sizePrefix + header + payload + checksum
         var buffer = new byte[totalLength];
 
         var offset = 0;
@@ -47,6 +49,8 @@ public class GameServerFramerTests
 
         // Payload
         payload.CopyTo(buffer.AsSpan(offset));
+        
+        BinaryPrimitives.WriteUInt16BigEndian(buffer.AsSpan()[^2..], buffer.AsSpan()[..^2].ComputeChecksum());
 
         return buffer;
     }
@@ -182,7 +186,7 @@ public class GameServerFramerTests
     public void ExtractOpcode_PayloadStartsAtCorrectOffset()
     {
         // Create payload with known content
-        var payload = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+        var payload = new byte[] { 0xDE, 0xAD };
         var rawPacket = BuildIncomingPacket(0x0B, payload);
         var buffer = new Memory<byte>(rawPacket);
         _framer.TryExtractPacket(ref buffer, out var packet);
