@@ -4,7 +4,8 @@ using Core.Infrastructure.Network;
 using MELT;
 using Microsoft.Extensions.Logging;
 using Shouldly;
-using WorldServer.NetWork.V2;
+using WorldServerV2.Network;
+using WorldServerV2.Network.Dtos;
 
 namespace WorldServer.Tests;
 
@@ -223,7 +224,7 @@ public class GameServerFramerTests
 
         var packet = _framer.CreatePacket(
             0x8A,
-            new NetWork.V2.Dtos.EncryptKeyResponse { Status = 1 },
+            new EncryptKeyResponse { Status = 1 },
             serializer);
 
         var bytes = packet.ToArray();
@@ -282,7 +283,7 @@ public class GameServerFramerTests
         var serializer = new GameServerSerializer();
         var outgoing = _framer.CreatePacket(
             0x8A,
-            new NetWork.V2.Dtos.EncryptKeyResponse { Status = 1 },
+            new EncryptKeyResponse { Status = 1 },
             serializer);
 
         var outBytes = outgoing.ToArray();

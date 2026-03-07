@@ -1,5 +1,5 @@
 using Shouldly;
-using WorldServer.NetWork.V2;
+using WorldServerV2.Network;
 
 namespace WorldServer.Tests.Integration;
 

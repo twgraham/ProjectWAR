@@ -6,7 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using WorldServer.NetWork.V2;
+using WorldServerV2.Network;
 
 namespace WorldServer.Tests.Integration;
 

@@ -1,6 +1,6 @@
 using Core.Infrastructure.Network;
-using WorldServer.NetWork.V2;
-using WorldServer.NetWork.V2.Dtos;
+using WorldServerV2.Network;
+using WorldServerV2.Network.Dtos;
 
 namespace WorldServer.Tests.Integration;
 

@@ -2,7 +2,8 @@ using System.Net;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using WorldServer.NetWork.V2;
+using WorldServerV2.Network;
+using WorldServerV2.Services;
 
 namespace WorldServer.Tests.Integration;
 
@@ -64,8 +65,7 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
         var services = new ServiceCollection();
 
         services.AddLogging(builder => builder
-            .SetMinimumLevel(LogLevel.Debug)
-            .AddConsole());
+            .SetMinimumLevel(LogLevel.Debug));
 
         // Core networking — registers NetworkManager as singleton + IHostedService
         services.AddServerNetworking(endpoint)

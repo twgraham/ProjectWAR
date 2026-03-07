@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="MELT" Version="1.1.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -25,7 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
-    <ProjectReference Include="..\..\src\WorldServer\WorldServer.csproj" />
+    <ProjectReference Include="..\..\src\WorldServerV2\WorldServerV2.csproj" />
   </ItemGroup>
 
 </Project>
