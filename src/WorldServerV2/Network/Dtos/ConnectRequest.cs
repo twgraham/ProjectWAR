@@ -15,7 +15,7 @@ public class ConnectRequest
     
     public byte PatchVersion { get; set; }
     
-    [Length(3, 3)]
+    [FixedLength(3)]
     public byte[] Padding { get; set; } = new byte[3];
     
     public uint ProtocolVersion { get; set; }
@@ -23,8 +23,8 @@ public class ConnectRequest
     [CString(81)]
     public string Token { get; set; }
     
-    [Length(20, 20)]
-    public byte[] Unk3 { get; set; } = new byte[16];
+    [FixedLength(20)]
+    public byte[] Unk3 { get; set; } = new byte[20];
     
     [CString(23)]
     public string Username { get; set; }

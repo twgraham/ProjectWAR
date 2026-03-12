@@ -2,9 +2,8 @@ using System.Diagnostics;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
-using WorldServerV2.Network;
 using WorldServerV2.Services;
-using WorldServerV2.World.Objects;
+using WorldServerV2.World.Entities;
 using IPacketHandler = Core.Infrastructure.Network.IPacketHandler;
 
 namespace WorldServerV2.Network.Handlers;
@@ -56,7 +55,7 @@ public class AuthenticationHandler : IPacketHandler
             {
                 if (context.PacketFramer is GameServerFramer framer)
                 {
-                    framer.SetEncryptionKey(request.Key);
+                    framer.SetEncryptionKey(request.Key.AsSpan()[..256]);
                 }
 
                 break;
@@ -67,7 +66,7 @@ public class AuthenticationHandler : IPacketHandler
     [Rpc((int)Opcodes.F_CONNECT, (int)Opcodes.S_CONNECTED)]
     public async Task<RpcResult<ConnectResponse>> F_CONNECT(ConnectRequest request, IConnectionContext context, [FromServices] SessionRegistry sessionRegistry)
     {
-        _logger.LogInformation("Entering F_CONNECT {ClientId}", context.ClientId);
+        // _logger.LogInformation("Entering F_CONNECT {ClientId}", context.ClientId);
 
         var result = await _accountMgrClient.CheckTokenAsync(new CheckTokenRequest
             { Username = request.Username, Token = request.Token });
@@ -102,6 +101,7 @@ public class AuthenticationHandler : IPacketHandler
 
         // Disconnect any existing sessions for this account (e.g. if they logged in from another location while we were processing)
         sessionRegistry.FindByAccountId(context.Account.Id)?.Disconnect("New session started for account");
+        sessionRegistry.SetSessionAccount(context.Session, context.Account);
 
         // Check if ip is banned. (they may have been just banned so launcher server wouldnt have picked it up)
         if (_accountMgrClient.IsIpBanned(new IsIpBannedRequest { IpAddress = context.RemoteAddress?.Split(':')[0] })

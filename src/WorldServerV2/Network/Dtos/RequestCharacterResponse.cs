@@ -11,5 +11,5 @@ public class RequestCharacterResponse
     public byte LastSwitchedToRealm { get; set; } = 0;
     public byte NumberOfPaidChangesAvailable { get; set; } = 0;
     public byte Unk3 { get; set; }
-    
+    public CharacterDto[] Characters { get; set; } = [];
 }

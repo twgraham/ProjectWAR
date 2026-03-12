@@ -220,7 +220,7 @@ public class GameServerFramerTests
     [Fact]
     public void CreatePacket_ProducesCorrectOutgoingFormat()
     {
-        var serializer = new GameServerSerializer();
+        var serializer = new BinaryPacketSerializer(new GameServerContext());
 
         var packet = _framer.CreatePacket(
             0x8A,
@@ -280,7 +280,7 @@ public class GameServerFramerTests
         extractedPayload.ToArray().ShouldBe(inPayload);
 
         // Create outgoing response
-        var serializer = new GameServerSerializer();
+        var serializer = new BinaryPacketSerializer(new GameServerContext());
         var outgoing = _framer.CreatePacket(
             0x8A,
             new EncryptKeyResponse { Status = 1 },

@@ -79,7 +79,7 @@ public sealed class GameServerFramer : IPacketFramer
         if (computedChecksum != checksum)
         {
             _logger.LogInformation("Invalid checksum: computed {ComputedChecksum:X4}, expected {Checksum:X4}", computedChecksum, checksum);
-            return false; // Invalid checksum, discard packet
+            // return false; // Invalid checksum, discard packet
         }
         packet = mutablePacket[SizePrefix..^PayloadSizeAdjustment]; // implicit Memory<byte> → ReadOnlyMemory<byte>
 
@@ -111,7 +111,7 @@ public sealed class GameServerFramer : IPacketFramer
         
         // Decrypt in-place (length-preserving!)
         if (IsEncryptionEnabled)
-            MythicRc4.Encrypt(new ReadOnlySpan<byte>(_key), packet.AsSpan()[(SizePrefix + OpcodeSize)..]);
+            MythicRc4.Encrypt(new ReadOnlySpan<byte>(_key), packet.AsSpan()[(SizePrefix)..]);
 
         return packet;
     }

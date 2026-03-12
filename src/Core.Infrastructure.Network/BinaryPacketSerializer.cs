@@ -104,11 +104,13 @@ public class BinaryPacketSerializer : IPacketSerializer
     {
         // Get the length size from PacketLength attribute (default to 1 byte)
         var lengthSize = 1;
+        var littleEndian = false;
         if (propertyInfo != null)
         {
             var packetLengthAttr = propertyInfo.GetCustomAttribute<PacketLengthAttribute>();
             if (packetLengthAttr != null)
                 lengthSize = packetLengthAttr.ByteCount;
+            littleEndian = propertyInfo.GetCustomAttribute<LittleEndianAttribute>() != null;
         }
 
         // Handle nullable types
@@ -123,21 +125,21 @@ public class BinaryPacketSerializer : IPacketSerializer
         if (propertyType == typeof(sbyte))
             return reader.ReadSByte();
         if (propertyType == typeof(short))
-            return reader.ReadInt16();
+            return littleEndian ? reader.ReadInt16LE() : reader.ReadInt16();
         if (propertyType == typeof(ushort))
-            return reader.ReadUInt16();
+            return littleEndian ? reader.ReadUInt16LE() : reader.ReadUInt16();
         if (propertyType == typeof(int))
-            return reader.ReadInt32();
+            return littleEndian ? reader.ReadInt32LE() : reader.ReadInt32();
         if (propertyType == typeof(uint))
-            return reader.ReadUInt32();
+            return littleEndian ? reader.ReadUInt32LE() : reader.ReadUInt32();
         if (propertyType == typeof(long))
-            return reader.ReadInt64();
+            return littleEndian ? reader.ReadInt64LE() : reader.ReadInt64();
         if (propertyType == typeof(ulong))
-            return reader.ReadUInt64();
+            return littleEndian ? reader.ReadUInt64LE() : reader.ReadUInt64();
         if (propertyType == typeof(float))
-            return reader.ReadFloat();
+            return littleEndian ? reader.ReadFloatLE() : reader.ReadFloat();
         if (propertyType == typeof(double))
-            return reader.ReadDouble();
+            return littleEndian ? reader.ReadDoubleLE() : reader.ReadDouble();
         if (propertyType == typeof(bool))
             return reader.ReadByte() != 0;
         if (propertyType.IsEnum)
@@ -146,6 +148,9 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             if (propertyInfo != null)
             {
+                if (propertyInfo.GetCustomAttribute<PascalStringAttribute>() != null)
+                    return reader.ReadPascalString();
+
                 var cstr = propertyInfo.GetCustomAttribute<CStringAttribute>();
                 if (cstr != null)
                     return reader.ReadCString(cstr.Length);
@@ -157,7 +162,15 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             var elementType = propertyType.GetElementType()!;
             if (elementType == typeof(byte))
+            {
+                if (propertyInfo != null)
+                {
+                    var fixedLenAttr = propertyInfo.GetCustomAttribute<FixedLengthAttribute>();
+                    if (fixedLenAttr != null)
+                        return reader.ReadFixedByteArray(fixedLenAttr.Length);
+                }
                 return reader.ReadByteArray(lengthSize);
+            }
             // Use generic method for arrays
             return ReadArrayGeneric(ref reader, elementType, lengthSize);
         }
@@ -167,10 +180,10 @@ public class BinaryPacketSerializer : IPacketSerializer
             var genericTypeDef = propertyType.GetGenericTypeDefinition();
                 
             // Handle List<T>, IList<T>, ICollection<T>, IEnumerable<T>
-            if (genericTypeDef == typeof(System.Collections.Generic.List<>) ||
-                genericTypeDef == typeof(System.Collections.Generic.IList<>) ||
-                genericTypeDef == typeof(System.Collections.Generic.ICollection<>) ||
-                genericTypeDef == typeof(System.Collections.Generic.IEnumerable<>))
+            if (genericTypeDef == typeof(List<>) ||
+                genericTypeDef == typeof(IList<>) ||
+                genericTypeDef == typeof(ICollection<>) ||
+                genericTypeDef == typeof(IEnumerable<>))
             {
                 var elementType = propertyType.GetGenericArguments()[0];
                     
@@ -178,9 +191,9 @@ public class BinaryPacketSerializer : IPacketSerializer
                 var array = ReadArrayGeneric(ref reader, elementType, lengthSize);
                     
                 // Convert to appropriate collection type
-                if (genericTypeDef == typeof(System.Collections.Generic.List<>))
+                if (genericTypeDef == typeof(List<>))
                 {
-                    var listType = typeof(System.Collections.Generic.List<>).MakeGenericType(elementType);
+                    var listType = typeof(List<>).MakeGenericType(elementType);
                     var list = Activator.CreateInstance(listType, array)!;
                     return list;
                 }
@@ -229,11 +242,13 @@ public class BinaryPacketSerializer : IPacketSerializer
     {
         // Get the length size from PacketLength attribute (default to 1 byte)
         var lengthSize = 1;
+        var littleEndian = false;
         if (propertyInfo != null)
         {
             var packetLengthAttr = propertyInfo.GetCustomAttribute<PacketLengthAttribute>();
             if (packetLengthAttr != null)
                 lengthSize = packetLengthAttr.ByteCount;
+            littleEndian = propertyInfo.GetCustomAttribute<LittleEndianAttribute>() != null;
         }
 
         // Handle nullable types
@@ -253,21 +268,21 @@ public class BinaryPacketSerializer : IPacketSerializer
         else if (propertyType == typeof(sbyte))
             writer.WriteSByte((sbyte)value);
         else if (propertyType == typeof(short))
-            writer.WriteInt16((short)value);
+            { if (littleEndian) writer.WriteInt16LE((short)value); else writer.WriteInt16((short)value); }
         else if (propertyType == typeof(ushort))
-            writer.WriteUInt16((ushort)value);
+            { if (littleEndian) writer.WriteUInt16LE((ushort)value); else writer.WriteUInt16((ushort)value); }
         else if (propertyType == typeof(int))
-            writer.WriteInt32((int)value);
+            { if (littleEndian) writer.WriteInt32LE((int)value); else writer.WriteInt32((int)value); }
         else if (propertyType == typeof(uint))
-            writer.WriteUInt32((uint)value);
+            { if (littleEndian) writer.WriteUInt32LE((uint)value); else writer.WriteUInt32((uint)value); }
         else if (propertyType == typeof(long))
-            writer.WriteInt64((long)value);
+            { if (littleEndian) writer.WriteInt64LE((long)value); else writer.WriteInt64((long)value); }
         else if (propertyType == typeof(ulong))
-            writer.WriteUInt64((ulong)value);
+            { if (littleEndian) writer.WriteUInt64LE((ulong)value); else writer.WriteUInt64((ulong)value); }
         else if (propertyType == typeof(float))
-            writer.WriteFloat((float)value);
+            { if (littleEndian) writer.WriteFloatLE((float)value); else writer.WriteFloat((float)value); }
         else if (propertyType == typeof(double))
-            writer.WriteDouble((double)value);
+            { if (littleEndian) writer.WriteDoubleLE((double)value); else writer.WriteDouble((double)value); }
         else if (propertyType == typeof(bool))
             writer.WriteByte((byte)((bool)value ? 1 : 0));
         else if (propertyType.IsEnum)
@@ -276,6 +291,12 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             if (propertyInfo != null)
             {
+                if (propertyInfo.GetCustomAttribute<PascalStringAttribute>() != null)
+                {
+                    writer.WritePascalString((string)value ?? string.Empty);
+                    return;
+                }
+
                 var cstr = propertyInfo.GetCustomAttribute<CStringAttribute>();
                 if (cstr != null)
                 {
@@ -290,7 +311,18 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             var elementType = propertyType.GetElementType()!;
             if (elementType == typeof(byte))
+            {
+                if (propertyInfo != null)
+                {
+                    var fixedLenAttr = propertyInfo.GetCustomAttribute<FixedLengthAttribute>();
+                    if (fixedLenAttr != null)
+                    {
+                        writer.WriteFixedByteArray((byte[])value, fixedLenAttr.Length);
+                        return;
+                    }
+                }
                 writer.WriteByteArray((byte[])value, lengthSize);
+            }
             else
             {
                 // Use generic method for arrays
@@ -302,10 +334,10 @@ public class BinaryPacketSerializer : IPacketSerializer
             var genericTypeDef = propertyType.GetGenericTypeDefinition();
                 
             // Handle List<T>, IList<T>, ICollection<T>, IEnumerable<T>
-            if (genericTypeDef == typeof(System.Collections.Generic.List<>) ||
-                genericTypeDef == typeof(System.Collections.Generic.IList<>) ||
-                genericTypeDef == typeof(System.Collections.Generic.ICollection<>) ||
-                genericTypeDef == typeof(System.Collections.Generic.IEnumerable<>))
+            if (genericTypeDef == typeof(List<>) ||
+                genericTypeDef == typeof(IList<>) ||
+                genericTypeDef == typeof(ICollection<>) ||
+                genericTypeDef == typeof(IEnumerable<>))
             {
                 var elementType = propertyType.GetGenericArguments()[0];
                     
@@ -477,6 +509,62 @@ public class BinaryPacketSerializer : IPacketSerializer
             return value;
         }
 
+        public short ReadInt16LE()
+        {
+            var value = BinaryPrimitives.ReadInt16LittleEndian(_span.Slice(_position, 2));
+            _position += 2;
+            return value;
+        }
+
+        public ushort ReadUInt16LE()
+        {
+            var value = BinaryPrimitives.ReadUInt16LittleEndian(_span.Slice(_position, 2));
+            _position += 2;
+            return value;
+        }
+
+        public int ReadInt32LE()
+        {
+            var value = BinaryPrimitives.ReadInt32LittleEndian(_span.Slice(_position, 4));
+            _position += 4;
+            return value;
+        }
+
+        public uint ReadUInt32LE()
+        {
+            var value = BinaryPrimitives.ReadUInt32LittleEndian(_span.Slice(_position, 4));
+            _position += 4;
+            return value;
+        }
+
+        public long ReadInt64LE()
+        {
+            var value = BinaryPrimitives.ReadInt64LittleEndian(_span.Slice(_position, 8));
+            _position += 8;
+            return value;
+        }
+
+        public ulong ReadUInt64LE()
+        {
+            var value = BinaryPrimitives.ReadUInt64LittleEndian(_span.Slice(_position, 8));
+            _position += 8;
+            return value;
+        }
+
+        public float ReadFloatLE()
+        {
+            var value = BinaryPrimitives.ReadSingleLittleEndian(_span.Slice(_position, 4));
+            _position += 4;
+            return value;
+        }
+
+        public double ReadDoubleLE()
+        {
+            var value = BinaryPrimitives.ReadDoubleLittleEndian(_span.Slice(_position, 8));
+            _position += 8;
+            return value;
+        }
+
         public string ReadString()
         {
             // String format: [Length:4][Bytes:N]
@@ -513,17 +601,42 @@ public class BinaryPacketSerializer : IPacketSerializer
             return result;
         }
 
+        /// <summary>Reads a Pascal string: a 1-byte length prefix followed by that many bytes.</summary>
+        public string ReadPascalString()
+        {
+            var length = ReadByte();
+            if (length == 0)
+                return string.Empty;
+
+            if (_position + length > _span.Length)
+                throw new InvalidOperationException("PascalString length exceeds buffer size");
+
+            var stringBytes = _span.Slice(_position, length);
+            _position += length;
+            return Encoding.GetString(stringBytes);
+        }
+
         public byte[] ReadByteArray(int lengthSize = 4)
         {
-            // Array format: [Length:N][Bytes:M]
-            var length = lengthSize switch
+            uint length;
+
+            if (lengthSize == 0)
             {
-                1 => ReadByte(),
-                2 => ReadUInt16(),
-                4 => ReadUInt32(),
-                _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
-            };
-                
+                // Remainder mode: read all remaining bytes with no length prefix.
+                length = (uint)(_span.Length - _position);
+            }
+            else
+            {
+                // Length-prefixed: [Length:N][Bytes:M]
+                length = lengthSize switch
+                {
+                    1 => ReadByte(),
+                    2 => ReadUInt16(),
+                    4 => ReadUInt32(),
+                    _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
+                };
+            }
+
             if (length == 0)
                 return Array.Empty<byte>();
 
@@ -533,6 +646,21 @@ public class BinaryPacketSerializer : IPacketSerializer
             var array = new byte[length];
             _span.Slice(_position, (int)length).CopyTo(array);
             _position += (int)length;
+            return array;
+        }
+
+        /// <summary>Reads exactly <paramref name="length"/> bytes with no length prefix.</summary>
+        public byte[] ReadFixedByteArray(int length)
+        {
+            if (length <= 0)
+                return Array.Empty<byte>();
+
+            if (_position + length > _span.Length)
+                throw new InvalidOperationException($"Fixed byte array length {length} exceeds buffer size");
+
+            var array = new byte[length];
+            _span.Slice(_position, length).CopyTo(array);
+            _position += length;
             return array;
         }
     }
@@ -612,6 +740,54 @@ public class BinaryPacketSerializer : IPacketSerializer
             _writer.Advance(8);
         }
 
+        public void WriteInt16LE(short value)
+        {
+            BinaryPrimitives.WriteInt16LittleEndian(_writer.GetSpan(2), value);
+            _writer.Advance(2);
+        }
+
+        public void WriteUInt16LE(ushort value)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(_writer.GetSpan(2), value);
+            _writer.Advance(2);
+        }
+
+        public void WriteInt32LE(int value)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(_writer.GetSpan(4), value);
+            _writer.Advance(4);
+        }
+
+        public void WriteUInt32LE(uint value)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(_writer.GetSpan(4), value);
+            _writer.Advance(4);
+        }
+
+        public void WriteInt64LE(long value)
+        {
+            BinaryPrimitives.WriteInt64LittleEndian(_writer.GetSpan(8), value);
+            _writer.Advance(8);
+        }
+
+        public void WriteUInt64LE(ulong value)
+        {
+            BinaryPrimitives.WriteUInt64LittleEndian(_writer.GetSpan(8), value);
+            _writer.Advance(8);
+        }
+
+        public void WriteFloatLE(float value)
+        {
+            BinaryPrimitives.WriteSingleLittleEndian(_writer.GetSpan(4), value);
+            _writer.Advance(4);
+        }
+
+        public void WriteDoubleLE(double value)
+        {
+            BinaryPrimitives.WriteDoubleLittleEndian(_writer.GetSpan(8), value);
+            _writer.Advance(8);
+        }
+
         public void WriteString(string value)
         {
             // String format: [Length:4][Bytes:N]
@@ -626,6 +802,25 @@ public class BinaryPacketSerializer : IPacketSerializer
             var bytesLength = Encoding.GetBytes(value, _writer.GetSpan());
             _writer.Advance(bytesLength);
             BinaryPrimitives.WriteUInt32BigEndian(lengthSpan, (uint)bytesLength);
+        }
+
+        /// <summary>Writes a Pascal string: a 1-byte length prefix followed by the encoded bytes.
+        /// Strings whose encoded length exceeds 255 bytes are silently truncated.</summary>
+        public void WritePascalString(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                WriteByte(0);
+                return;
+            }
+
+            // Reserve 1 byte for the length prefix, then encode directly into the writer buffer.
+            var lengthSpan = _writer.GetSpan(1);
+            _writer.Advance(1);
+            var bytesWritten = Encoding.GetBytes(value, _writer.GetSpan());
+            var actualWritten = Math.Min(bytesWritten, byte.MaxValue);
+            _writer.Advance(actualWritten);
+            lengthSpan[0] = (byte)actualWritten;
         }
 
         public void WriteCString(string value, int length)
@@ -659,7 +854,19 @@ public class BinaryPacketSerializer : IPacketSerializer
 
         public void WriteByteArray(byte[] value, int lengthSize = 4)
         {
-            // Array format: [Length:N][Bytes:M]
+            // Remainder mode: write raw bytes with no length prefix.
+            if (lengthSize == 0)
+            {
+                if (value is { Length: > 0 })
+                {
+                    var rawSpan = _writer.GetSpan(value.Length);
+                    value.CopyTo(rawSpan);
+                    _writer.Advance(value.Length);
+                }
+                return;
+            }
+
+            // Length-prefixed: [Length:N][Bytes:M]
             if (value == null || value.Length == 0)
             {
                 switch (lengthSize)
@@ -702,6 +909,30 @@ public class BinaryPacketSerializer : IPacketSerializer
             var span = _writer.GetSpan(value.Length);
             value.CopyTo(span);
             _writer.Advance(value.Length);
+        }
+
+        /// <summary>Writes exactly <paramref name="length"/> bytes with no length prefix.
+        /// Shorter arrays are zero-padded; longer arrays are truncated.</summary>
+        public void WriteFixedByteArray(byte[] value, int length)
+        {
+            if (length <= 0)
+                return;
+
+            var span = _writer.GetSpan(length);
+            if (value == null || value.Length == 0)
+            {
+                span.Slice(0, length).Fill(0);
+            }
+            else if (value.Length >= length)
+            {
+                value.AsSpan(0, length).CopyTo(span);
+            }
+            else
+            {
+                value.CopyTo(span);
+                span.Slice(value.Length, length - value.Length).Fill(0);
+            }
+            _writer.Advance(length);
         }
     }
 }

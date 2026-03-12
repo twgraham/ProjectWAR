@@ -11,10 +11,10 @@ public static class SpanExtensions
         
         foreach (var b in data)
         {
-            sum1 = (byte)(sum1 + b);
-            sum2 = (byte)(sum2 + sum1);
+            sum1 += b;
+            sum2 += sum1;
         }
         
-        return (ushort)((sum1 << 8) | sum2);
+        return (ushort)((-sum1 * 0x100) + (-sum2 * 0xFF));
     }
 }

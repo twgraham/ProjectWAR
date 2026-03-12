@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network;
-using WorldServerV2.World.Objects;
+using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.Services;
 
 /// <summary>
 /// Manages the mapping between <see cref="GameSession"/> instances and their active
-/// <see cref="Player"/> entities. Replaces the legacy static <c>Player._Players</c>
+/// <see cref="PlayerEntity"/> player entities. Replaces the legacy static <c>Player._Players</c>
 /// and <c>Player.PlayersByCharId</c> dictionaries with an injectable, thread-safe service.
 /// <para>
 /// <b>Thread-safety model:</b> Identical to <see cref="SessionRegistry"/> — a single
@@ -20,8 +20,8 @@ namespace WorldServerV2.Services;
 /// </summary>
 public sealed class PlayerService
 {
-    private readonly ConcurrentDictionary<ushort, Player> _bySessionId = new();
-    private readonly ConcurrentDictionary<uint, Player> _byCharacterId = new();
+    private readonly ConcurrentDictionary<ushort, PlayerEntity> _bySessionId = new();
+    private readonly ConcurrentDictionary<uint, PlayerEntity> _byCharacterId = new();
     private readonly ILogger<PlayerService> _logger;
     private readonly Lock _writeLock = new();
 
@@ -33,7 +33,7 @@ public sealed class PlayerService
     // ── Write operations (serialized) ───────────────────────────────────
 
     /// <summary>
-    /// Binds a <see cref="Player"/> to a <see cref="GameSession"/> when the player enters the world.
+    /// Binds a <see cref="PlayerEntity"/> to a <see cref="GameSession"/> when the player enters the world.
     /// <para>
     /// If the session already has a bound player (e.g. character switch without explicit unbind),
     /// the previous player is unbound first. If the character ID is already bound to a different
@@ -41,9 +41,9 @@ public sealed class PlayerService
     /// </para>
     /// </summary>
     /// <param name="session">The session that owns this player.</param>
-    /// <param name="player">The player entering the world.</param>
+    /// <param name="player">The player entity entering the world.</param>
     /// <exception cref="ArgumentNullException">If either argument is null.</exception>
-    public void Bind(GameSession session, Player player)
+    public void Bind(GameSession session, PlayerEntity player)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(player);
@@ -54,15 +54,15 @@ public sealed class PlayerService
             if (_bySessionId.TryGetValue(session.Id, out var existingPlayer) && existingPlayer != player)
             {
                 _byCharacterId.TryRemove(
-                    new KeyValuePair<uint, Player>(existingPlayer.Info.CharacterId, existingPlayer));
+                    new KeyValuePair<uint, PlayerEntity>(existingPlayer.CharacterId, existingPlayer));
 
                 _logger.LogDebug(
                     "Session {SessionId} switching character from {OldCharId} to {NewCharId}",
-                    session.Id, existingPlayer.Info.CharacterId, player.Info.CharacterId);
+                    session.Id, existingPlayer.CharacterId, player.CharacterId);
             }
 
             // If this character ID is already bound to a different session, displace it.
-            if (_byCharacterId.TryGetValue(player.Info.CharacterId, out var displacedPlayer)
+            if (_byCharacterId.TryGetValue(player.CharacterId, out var displacedPlayer)
                 && displacedPlayer != player)
             {
                 // Find and remove the displaced player's session binding.
@@ -77,16 +77,16 @@ public sealed class PlayerService
 
                 _logger.LogWarning(
                     "Character {CharId} was bound to another session; displacing",
-                    player.Info.CharacterId);
+                    player.CharacterId);
             }
 
             _bySessionId[session.Id] = player;
-            _byCharacterId[player.Info.CharacterId] = player;
+            _byCharacterId[player.CharacterId] = player;
         }
 
         _logger.LogDebug(
             "Bound Player {CharName} ({CharId}) to Session {SessionId}",
-            player.Name, player.Info.CharacterId, session.Id);
+            player.Name, player.CharacterId, session.Id);
     }
 
     /// <summary>
@@ -94,12 +94,12 @@ public sealed class PlayerService
     /// Safe to call if no player is bound — the call is a no-op.
     /// </summary>
     /// <param name="session">The session to unbind from.</param>
-    /// <returns>The unbound player, or <c>null</c> if none was bound.</returns>
-    public Player? Unbind(GameSession session)
+    /// <returns>The unbound player entity, or <c>null</c> if none was bound.</returns>
+    public PlayerEntity? Unbind(GameSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        Player? player;
+        PlayerEntity? player;
 
         lock (_writeLock)
         {
@@ -108,12 +108,12 @@ public sealed class PlayerService
 
             // Only remove from char index if it still points to this player.
             _byCharacterId.TryRemove(
-                new KeyValuePair<uint, Player>(player.Info.CharacterId, player));
+                new KeyValuePair<uint, PlayerEntity>(player.CharacterId, player));
         }
 
         _logger.LogDebug(
             "Unbound Player {CharName} ({CharId}) from Session {SessionId}",
-            player.Name, player.Info.CharacterId, session.Id);
+            player.Name, player.CharacterId, session.Id);
 
         return player;
     }
@@ -121,23 +121,23 @@ public sealed class PlayerService
     // ── Lock-free reads ─────────────────────────────────────────────────
 
     /// <summary>
-    /// Gets the <see cref="Player"/> bound to the given session, or <c>null</c> if
+    /// Gets the <see cref="PlayerEntity"/> bound to the given session, or <c>null</c> if
     /// the session has no active player (pre-world, char screen, etc.).
     /// </summary>
-    public Player? GetPlayer(GameSession session)
+    public PlayerEntity? GetPlayer(GameSession session)
         => _bySessionId.TryGetValue(session.Id, out var player) ? player : null;
 
     /// <summary>
-    /// Gets the <see cref="Player"/> by character ID, or <c>null</c> if not in world.
+    /// Gets the <see cref="PlayerEntity"/> by character ID, or <c>null</c> if not in world.
     /// </summary>
-    public Player? GetPlayerByCharacterId(uint characterId)
+    public PlayerEntity? GetPlayerByCharacterId(uint characterId)
         => _byCharacterId.TryGetValue(characterId, out var player) ? player : null;
 
     /// <summary>
-    /// Gets the <see cref="Player"/> by character name (case-insensitive linear scan).
+    /// Gets the <see cref="PlayerEntity"/> by character name (case-insensitive linear scan).
     /// Use <see cref="GetPlayerByCharacterId"/> for O(1) lookups where possible.
     /// </summary>
-    public Player? GetPlayerByName(string name)
+    public PlayerEntity? GetPlayerByName(string name)
     {
         foreach (var player in _byCharacterId.Values)
         {
@@ -152,8 +152,8 @@ public sealed class PlayerService
     public int Count => _bySessionId.Count;
 
     /// <summary>
-    /// Enumerates all currently bound players. The sequence is a point-in-time snapshot
+    /// Enumerates all currently bound player entities. The sequence is a point-in-time snapshot
     /// of the dictionary values.
     /// </summary>
-    public IEnumerable<Player> OnlinePlayers => _byCharacterId.Values;
+    public IEnumerable<PlayerEntity> OnlinePlayers => _byCharacterId.Values;
 }

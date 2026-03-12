@@ -1,3 +1,5 @@
+using Core.Infrastructure.Network;
+
 namespace WorldServerV2.Network.Dtos;
 
 /// <summary>
@@ -24,6 +26,7 @@ public class EncryptKeyRequest
     /// <summary>Unknown field.</summary>
     public byte Unk1 { get; set; }
 
-    /// <summary>Client encryption key (typically 256 bytes).</summary>
+    /// <summary>Client encryption key (typically 256 bytes). No length prefix — remainder of payload.</summary>
+    [PacketLength(0)]
     public byte[] Key { get; set; } = [];
 }

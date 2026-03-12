@@ -67,10 +67,13 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
         services.AddLogging(builder => builder
             .SetMinimumLevel(LogLevel.Debug));
 
+        // Source-generated serializer context for binary DTOs
+        services.AddSingleton<IPacketSerializerContext, GameServerContext>();
+
         // Core networking — registers NetworkManager as singleton + IHostedService
         services.AddServerNetworking(endpoint)
             .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
-            .WithPacketSerializer<GameServerSerializer>(ServiceLifetime.Scoped)
+            .WithPacketSerializer<BinaryPacketSerializer>(ServiceLifetime.Scoped)
             .WithPacketDispatcher(dispatcher);
 
         // Session + player services + lifecycle hosted service

@@ -335,6 +335,17 @@ namespace RpcSourceGenerator
                     continue;
                 }
 
+                // Handle PascalString attribute
+                if (HasPascalString(prop) && underlyingType.SpecialType == SpecialType.System_String)
+                {
+                    sb.Append(isNullable
+                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : reader.ReadPascalString()"
+                        : $"                {prop.Name} = reader.ReadPascalString()");
+
+                    sb.AppendLine(isLast ? "" : ",");
+                    continue;
+                }
+
                 // Check if it's an enum - handle specially because cast needs to wrap reader.ReadByte()
                 if (underlyingType.TypeKind == TypeKind.Enum)
                 {
@@ -351,6 +362,21 @@ namespace RpcSourceGenerator
                     // Call discrete collection deserialize method
                     var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize);
                     sb.Append($"                {prop.Name} = {methodName}(ref reader)");
+                }
+                else if (underlyingType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+                {
+                    var fixedLen = GetFixedLength(prop);
+                    if (fixedLen.HasValue)
+                    {
+                        // [FixedLength(N)] byte[] — read exactly N bytes, no length prefix
+                        sb.Append($"                {prop.Name} = reader.ReadFixedByteArray({fixedLen.Value})");
+                    }
+                    else
+                    {
+                        // byte[] with length prefix
+                        var lengthSize = GetPacketLengthSize(prop);
+                        sb.Append($"                {prop.Name} = reader.ReadByteArray({lengthSize})");
+                    }
                 }
                 else if (ShouldGenerateSerializerFor(underlyingType, out var customType))
                 {
@@ -370,7 +396,7 @@ namespace RpcSourceGenerator
                     else
                     {
                         sb.Append($"                {prop.Name} = reader.IsAtEnd() ? null : reader.");
-                        GenerateReadExpressionInline(sb, propType);
+                        GenerateReadExpressionInline(sb, propType, HasLittleEndian(prop));
                     }
                 }
                 else
@@ -383,7 +409,7 @@ namespace RpcSourceGenerator
                     else
                     {
                         sb.Append($"                {prop.Name} = reader.");
-                        GenerateReadExpressionInline(sb, propType);
+                        GenerateReadExpressionInline(sb, propType, HasLittleEndian(prop));
                     }
                 }
 
@@ -394,7 +420,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("        }");
         }
 
-        private static void GenerateReadExpressionInline(StringBuilder sb, ITypeSymbol type)
+        private static void GenerateReadExpressionInline(StringBuilder sb, ITypeSymbol type, bool littleEndian = false)
         {
             var underlyingType = type;
             if (type.NullableAnnotation == NullableAnnotation.Annotated && type is INamedTypeSymbol namedType && namedType.IsGenericType)
@@ -406,14 +432,14 @@ namespace RpcSourceGenerator
             {
                 SpecialType.System_Byte => "ReadByte()",
                 SpecialType.System_SByte => "ReadSByte()",
-                SpecialType.System_Int16 => "ReadInt16()",
-                SpecialType.System_UInt16 => "ReadUInt16()",
-                SpecialType.System_Int32 => "ReadInt32()",
-                SpecialType.System_UInt32 => "ReadUInt32()",
-                SpecialType.System_Int64 => "ReadInt64()",
-                SpecialType.System_UInt64 => "ReadUInt64()",
-                SpecialType.System_Single => "ReadFloat()",
-                SpecialType.System_Double => "ReadDouble()",
+                SpecialType.System_Int16 => littleEndian ? "ReadInt16LE()" : "ReadInt16()",
+                SpecialType.System_UInt16 => littleEndian ? "ReadUInt16LE()" : "ReadUInt16()",
+                SpecialType.System_Int32 => littleEndian ? "ReadInt32LE()" : "ReadInt32()",
+                SpecialType.System_UInt32 => littleEndian ? "ReadUInt32LE()" : "ReadUInt32()",
+                SpecialType.System_Int64 => littleEndian ? "ReadInt64LE()" : "ReadInt64()",
+                SpecialType.System_UInt64 => littleEndian ? "ReadUInt64LE()" : "ReadUInt64()",
+                SpecialType.System_Single => littleEndian ? "ReadFloatLE()" : "ReadFloat()",
+                SpecialType.System_Double => littleEndian ? "ReadDoubleLE()" : "ReadDouble()",
                 SpecialType.System_Boolean => "ReadByte() != 0",
                 SpecialType.System_String => "ReadString()",
                 _ => "null /* unsupported type */"
@@ -460,17 +486,20 @@ namespace RpcSourceGenerator
             // Check if it's a collection first
             if (IsCollectionType(underlyingType, out var elementType))
             {
-                // For byte arrays, use the specialized method
-                if (elementType!.SpecialType == SpecialType.System_Byte)
-                {
-                    sb.AppendLine($"            writer.WriteByteArray({value}, {lengthSize});");
-                }
+                // Call discrete collection serialize method
+                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize);
+                sb.AppendLine($"            {methodName}(ref writer, {value});");
+                return;
+            }
+
+            // byte[] — excluded from IsCollectionType, use specialized WriteByteArray / WriteFixedByteArray
+            if (underlyingType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+            {
+                var fixedLen = GetFixedLength(property);
+                if (fixedLen.HasValue)
+                    sb.AppendLine($"            writer.WriteFixedByteArray({value}, {fixedLen.Value});");
                 else
-                {
-                    // Call discrete collection serialize method
-                    var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType, lengthSize);
-                    sb.AppendLine($"            {methodName}(ref writer, {value});");
-                }
+                    sb.AppendLine($"            writer.WriteByteArray({value}, {lengthSize});");
                 return;
             }
 
@@ -509,6 +538,23 @@ namespace RpcSourceGenerator
                 return;
             }
 
+            // Handle PascalString attribute on string properties
+            if (HasPascalString(property) && underlyingType.SpecialType == SpecialType.System_String)
+            {
+                if (needsCast)
+                {
+                    sb.AppendLine($"            if ({valueExpression} != null)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                writer.WritePascalString({value});");
+                    sb.AppendLine("            }");
+                }
+                else
+                {
+                    sb.AppendLine($"            writer.WritePascalString({value});");
+                }
+                return;
+            }
+
             // Handle CString attribute on string properties
             var cstrLen = GetCStringLength(property);
             if (cstrLen.HasValue && underlyingType.SpecialType == SpecialType.System_String)
@@ -533,18 +579,18 @@ namespace RpcSourceGenerator
                 sb.AppendLine($"            if ({valueExpression} != null)");
                 sb.AppendLine("            {");
                 sb.Append("                writer.");
-                GenerateWriteExpressionInline(sb, propType, value);
+                GenerateWriteExpressionInline(sb, propType, value, HasLittleEndian(property));
                 sb.AppendLine(";");
                 sb.AppendLine("            }");
             }
             else
             {
                 sb.Append("            writer.");
-                GenerateWriteExpressionInline(sb, propType, value);
+                GenerateWriteExpressionInline(sb, propType, value, HasLittleEndian(property));
                 sb.AppendLine(";");
             }
         }
-        private static void GenerateWriteExpressionInline(StringBuilder sb, ITypeSymbol type, string valueExpression)
+        private static void GenerateWriteExpressionInline(StringBuilder sb, ITypeSymbol type, string valueExpression, bool littleEndian = false)
         {
             var underlyingType = type;
             if (type.NullableAnnotation == NullableAnnotation.Annotated && type is INamedTypeSymbol namedType && namedType.IsGenericType)
@@ -556,14 +602,14 @@ namespace RpcSourceGenerator
             {
                 SpecialType.System_Byte => $"WriteByte({valueExpression})",
                 SpecialType.System_SByte => $"WriteSByte({valueExpression})",
-                SpecialType.System_Int16 => $"WriteInt16({valueExpression})",
-                SpecialType.System_UInt16 => $"WriteUInt16({valueExpression})",
-                SpecialType.System_Int32 => $"WriteInt32({valueExpression})",
-                SpecialType.System_UInt32 => $"WriteUInt32({valueExpression})",
-                SpecialType.System_Int64 => $"WriteInt64({valueExpression})",
-                SpecialType.System_UInt64 => $"WriteUInt64({valueExpression})",
-                SpecialType.System_Single => $"WriteFloat({valueExpression})",
-                SpecialType.System_Double => $"WriteDouble({valueExpression})",
+                SpecialType.System_Int16 => littleEndian ? $"WriteInt16LE({valueExpression})" : $"WriteInt16({valueExpression})",
+                SpecialType.System_UInt16 => littleEndian ? $"WriteUInt16LE({valueExpression})" : $"WriteUInt16({valueExpression})",
+                SpecialType.System_Int32 => littleEndian ? $"WriteInt32LE({valueExpression})" : $"WriteInt32({valueExpression})",
+                SpecialType.System_UInt32 => littleEndian ? $"WriteUInt32LE({valueExpression})" : $"WriteUInt32({valueExpression})",
+                SpecialType.System_Int64 => littleEndian ? $"WriteInt64LE({valueExpression})" : $"WriteInt64({valueExpression})",
+                SpecialType.System_UInt64 => littleEndian ? $"WriteUInt64LE({valueExpression})" : $"WriteUInt64({valueExpression})",
+                SpecialType.System_Single => littleEndian ? $"WriteFloatLE({valueExpression})" : $"WriteFloat({valueExpression})",
+                SpecialType.System_Double => littleEndian ? $"WriteDoubleLE({valueExpression})" : $"WriteDouble({valueExpression})",
                 SpecialType.System_Boolean => $"WriteByte((byte)({valueExpression} ? 1 : 0))",
                 SpecialType.System_String => $"WriteString({valueExpression})",
                 _ => "/* unsupported type */"
@@ -637,6 +683,31 @@ namespace RpcSourceGenerator
 
             return null;
         }
+
+        private static int? GetFixedLength(IPropertySymbol property)
+        {
+            var fixedLenAttr = property.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name == "FixedLengthAttribute" &&
+                                     a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+
+            if (fixedLenAttr is { ConstructorArguments.Length: > 0 })
+            {
+                if (fixedLenAttr.ConstructorArguments[0].Value is int len)
+                    return len;
+            }
+
+            return null;
+        }
+
+        private static bool HasPascalString(IPropertySymbol property) =>
+            property.GetAttributes()
+                .Any(a => a.AttributeClass?.Name == "PascalStringAttribute" &&
+                          a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+
+        private static bool HasLittleEndian(IPropertySymbol property) =>
+            property.GetAttributes()
+                .Any(a => a.AttributeClass?.Name == "LittleEndianAttribute" &&
+                          a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
 
         // Register a collection deserialize method and return its name
         private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize)

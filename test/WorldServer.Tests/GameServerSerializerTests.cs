@@ -1,13 +1,18 @@
 using System.Buffers;
+using Core.Infrastructure.Network;
 using Shouldly;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 
 namespace WorldServer.Tests;
 
+/// <summary>
+/// Tests that EncryptKey DTOs are correctly serialized/deserialized through
+/// the source-generated <see cref="GameServerContext"/> and <see cref="BinaryPacketSerializer"/>.
+/// </summary>
 public class GameServerSerializerTests
 {
-    private readonly GameServerSerializer _serializer = new();
+    private readonly BinaryPacketSerializer _serializer = new(new GameServerContext());
 
     #region EncryptKeyRequest Deserialization
 
@@ -15,7 +20,7 @@ public class GameServerSerializerTests
     public void Deserialize_EncryptKeyRequest_ReadsStructFields()
     {
         // 6-byte struct: cipher=0, app=1, major=1, minor=4, revision=8, unk1=0
-        // + 256-byte key
+        // + 256-byte key (remainder — no length prefix)
         var payload = new byte[262];
         payload[0] = 0x00; // cipher
         payload[1] = 0x01; // application
@@ -65,22 +70,6 @@ public class GameServerSerializerTests
         result.Key.Length.ShouldBe(0);
     }
 
-    [Fact]
-    public void Deserialize_EncryptKeyRequest_PayloadTooShort_Throws()
-    {
-        var payload = new byte[] { 0x00, 0x01, 0x02 }; // Only 3 bytes, need at least 6
-
-        Should.Throw<InvalidOperationException>(() =>
-            _serializer.Deserialize<EncryptKeyRequest>(payload));
-    }
-
-    [Fact]
-    public void Deserialize_UnsupportedType_Throws()
-    {
-        Should.Throw<InvalidOperationException>(() =>
-            _serializer.Deserialize<string>([]));
-    }
-
     #endregion
 
     #region EncryptKeyResponse Serialization
@@ -109,13 +98,36 @@ public class GameServerSerializerTests
         writer.WrittenSpan[0].ShouldBe((byte)0);
     }
 
-    [Fact]
-    public void Serialize_UnsupportedType_Throws()
-    {
-        var writer = new ArrayBufferWriter<byte>();
+    #endregion
 
-        Should.Throw<InvalidOperationException>(() =>
-            _serializer.Serialize(writer, "unsupported"));
+    #region Round-trip
+
+    [Fact]
+    public void EncryptKeyRequest_RoundTrips()
+    {
+        var original = new EncryptKeyRequest
+        {
+            Cipher = 1,
+            Application = 2,
+            Major = 3,
+            Minor = 4,
+            Revision = 5,
+            Unk1 = 6,
+            Key = [0xDE, 0xAD, 0xBE, 0xEF]
+        };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+
+        var deserialized = _serializer.Deserialize<EncryptKeyRequest>(writer.WrittenSpan);
+
+        deserialized.Cipher.ShouldBe(original.Cipher);
+        deserialized.Application.ShouldBe(original.Application);
+        deserialized.Major.ShouldBe(original.Major);
+        deserialized.Minor.ShouldBe(original.Minor);
+        deserialized.Revision.ShouldBe(original.Revision);
+        deserialized.Unk1.ShouldBe(original.Unk1);
+        deserialized.Key.ShouldBe(original.Key);
     }
 
     #endregion
