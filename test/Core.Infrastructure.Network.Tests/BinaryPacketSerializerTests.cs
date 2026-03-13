@@ -766,6 +766,75 @@ public class BinaryPacketSerializerTests
         writer.WrittenSpan[4].ShouldBe((byte)0x88); // LittleEndian LSB first
     }
 
+    [Fact]
+    public void RoundTrip_FixedLength_TypedArray()
+    {
+        // GIVEN: A packet with [FixedLength(3)] int[]
+        var original = new FixedLengthTypedArrayPacket { Values = new[] { 1, 2, 3 } };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<FixedLengthTypedArrayPacket>(original);
+
+        // THEN: Values are preserved
+        result.Values.ShouldBe(new[] { 1, 2, 3 });
+
+        // AND: No length prefix written — wire size is exactly 3 * 4 = 12 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(12);
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLength_TypedArray_WithNeighbours()
+    {
+        // GIVEN: A packet with surrounding bytes flanking a [FixedLength(2)] ushort[]
+        var original = new FixedLengthTypedArrayWithNeighboursPacket
+            { Before = 0xAA, Items = new ushort[] { 0x0102, 0x0304 }, After = 0xBB };
+
+        // WHEN
+        var result = RoundTrip<FixedLengthTypedArrayWithNeighboursPacket>(original);
+
+        // THEN: Surrounding bytes + array values intact
+        result.Before.ShouldBe((byte)0xAA);
+        result.Items.ShouldBe(new ushort[] { 0x0102, 0x0304 });
+        result.After.ShouldBe((byte)0xBB);
+
+        // AND: Wire size = 1 + 2*2 + 1 = 6 bytes (no length prefix)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(6);
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLength_List()
+    {
+        // GIVEN: A packet with [FixedLength(3)] List<int>
+        var original = new FixedLengthListPacket { Values = new List<int> { 10, 20, 30 } };
+
+        // WHEN
+        var result = RoundTrip<FixedLengthListPacket>(original);
+
+        // THEN: Values preserved
+        result.Values.ShouldBe(new List<int> { 10, 20, 30 });
+
+        // AND: No length prefix — wire size is exactly 3 * 4 = 12 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(12);
+    }
+
+    [Fact]
+    public void FixedLength_TypedArray_Throws_WhenCountMismatch()
+    {
+        // GIVEN: An array with the wrong element count
+        var original = new FixedLengthTypedArrayPacket { Values = new[] { 1, 2 } }; // expects 3
+
+        // WHEN / THEN: Serialize throws
+        var writer = new ArrayBufferWriter<byte>();
+        Should.Throw<InvalidOperationException>(() => _serializer.Serialize(writer, original))
+            .Message.ShouldContain("FixedLength");
+    }
+
     public class BytePacket { public byte Value { get; set; } }
     public class SBytePacket { public sbyte Value { get; set; } }
     public class Int16Packet { public short Value { get; set; } }
@@ -845,6 +914,26 @@ public class BinaryPacketSerializerTests
         public int BigEndian { get; set; }
         [LittleEndian]
         public int LittleEndian { get; set; }
+    }
+
+    public class FixedLengthTypedArrayPacket
+    {
+        [FixedLength(3)]
+        public int[] Values { get; set; } = Array.Empty<int>();
+    }
+
+    public class FixedLengthTypedArrayWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [FixedLength(2)]
+        public ushort[] Items { get; set; } = Array.Empty<ushort>();
+        public byte After { get; set; }
+    }
+
+    public class FixedLengthListPacket
+    {
+        [FixedLength(3)]
+        public List<int> Values { get; set; } = new();
     }
 
     public class UnsupportedTypePacket

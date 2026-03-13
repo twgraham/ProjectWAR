@@ -522,6 +522,39 @@ namespace TestNamespace
         code.ShouldNotContain("ReadUInt16()"); // big-endian variant must not appear for this property
     }
 
+    [Fact]
+    public void GeneratesSerializer_WithFixedLengthOnCollection()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+using System.Collections.Generic;
+
+namespace TestNamespace
+{
+    public class FixedCollectionPacket
+    {
+        [FixedLength(4)]
+        public List<int> Items { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(FixedCollectionPacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Fixed-length collection uses a compile-time constant — no length-prefix read/write
+        code.ShouldContain("const int length = 4");
+        code.ShouldContain("FixedLength(4)");  // validation message
+        code.ShouldNotContain("ReadByte()");   // no 1-byte length prefix read
+        code.ShouldNotContain("WriteByte(");   // no 1-byte length prefix write
+    }
+
     private GeneratorTestResult RunGenerator(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);

@@ -58,6 +58,20 @@ try
             };
             
             s.AddGameData(postgresConfig.ToString());
+            
+            var characterDatabaseConfig = ctx.Configuration.GetSection("characterDatabase").Get<DatabaseConfig>()
+                ?? databaseConfig; // Fall back to the same DB if no separate config is provided
+            
+            var characterPostgresConfig = new NpgsqlConnectionStringBuilder
+            {
+                Host = characterDatabaseConfig.Host,
+                Port = characterDatabaseConfig.Port,
+                Database = characterDatabaseConfig.Database,
+                Username = characterDatabaseConfig.Username,
+                Password = characterDatabaseConfig.Password,
+            };
+            
+            s.AddCharacterData(characterPostgresConfig.ToString());
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
@@ -66,6 +80,11 @@ try
         });
 
     var host = builder.Build();
+
+    // Populate the lightweight character directory before accepting connections
+    var characterService = host.Services.GetRequiredService<ICharacterService>();
+    await characterService.LoadDirectoryAsync();
+
     await host.RunAsync();
 }
 catch (Exception ex)

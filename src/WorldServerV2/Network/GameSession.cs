@@ -1,4 +1,5 @@
 using Core.Infrastructure.Network;
+using WorldServerV2.Data.Entities;
 
 namespace WorldServerV2.Network;
 
@@ -48,6 +49,25 @@ public sealed class GameSession
     /// Set via <see cref="SessionRegistry.SetSessionAccount"/>.
     /// </summary>
     public AccountInfo? Account { get; internal set; }
+
+    /// <summary>
+    /// Characters for this account, loaded during <c>F_CONNECT</c>.
+    /// Empty until authentication completes. The session owns this data —
+    /// it is released when the session is torn down.
+    /// </summary>
+    public IReadOnlyList<Character> Characters { get; internal set; } = [];
+
+    /// <summary>
+    /// The account's realm (Order/Destruction), derived from its characters.
+    /// Returns 0 if the account has no characters.
+    /// </summary>
+    public byte Realm => Characters.FirstOrDefault(c => c.Realm != 0)?.Realm ?? 0;
+
+    /// <summary>
+    /// Finds the character in the given slot, or <c>null</c> if the slot is empty.
+    /// </summary>
+    public Character? GetCharacterBySlot(byte slot)
+        => Characters.FirstOrDefault(c => c.SlotId == slot);
 
     /// <summary>
     /// The remote endpoint address (e.g. "127.0.0.1:54321"), or <c>null</c> if disconnected.

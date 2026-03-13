@@ -112,8 +112,8 @@ public class AuthenticationHandler : IPacketHandler
             return RpcResult<ConnectResponse>.NoResponse;
         }
 
-        // Load characters before connection instead of later on
-        _characterService.LoadCharactersForAccount(context.Account.Id);
+        // Load characters into the session before responding
+        context.Session.Characters = await _characterService.GetCharactersForAccountAsync(context.Account.Id);
 
         return new ConnectResponse
         {
@@ -179,7 +179,7 @@ public class AuthenticationHandler : IPacketHandler
     }
     
     [Rpc((int)Opcodes.F_REQUEST_CHAR, (int)Opcodes.F_REQUEST_CHAR_RESPONSE)]
-    public RpcResult<RequestCharacterResponse> F_REQUEST_CHAR(RequestCharacterRequest request, IConnectionContext context)
+    public async Task<RpcResult<RequestCharacterResponse>> F_REQUEST_CHAR(RequestCharacterRequest request, IConnectionContext context)
     {
         context.Session.State = ClientState.CharScreen;
         
@@ -187,19 +187,11 @@ public class AuthenticationHandler : IPacketHandler
         {
             context.SendResponse((byte)Opcodes.F_REQUEST_CHAR_ERROR, new RequestCharacterErrorResponse
             {
-               RealmType = _characterService.GetAccountRealm(context.Account!.Id)
+               RealmType = context.Session.Realm
             });
             return RpcResult<RequestCharacterResponse>.NoResponse;
         }
 
-        var response = new RequestCharacterResponse
-        {
-            AccountUsername = context.Account!.Username,
-        };
-
-        return response;
-
-        // byte[] Chars = CharMgr.BuildCharacters((int)cclient._Account.Id);
-        // Out.Write(Chars, 0, Chars.Length);
+        return new RequestCharacterResponse(context.Session);
     }
 }

@@ -2,7 +2,6 @@ using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
-using WorldServerV2.Data.Entities;
 using WorldServerV2.World.Entities;
 using IPacketHandler = Core.Infrastructure.Network.IPacketHandler;
 
@@ -14,7 +13,6 @@ namespace WorldServerV2.Network.Handlers;
 /// </summary>
 public class CharacterHandler : IPacketHandler
 {
-    private readonly ICharacterService _characterService;
     private readonly ILogger<CharacterHandler> _logger;
 
     /// <summary>Default max health for newly created player entities.
@@ -22,10 +20,8 @@ public class CharacterHandler : IPacketHandler
     private const uint DefaultMaxHealth = 1000;
 
     public CharacterHandler(
-        ICharacterService characterService,
         ILogger<CharacterHandler> logger)
     {
-        _characterService = characterService;
         _logger = logger;
     }
 
@@ -47,7 +43,7 @@ public class CharacterHandler : IPacketHandler
             return RpcResult<WorldEnterResponse>.NoResponse;
         }
 
-        var character = _characterService.GetCharacterBySlot(context.Account.Id, request.CharacterSlot);
+        var character = context.Session.GetCharacterBySlot(request.CharacterSlot);
         if (character == null)
         {
             _logger.LogError("Character not found on slot {Slot} for account {AccountId}",

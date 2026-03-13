@@ -2,6 +2,7 @@ using System.Net;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using WorldServerV2.Data.Entities;
 using WorldServerV2.Network;
 using WorldServerV2.Services;
 
@@ -69,6 +70,9 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
 
         // Source-generated serializer context for binary DTOs
         services.AddSingleton<IPacketSerializerContext, GameServerContext>();
+
+        // Stub character service — integration smoke tests don't use a DB
+        services.AddSingleton<ICharacterService, NullCharacterService>();
 
         // Core networking — registers NetworkManager as singleton + IHostedService
         services.AddServerNetworking(endpoint)
@@ -154,5 +158,18 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
     {
         await _networkManager.StopAsync(CancellationToken.None);
         await _serviceProvider.DisposeAsync();
+    }
+
+    /// <summary>
+    /// No-op <see cref="ICharacterService"/> for integration smoke tests that
+    /// don't exercise character loading.
+    /// </summary>
+    private sealed class NullCharacterService : ICharacterService
+    {
+        public Task<IReadOnlyList<Character>> GetCharactersForAccountAsync(uint accountId)
+            => Task.FromResult<IReadOnlyList<Character>>([]);
+        public CharacterSummary? FindByName(string name) => null;
+        public CharacterSummary? FindById(uint characterId) => null;
+        public Task LoadDirectoryAsync() => Task.CompletedTask;
     }
 }

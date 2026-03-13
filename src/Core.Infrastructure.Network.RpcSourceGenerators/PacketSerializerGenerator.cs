@@ -17,7 +17,7 @@ namespace RpcSourceGenerator
         {
             public HashSet<string> DeserializeMethods { get; } = [];
             public HashSet<string> SerializeMethods { get; } = [];
-            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize)> CollectionInfo { get; } = new();
+            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize, int? FixedCount)> CollectionInfo { get; } = new();
         }
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -358,9 +358,10 @@ namespace RpcSourceGenerator
                 {
                     // Get PacketLength attribute if present
                     var lengthSize = GetPacketLengthSize(prop);
+                    var fixedLen = GetFixedLength(prop);
                     
                     // Call discrete collection deserialize method
-                    var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize);
+                    var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen);
                     sb.Append($"                {prop.Name} = {methodName}(ref reader)");
                 }
                 else if (underlyingType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
@@ -486,8 +487,9 @@ namespace RpcSourceGenerator
             // Check if it's a collection first
             if (IsCollectionType(underlyingType, out var elementType))
             {
+                var fixedLen = GetFixedLength(property);
                 // Call discrete collection serialize method
-                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize);
+                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen);
                 sb.AppendLine($"            {methodName}(ref writer, {value});");
                 return;
             }
@@ -710,26 +712,30 @@ namespace RpcSourceGenerator
                           a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
 
         // Register a collection deserialize method and return its name
-        private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize)
+        private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
         {
-            var methodName = $"DeserializeCollection_{GetSafeTypeName(collectionType)}_{lengthSize}";
+            var methodName = fixedCount.HasValue
+                ? $"DeserializeCollection_{GetSafeTypeName(collectionType)}_fixed_{fixedCount.Value}"
+                : $"DeserializeCollection_{GetSafeTypeName(collectionType)}_{lengthSize}";
             
             if (tracker.DeserializeMethods.Add(methodName))
             {
-                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize);
+                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount);
             }
             
             return methodName;
         }
 
         // Register a collection serialize method and return its name
-        private static string RegisterCollectionSerializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize)
+        private static string RegisterCollectionSerializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
         {
-            var methodName = $"SerializeCollection_{GetSafeTypeName(collectionType)}_{lengthSize}";
+            var methodName = fixedCount.HasValue
+                ? $"SerializeCollection_{GetSafeTypeName(collectionType)}_fixed_{fixedCount.Value}"
+                : $"SerializeCollection_{GetSafeTypeName(collectionType)}_{lengthSize}";
             
             if (tracker.SerializeMethods.Add(methodName))
             {
-                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize);
+                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount);
             }
             
             return methodName;
@@ -741,21 +747,21 @@ namespace RpcSourceGenerator
             // Generate deserialize methods
             foreach (var methodName in tracker.DeserializeMethods)
             {
-                var (collectionType, elementType, lengthSize) = tracker.CollectionInfo[methodName];
-                GenerateCollectionDeserializeMethod(sb, methodName, collectionType, elementType, lengthSize);
+                var (collectionType, elementType, lengthSize, fixedCount) = tracker.CollectionInfo[methodName];
+                GenerateCollectionDeserializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount);
                 sb.AppendLine();
             }
 
             // Generate serialize methods
             foreach (var methodName in tracker.SerializeMethods)
             {
-                var (collectionType, elementType, lengthSize) = tracker.CollectionInfo[methodName];
-                GenerateCollectionSerializeMethod(sb, methodName, collectionType, elementType, lengthSize);
+                var (collectionType, elementType, lengthSize, fixedCount) = tracker.CollectionInfo[methodName];
+                GenerateCollectionSerializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount);
                 sb.AppendLine();
             }
         }
 
-        private static void GenerateCollectionDeserializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize)
+        private static void GenerateCollectionDeserializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
         {
             var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -763,9 +769,18 @@ namespace RpcSourceGenerator
             sb.AppendLine($"        private {collectionTypeName} {methodName}(ref BinaryPacketSerializer.SpanReader reader)");
             sb.AppendLine("        {");
             
-            // Read length based on lengthSize
-            sb.AppendLine($"            var length = {GenerateLengthRead(lengthSize)};");
-            sb.AppendLine($"            if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
+            if (fixedCount.HasValue)
+            {
+                // [FixedLength] — use the compile-time count directly, no length prefix read
+                sb.AppendLine($"            const int length = {fixedCount.Value};");
+                sb.AppendLine($"            if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
+            }
+            else
+            {
+                // Read length from the span
+                sb.AppendLine($"            var length = {GenerateLengthRead(lengthSize)};");
+                sb.AppendLine($"            if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
+            }
             sb.AppendLine();
             
             // Create array to hold elements
@@ -798,7 +813,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("        }");
         }
 
-        private static void GenerateCollectionSerializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize)
+        private static void GenerateCollectionSerializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
         {
             var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             
@@ -806,14 +821,21 @@ namespace RpcSourceGenerator
             sb.AppendLine("        {");
             
             // Get count - handle different collection types
-            string countExpression;
-            countExpression = collectionType is IArrayTypeSymbol ? "collection.Length" :
-                // For List<T> and other collections, use Count property
-                "collection.Count";
+            string countExpression = collectionType is IArrayTypeSymbol ? "collection.Length" : "collection.Count";
             
-            // Write length validation and length bytes
-            sb.AppendLine($"            var count = {countExpression};");
-            GenerateLengthWrite(sb, "count", lengthSize);
+            if (fixedCount.HasValue)
+            {
+                // [FixedLength] — no length prefix; validate exact count at runtime
+                sb.AppendLine($"            var count = {countExpression};");
+                sb.AppendLine($"            if (count != {fixedCount.Value})");
+                sb.AppendLine($"                throw new System.InvalidOperationException($\"Collection length {{count}} does not match [FixedLength({fixedCount.Value})]\");");
+            }
+            else
+            {
+                // Write length prefix
+                sb.AppendLine($"            var count = {countExpression};");
+                GenerateLengthWrite(sb, "count", lengthSize);
+            }
             sb.AppendLine();
             
             // Loop through and write each element

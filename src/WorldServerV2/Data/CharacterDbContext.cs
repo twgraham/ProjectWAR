@@ -160,6 +160,15 @@ public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> opti
             entity.Ignore(e => e.TraitBytes);
             entity.Ignore(e => e.Level);
             entity.Ignore(e => e.FirstConnect);
+            
+            // Relationships
+            entity.HasOne(x => x.Value)
+                .WithOne(x => x.Character)
+                .HasForeignKey<CharacterValue>(x => x.CharacterId);
+            
+            entity.HasMany(x => x.Items)
+                .WithOne(x => x.Character)
+                .HasForeignKey(x => x.CharacterId);
 
             entity.HasIndex(e => e.Name).IsUnique();
         });

@@ -19,4 +19,6 @@ public sealed class CharacterItem
     public ushort SecondaryDye { get; set; }
     public bool BoundtoPlayer { get; set; }
     public uint AlternateAppereanceEntry { get; set; }
+
+    public Character Character { get; set; } = null!;
 }

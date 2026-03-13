@@ -42,4 +42,21 @@ public static class GameDataServiceExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers the <see cref="CharacterDbContext"/> as a factory for on-demand
+    /// short-lived context creation. Used by the singleton <c>CharacterService</c>
+    /// which cannot inject a scoped DbContext directly.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="connectionString">PostgreSQL connection string for the Characters database.</param>
+    public static IServiceCollection AddCharacterData(
+        this IServiceCollection services,
+        string connectionString)
+    {
+        services.AddDbContextFactory<CharacterDbContext>(options =>
+            options.UseNpgsql(connectionString));
+
+        return services;
+    }
 }

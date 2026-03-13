@@ -171,8 +171,9 @@ public class BinaryPacketSerializer : IPacketSerializer
                 }
                 return reader.ReadByteArray(lengthSize);
             }
-            // Use generic method for arrays
-            return ReadArrayGeneric(ref reader, elementType, lengthSize);
+            // Use generic method for arrays; [FixedLength] skips the length-prefix read
+            var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
+            return ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount);
         }
 
         if (propertyType.IsGenericType)
@@ -186,9 +187,10 @@ public class BinaryPacketSerializer : IPacketSerializer
                 genericTypeDef == typeof(IEnumerable<>))
             {
                 var elementType = propertyType.GetGenericArguments()[0];
+                var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
                     
-                // Read as array first
-                var array = ReadArrayGeneric(ref reader, elementType, lengthSize);
+                // Read as array first; [FixedLength] skips the length-prefix read
+                var array = ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount);
                     
                 // Convert to appropriate collection type
                 if (genericTypeDef == typeof(List<>))
@@ -208,16 +210,24 @@ public class BinaryPacketSerializer : IPacketSerializer
         throw new NotSupportedException($"Property type {propertyType.Name} is not supported");
     }
 
-    private object ReadArrayGeneric(ref SpanReader reader, Type elementType, int lengthSize)
+    private object ReadArrayGeneric(ref SpanReader reader, Type elementType, int lengthSize, int? fixedCount = null)
     {
-        // Read the length based on lengthSize
-        var length = lengthSize switch
+        // If [FixedLength] is present use the fixed count; otherwise read the length prefix
+        uint length;
+        if (fixedCount.HasValue)
         {
-            1 => reader.ReadByte(),
-            2 => reader.ReadUInt16(),
-            4 => reader.ReadUInt32(),
-            _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
-        };
+            length = (uint)fixedCount.Value;
+        }
+        else
+        {
+            length = lengthSize switch
+            {
+                1 => reader.ReadByte(),
+                2 => reader.ReadUInt16(),
+                4 => reader.ReadUInt32(),
+                _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
+            };
+        }
             
         if (length == 0)
         {
@@ -325,8 +335,9 @@ public class BinaryPacketSerializer : IPacketSerializer
             }
             else
             {
-                // Use generic method for arrays
-                WriteArrayGeneric(ref writer, value, elementType, lengthSize);
+                // Use generic method for arrays; [FixedLength] skips writing a length prefix
+                var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
+                WriteArrayGeneric(ref writer, value, elementType, lengthSize, fixedCount);
             }
         }
         else if (propertyType.IsGenericType)
@@ -340,9 +351,10 @@ public class BinaryPacketSerializer : IPacketSerializer
                 genericTypeDef == typeof(IEnumerable<>))
             {
                 var elementType = propertyType.GetGenericArguments()[0];
+                var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
                     
-                // Use WriteCollection
-                WriteCollectionGeneric(ref writer, value, elementType, lengthSize);
+                // Use WriteCollection; [FixedLength] skips writing a length prefix
+                WriteCollectionGeneric(ref writer, value, elementType, lengthSize, fixedCount);
             }
             else
                 throw new NotSupportedException($"Generic type {propertyType.Name} is not supported");
@@ -351,28 +363,38 @@ public class BinaryPacketSerializer : IPacketSerializer
             throw new NotSupportedException($"Property type {propertyType.Name} is not supported");
     }
 
-    private void WriteArrayGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize)
+    private void WriteArrayGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null)
     {
         var array = (Array)value;
             
-        // Write length based on lengthSize
-        switch (lengthSize)
+        if (fixedCount.HasValue)
         {
-            case 1:
-                if (array.Length > byte.MaxValue)
-                    throw new InvalidOperationException($"Array length {array.Length} exceeds maximum for 1-byte length ({byte.MaxValue})");
-                writer.WriteByte((byte)array.Length);
-                break;
-            case 2:
-                if (array.Length > ushort.MaxValue)
-                    throw new InvalidOperationException($"Array length {array.Length} exceeds maximum for 2-byte length ({ushort.MaxValue})");
-                writer.WriteUInt16((ushort)array.Length);
-                break;
-            case 4:
-                writer.WriteUInt32((uint)array.Length);
-                break;
-            default:
-                throw new InvalidOperationException($"Invalid length size: {lengthSize}");
+            // [FixedLength] — no length prefix; validate exact count
+            if (array.Length != fixedCount.Value)
+                throw new InvalidOperationException(
+                    $"Array length {array.Length} does not match [FixedLength({fixedCount.Value})]");
+        }
+        else
+        {
+            // Write length prefix based on lengthSize
+            switch (lengthSize)
+            {
+                case 1:
+                    if (array.Length > byte.MaxValue)
+                        throw new InvalidOperationException($"Array length {array.Length} exceeds maximum for 1-byte length ({byte.MaxValue})");
+                    writer.WriteByte((byte)array.Length);
+                    break;
+                case 2:
+                    if (array.Length > ushort.MaxValue)
+                        throw new InvalidOperationException($"Array length {array.Length} exceeds maximum for 2-byte length ({ushort.MaxValue})");
+                    writer.WriteUInt16((ushort)array.Length);
+                    break;
+                case 4:
+                    writer.WriteUInt32((uint)array.Length);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Invalid length size: {lengthSize}");
+            }
         }
             
         // Write each element by recursively calling WriteProperty
@@ -383,7 +405,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         }
     }
 
-    private void WriteCollectionGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize)
+    private void WriteCollectionGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null)
     {
         // Convert to array for counting
         var enumerable = (System.Collections.IEnumerable)value;
@@ -393,24 +415,34 @@ public class BinaryPacketSerializer : IPacketSerializer
             list.Add(item);
         }
             
-        // Write length based on lengthSize
-        switch (lengthSize)
+        if (fixedCount.HasValue)
         {
-            case 1:
-                if (list.Count > byte.MaxValue)
-                    throw new InvalidOperationException($"Collection length {list.Count} exceeds maximum for 1-byte length ({byte.MaxValue})");
-                writer.WriteByte((byte)list.Count);
-                break;
-            case 2:
-                if (list.Count > ushort.MaxValue)
-                    throw new InvalidOperationException($"Collection length {list.Count} exceeds maximum for 2-byte length ({ushort.MaxValue})");
-                writer.WriteUInt16((ushort)list.Count);
-                break;
-            case 4:
-                writer.WriteUInt32((uint)list.Count);
-                break;
-            default:
-                throw new InvalidOperationException($"Invalid length size: {lengthSize}");
+            // [FixedLength] — no length prefix; validate exact count
+            if (list.Count != fixedCount.Value)
+                throw new InvalidOperationException(
+                    $"Collection length {list.Count} does not match [FixedLength({fixedCount.Value})]");
+        }
+        else
+        {
+            // Write length prefix based on lengthSize
+            switch (lengthSize)
+            {
+                case 1:
+                    if (list.Count > byte.MaxValue)
+                        throw new InvalidOperationException($"Collection length {list.Count} exceeds maximum for 1-byte length ({byte.MaxValue})");
+                    writer.WriteByte((byte)list.Count);
+                    break;
+                case 2:
+                    if (list.Count > ushort.MaxValue)
+                        throw new InvalidOperationException($"Collection length {list.Count} exceeds maximum for 2-byte length ({ushort.MaxValue})");
+                    writer.WriteUInt16((ushort)list.Count);
+                    break;
+                case 4:
+                    writer.WriteUInt32((uint)list.Count);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Invalid length size: {lengthSize}");
+            }
         }
             
         // Write each element by recursively calling WriteProperty

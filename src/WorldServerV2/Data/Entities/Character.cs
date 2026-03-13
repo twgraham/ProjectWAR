@@ -40,4 +40,7 @@ public sealed class Character
 
     public byte Level { get; set; } = 1;
     public bool FirstConnect { get; set; }
+    
+    public CharacterValue Value { get; set; }
+    public List<CharacterItem> Items { get; set; }
 }

@@ -52,4 +52,6 @@ public sealed class CharacterValue
     public uint? PendingRenown { get; set; }
     public string Lockouts { get; set; } = string.Empty;
     public DateTime DisconcetTime { get; set; }
+    
+    public Character Character { get; set; } = null!;
 }
