@@ -112,7 +112,7 @@ internal sealed class CharacterService : ICharacterService
             Race = (byte)model.Race,
             Sex = (byte)model.Sex,
             Career = (byte)model.Class,
-            TraitBytes = model.Traits,
+            Traits = model.Traits,
             ModelId =  model.Model,
             Realm = (byte)model.Race.GetFaction(),
             RealmId = realmId,

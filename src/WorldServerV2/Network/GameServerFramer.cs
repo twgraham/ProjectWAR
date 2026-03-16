@@ -1,4 +1,3 @@
-using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using Core.Infrastructure.Cryptography;
@@ -64,25 +63,28 @@ public sealed class GameServerFramer : IPacketFramer
         if (buffer.Length < totalLength)
             return false;
 
-        // Slice out [8-byte header][payload] — the size prefix is consumed/stripped.
-        // ExtractOpcode knows the opcode sits at offset 7 within this slice.
+        var opcode = buffer.Span[SizePrefix + OpcodeOffsetInHeader];
         var mutablePacket = buffer[..(SizePrefix + HeaderSize + payloadLength)];
-        
+
         // Decrypt in-place (length-preserving!) — zero allocations
         if (IsEncryptionEnabled)
             MythicRc4.Decrypt(new ReadOnlySpan<byte>(_key), mutablePacket.Span[SizePrefix..]);
 
         buffer = buffer[totalLength..];
-
-        var computedChecksum = mutablePacket.Span[..^PayloadSizeAdjustment].ComputeChecksum();
-        var checksum = BinaryPrimitives.ReadUInt16BigEndian(mutablePacket.Span[^PayloadSizeAdjustment..].ToArray());
-        if (computedChecksum != checksum)
-        {
-            _logger.LogInformation("Invalid checksum: computed {ComputedChecksum:X4}, expected {Checksum:X4}", computedChecksum, checksum);
-            // return false; // Invalid checksum, discard packet
-        }
         packet = mutablePacket[SizePrefix..^PayloadSizeAdjustment]; // implicit Memory<byte> → ReadOnlyMemory<byte>
 
+        // Ignore checksum for encryption packet
+        if (opcode == (byte)Opcodes.F_ENCRYPTKEY)
+            return true;
+        
+        var computedChecksum = mutablePacket.Span[..^PayloadSizeAdjustment].ComputeChecksum();
+        var checksum = BinaryPrimitives.ReadUInt16BigEndian(mutablePacket.Span[^PayloadSizeAdjustment..]);
+        if (computedChecksum != checksum)
+        {
+            _logger.LogInformation("Invalid checksum for opcode {Opcode} computed {ComputedChecksum:X4}, expected {Checksum:X4}", (Opcodes)opcode, computedChecksum, checksum);
+            return false; // Invalid checksum, discard packet
+        }
+        
         return true;
     }
 

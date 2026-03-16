@@ -22,5 +22,5 @@ namespace WorldServerV2.Network.Dtos;
 public class CharacterTemplatesResponse
 {
     [FixedLength(16)]
-    public byte[] EmptyTemplates { get; set; } = new byte[12];
+    public byte[] EmptyTemplates { get; set; } = new byte[16];
 }

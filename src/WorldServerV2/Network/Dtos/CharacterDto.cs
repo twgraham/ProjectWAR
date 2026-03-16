@@ -77,7 +77,7 @@ public class CharacterDto
         Sex = character.Sex;
         ModelId = character.ModelId;
         Race = character.Race;
-        Traits = character.TraitBytes;
+        Traits = character.Traits;
         ZoneId = character.Value.ZoneId;
         Items = new CharacterItemDto[18];
 

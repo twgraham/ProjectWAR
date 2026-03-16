@@ -41,10 +41,9 @@ public class AuthenticationHandler : IPacketHandler
     [Rpc((byte)Opcodes.F_ENCRYPTKEY)]
     public void F_ENCRYPTKEY(EncryptKeyRequest request, IConnectionContext context)
     {
-        var version = $"{request.Major}.{request.Minor}.{request.Revision}";
         _logger.LogInformation(
-            "Received F_ENCRYPTKEY from {RemoteAddress} — cipher={Cipher}, version={Version}, keyLength={KeyLength}",
-            context.RemoteAddress, request.Cipher, version, request.Key.Length);
+            "Received F_ENCRYPTKEY from {RemoteAddress} — cipher={Cipher}, version={VersionMajor}.{VersionMinor}.{VersionRevision}, keyLength={KeyLength}",
+            context.RemoteAddress, request.Cipher, request.Major, request.Minor, request.Revision, request.Key.Length);
 
         switch (request.Cipher)
         {
@@ -53,6 +52,13 @@ public class AuthenticationHandler : IPacketHandler
                 break;
             case 1:
             {
+                if (request.Key.Length != 256)
+                {
+                    _logger.LogError("Invalid encryption key length: {KeyLength}", request.Key.Length);
+                    context.Disconnect("Invalid encryption key");
+                    return;
+                }
+                
                 if (context.PacketFramer is GameServerFramer framer)
                 {
                     framer.SetEncryptionKey(request.Key.AsSpan()[..256]);

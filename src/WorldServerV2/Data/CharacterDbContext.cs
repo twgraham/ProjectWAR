@@ -159,7 +159,6 @@ public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> opti
 
             // Runtime-only properties — no backing DB columns
             entity.Ignore(e => e.CareerFlags);
-            entity.Ignore(e => e.TraitBytes);
             entity.Ignore(e => e.Level);
             entity.Ignore(e => e.FirstConnect);
             

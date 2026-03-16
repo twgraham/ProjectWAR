@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Core.Infrastructure.Network;
 
 /// <summary>
@@ -51,7 +53,7 @@ public interface IConnectionContext
     
     TItem Get<TItem>(string key) => (TItem)Items[key];
     
-    bool TryGetValue<TItem>(string key, out TItem? value)
+    bool TryGetValue<TItem>(string key, [NotNullWhen(true)] out TItem? value)
     {
         var result = Items.TryGetValue(key, out var obj);
         

@@ -10,8 +10,8 @@ public static class GameClientConnectionContext
         public string ClientId => context.Get<string>("ClientId") ?? "UnknownClient";
 
         /// <summary>
-        /// The <see cref="WorldServer.NetWork.V2.GameSession"/> for this connection, or <c>null</c> if not yet created.
-        /// Set automatically by <see cref="WorldServer.NetWork.V2.SessionLifecycleService"/> on connect.
+        /// The <see cref="WorldServerV2.Network.GameSession"/> for this connection, or <c>null</c> if not yet created.
+        /// Set automatically by <see cref="WorldServerV2.Network.SessionLifecycleService"/> on connect.
         /// </summary>
         public GameSession Session
             => context.TryGetValue<GameSession>(GameSession.ItemKey, out var session)
@@ -21,7 +21,13 @@ public static class GameClientConnectionContext
         public AccountInfo? Account
         {
             get => context.TryGetValue<AccountInfo>("Account", out var account) ? account : null;
-            set => context.Items["Account"] = value;
+            set
+            {
+                if (value == null)
+                    context.Items.Remove("Account");
+                else
+                    context.Items["Account"] = value;
+            }
         }
     }
 }
