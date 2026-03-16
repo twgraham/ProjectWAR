@@ -233,12 +233,11 @@ namespace RpcSourceGenerator
 
                     // Determine return type
                     var returnType = member.ReturnType;
-                    var isAsync = returnType.Name == "Task" || returnType.Name == "ValueTask";
+                    var isAsync = returnType.Name is "Task" or "ValueTask";
                     var hasResponse = false;
                     ITypeSymbol responseType = null;
 
-                    if (isAsync && returnType is INamedTypeSymbol namedReturnType &&
-                        namedReturnType.TypeArguments.Length > 0)
+                    if (isAsync && returnType is INamedTypeSymbol { TypeArguments.Length: > 0 } namedReturnType)
                     {
                         hasResponse = true;
                         responseType = namedReturnType.TypeArguments[0];
@@ -251,14 +250,9 @@ namespace RpcSourceGenerator
 
                     // Detect RpcResult<T> wrapper so the generated code can use
                     // .HasValue / .Value instead of a null check.
-                    var isRpcResult = false;
-                    if (responseType is INamedTypeSymbol namedResponseType &&
-                        namedResponseType.Name == "RpcResult" &&
-                        namedResponseType.ContainingNamespace?.ToString() == "Core.Infrastructure.Network" &&
-                        namedResponseType.TypeArguments.Length == 1)
-                    {
-                        isRpcResult = true;
-                    }
+                    var isRpcResult = responseType is INamedTypeSymbol { Name: "RpcResult" } namedResponseType &&
+                                      namedResponseType.ContainingNamespace?.ToString() == "Core.Infrastructure.Network" &&
+                                      namedResponseType.TypeArguments.Length == 1;
 
                     hasRpcMethods = true;
                     groupInfo.Methods.Add(new RpcMethodInfo
@@ -307,6 +301,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Core.Infrastructure.Network;");
+            sb.AppendLine("using Core.Infrastructure.Network.Serialization;");
             sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
             sb.AppendLine();
 
@@ -445,7 +440,7 @@ namespace RpcSourceGenerator
                     {
                         sb.AppendLine("                    if (response.HasValue)");
                         sb.AppendLine(
-                            $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response.Value);");
+                            $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response.Value!);");
                     }
                     else
                     {
@@ -496,7 +491,7 @@ namespace RpcSourceGenerator
                 {
                     sb.AppendLine("                if (response.HasValue)");
                     sb.AppendLine(
-                        $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response.Value);");
+                        $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response.Value!);");
                 }
                 else
                 {

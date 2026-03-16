@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using Launcher.NetWork;
 using Launcher.Resources;
 using Launcher.Services;

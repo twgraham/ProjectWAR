@@ -2,7 +2,6 @@ using System.Collections.Frozen;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data.Domain;
-using WorldServerV2.Data.Entities;
 
 namespace WorldServerV2.Data.Providers;
 
@@ -10,14 +9,15 @@ namespace WorldServerV2.Data.Providers;
 /// Loads all item-related data from the World database via EF Core.
 /// </summary>
 public sealed class ItemDataProvider(
-    WorldDbContext db,
+    IDbContextFactory<WorldDbContext> dbContextFactory,
     ILogger<ItemDataProvider> logger) : IDataProvider<ItemData>
 {
-    public ItemData Load()
+    public async Task<ItemData> LoadAsync()
     {
-        var infos = db.ItemInfos
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var infos = (await db.ItemInfos
             .AsNoTracking()
-            .ToList()
+            .ToListAsync())
             .ToFrozenDictionary(i => i.Entry);
 
         logger.LogInformation("Loaded {Count} item definitions", infos.Count);

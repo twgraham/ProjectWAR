@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
+using Core.Infrastructure.Network.Serialization;
+using Core.Infrastructure.Network.Serialization.Attributes;
 using Shouldly;
 
 namespace Core.Infrastructure.Network.Tests;
@@ -835,6 +837,65 @@ public class BinaryPacketSerializerTests
             .Message.ShouldContain("FixedLength");
     }
 
+    [Fact]
+    public void RoundTrip_CString_FixedLength()
+    {
+        // GIVEN: A [CString(8)] string shorter than the field
+        var original = new FixedCStringPacket { Name = "Hello" };
+
+        // WHEN
+        var result = RoundTrip<FixedCStringPacket>(original);
+
+        // THEN: string value is preserved
+        result.Name.ShouldBe("Hello");
+
+        // AND: exactly 8 bytes written (padded with \0)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(8);
+        writer.WrittenSpan[5].ShouldBe((byte)0); // null terminator at index 5
+    }
+
+    [Fact]
+    public void RoundTrip_CString_NullTerminated()
+    {
+        // GIVEN: A [CString] (no length) packet — wire format is string bytes + \0
+        var original = new NullTerminatedCStringPacket { Name = "WAR" };
+
+        // WHEN
+        var result = RoundTrip<NullTerminatedCStringPacket>(original);
+
+        // THEN: string value is preserved
+        result.Name.ShouldBe("WAR");
+
+        // AND: wire is exactly the encoded bytes + 1 null terminator (no fixed padding)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(4); // 3 chars + \0
+        writer.WrittenSpan[3].ShouldBe((byte)0);
+    }
+
+    [Fact]
+    public void RoundTrip_CString_NullTerminated_WithNeighbours()
+    {
+        // GIVEN: Surrounding byte properties bracket a null-terminated CString
+        var original = new NullTerminatedCStringWithNeighboursPacket
+            { Before = 0xAA, Middle = "Hi", After = 0xBB };
+
+        // WHEN
+        var result = RoundTrip<NullTerminatedCStringWithNeighboursPacket>(original);
+
+        // THEN
+        result.Before.ShouldBe((byte)0xAA);
+        result.Middle.ShouldBe("Hi");
+        result.After.ShouldBe((byte)0xBB);
+
+        // AND: wire = 0xAA + 'H' + 'i' + 0x00 + 0xBB = 5 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(5);
+    }
+
     public class BytePacket { public byte Value { get; set; } }
     public class SBytePacket { public sbyte Value { get; set; } }
     public class Int16Packet { public short Value { get; set; } }
@@ -939,6 +1000,26 @@ public class BinaryPacketSerializerTests
     public class UnsupportedTypePacket
     {
         public Dictionary<string, string> Map { get; set; } = new();
+    }
+
+    public class FixedCStringPacket
+    {
+        [CString(8)]
+        public string Name { get; set; } = "";
+    }
+
+    public class NullTerminatedCStringPacket
+    {
+        [CString]
+        public string Name { get; set; } = "";
+    }
+
+    public class NullTerminatedCStringWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [CString]
+        public string Middle { get; set; } = "";
+        public byte After { get; set; }
     }
 
     public enum TestStatus : byte

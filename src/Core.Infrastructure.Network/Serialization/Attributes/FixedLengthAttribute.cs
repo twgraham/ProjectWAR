@@ -1,6 +1,4 @@
-using System;
-
-namespace Core.Infrastructure.Network;
+namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 /// <summary>
 /// Specifies that a <c>byte[]</c> property is serialized as a fixed-length field with no length prefix.

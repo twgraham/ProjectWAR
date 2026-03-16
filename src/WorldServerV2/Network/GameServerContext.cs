@@ -1,14 +1,25 @@
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using WorldServerV2.Network.Dtos;
 
 namespace WorldServerV2.Network;
 
 // Source-generated fast-path serializers for all binary DTOs.
 [PacketSerializerContext(
-    typeof(EncryptKeyRequest),
-    typeof(EncryptKeyResponse),
+    typeof(AccountCharacterModifiedResponse),
+    typeof(AccountCharacterModifyErrorResponse),
+    typeof(CharacterTemplatesRequest),
+    typeof(CharacterTemplatesResponse),
+    typeof(CheckNameResponse),
     typeof(ConnectRequest),
     typeof(ConnectResponse),
+    typeof(CreateCharacterRequest),
+    typeof(DeleteNameRequest),
+    typeof(DumpArenasLargeRequest),
+    typeof(EncryptKeyRequest),
+    typeof(EncryptKeyResponse),
+    typeof(OpenGameRequest),
+    typeof(OpenGameResponse),
     typeof(PingRequest),
     typeof(PingResponse),
     typeof(PlayerEnterRequest),
@@ -18,8 +29,7 @@ namespace WorldServerV2.Network;
     typeof(RequestCharacterRequest),
     typeof(RequestCharacterResponse),
     typeof(RequestCharacterErrorResponse),
-    typeof(DumpArenasLargeRequest),
     typeof(WorldEnterResponse))]
-public partial class GameServerContext : IPacketSerializerContext
+public partial class GameServerContext
 {
 }

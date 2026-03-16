@@ -1,4 +1,5 @@
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization.Attributes;
 using WorldServerV2.Data.Entities;
 
 namespace WorldServerV2.Network.Dtos;

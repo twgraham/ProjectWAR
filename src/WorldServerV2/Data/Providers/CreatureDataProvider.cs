@@ -11,20 +11,21 @@ namespace WorldServerV2.Data.Providers;
 /// intra-domain cross-linking (e.g., <see cref="CreatureSpawn.Proto"/>).
 /// </summary>
 public sealed class CreatureDataProvider(
-    WorldDbContext db,
+    IDbContextFactory<WorldDbContext> dbContextFactory,
     ILogger<CreatureDataProvider> logger) : IDataProvider<CreatureData>
 {
-    public CreatureData Load()
+    public async Task<CreatureData> LoadAsync()
     {
-        var protos = db.CreatureProtos
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var protos = (await db.CreatureProtos
             .AsNoTracking()
-            .ToList()
-            .ToFrozenDictionary(p => p.Entry);
+            .ToListAsync())
+            .ToFrozenDictionary(x => x.Entry);
 
-        var spawnList = db.CreatureSpawns
+        var spawnList = await db.CreatureSpawns
             .AsNoTracking()
-            .ToList();
-
+            .ToListAsync();
+        
         CrossLinkSpawns(spawnList, protos);
 
         var spawns = spawnList.ToFrozenDictionary(s => s.Guid);

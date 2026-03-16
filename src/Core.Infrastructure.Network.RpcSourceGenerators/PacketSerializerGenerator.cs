@@ -51,7 +51,7 @@ namespace RpcSourceGenerator
 
             var hasContextAttribute = symbol.GetAttributes()
                 .Any(a => a.AttributeClass?.Name == "PacketSerializerContextAttribute" &&
-                         a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+                         (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
 
             return hasContextAttribute ? classDeclaration : null;
         }
@@ -208,6 +208,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Buffers;");
             sb.AppendLine("using Core.Infrastructure.Network;");
+            sb.AppendLine("using Core.Infrastructure.Network.Serialization;");
             sb.AppendLine();
 
             if (!string.IsNullOrEmpty(namespaceName))
@@ -301,124 +302,112 @@ namespace RpcSourceGenerator
             sb.AppendLine($"        private {fullTypeName} Deserialize{safeName}(ref BinaryPacketSerializer.SpanReader reader)");
             sb.AppendLine("        {");
 
-            var properties = type.GetMembers().OfType<IPropertySymbol>()
-                .Where(p => p.DeclaredAccessibility == Accessibility.Public && p.SetMethod != null)
+            // ALL public readable properties, in declaration order — drives wire read sequence.
+            var allProps = type.GetMembers().OfType<IPropertySymbol>()
+                .Where(p => p.DeclaredAccessibility == Accessibility.Public && p.GetMethod != null)
                 .ToList();
 
-            // Use object initializer to handle required properties
-            sb.AppendLine($"            return new {fullTypeName}");
-            sb.AppendLine("            {");
-            
-            for (var i = 0; i < properties.Count; i++)
+            // Phase 1 — read every field in wire order.
+            // Getter-only properties are consumed and discarded; settable ones go into locals.
+            foreach (var prop in allProps)
             {
-                var prop = properties[i];
                 var propType = prop.Type;
                 var isNullable = propType.NullableAnnotation == NullableAnnotation.Annotated;
-                var isLast = i == properties.Count - 1;
-
-                // Get underlying type for nullables
                 var underlyingType = propType;
                 if (isNullable && propType is INamedTypeSymbol namedNullable && namedNullable.IsGenericType)
-                {
                     underlyingType = namedNullable.TypeArguments[0];
-                }
 
-                // Handle CString attribute for fixed-length C-style strings
-                var cstringLen = GetCStringLength(prop);
-                if (cstringLen.HasValue && underlyingType.SpecialType == SpecialType.System_String)
-                {
-                    sb.Append(isNullable
-                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : reader.ReadCString({cstringLen.Value})"
-                        : $"                {prop.Name} = reader.ReadCString({cstringLen.Value})");
+                var readExpr = BuildReadExpression(prop, propType, underlyingType, isNullable, tracker);
 
-                    sb.AppendLine(isLast ? "" : ",");
-                    continue;
-                }
-
-                // Handle PascalString attribute
-                if (HasPascalString(prop) && underlyingType.SpecialType == SpecialType.System_String)
-                {
-                    sb.Append(isNullable
-                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : reader.ReadPascalString()"
-                        : $"                {prop.Name} = reader.ReadPascalString()");
-
-                    sb.AppendLine(isLast ? "" : ",");
-                    continue;
-                }
-
-                // Check if it's an enum - handle specially because cast needs to wrap reader.ReadByte()
-                if (underlyingType.TypeKind == TypeKind.Enum)
-                {
-                    var enumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    sb.Append(isNullable
-                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : ({enumTypeName})reader.ReadByte()"
-                        : $"                {prop.Name} = ({enumTypeName})reader.ReadByte()");
-                }
-                else if (IsCollectionType(underlyingType, out var elementType))
-                {
-                    // Get PacketLength attribute if present
-                    var lengthSize = GetPacketLengthSize(prop);
-                    var fixedLen = GetFixedLength(prop);
-                    
-                    // Call discrete collection deserialize method
-                    var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen);
-                    sb.Append($"                {prop.Name} = {methodName}(ref reader)");
-                }
-                else if (underlyingType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
-                {
-                    var fixedLen = GetFixedLength(prop);
-                    if (fixedLen.HasValue)
-                    {
-                        // [FixedLength(N)] byte[] — read exactly N bytes, no length prefix
-                        sb.Append($"                {prop.Name} = reader.ReadFixedByteArray({fixedLen.Value})");
-                    }
-                    else
-                    {
-                        // byte[] with length prefix
-                        var lengthSize = GetPacketLengthSize(prop);
-                        sb.Append($"                {prop.Name} = reader.ReadByteArray({lengthSize})");
-                    }
-                }
-                else if (ShouldGenerateSerializerFor(underlyingType, out var customType))
-                {
-                    // Custom reference type - call its deserializer passing the reader by reference
-                    var customTypeSafeName = GetSafeTypeName(customType);
-                    sb.Append(isNullable
-                        ? $"                {prop.Name} = reader.IsAtEnd() ? null : Deserialize{customTypeSafeName}(ref reader)"
-                        : $"                {prop.Name} = Deserialize{customTypeSafeName}(ref reader)");
-                }
-                else if (isNullable)
-                {
-                    // Check if it's a boolean - needs special handling
-                    if (underlyingType.SpecialType == SpecialType.System_Boolean)
-                    {
-                        sb.Append($"                {prop.Name} = reader.IsAtEnd() ? null : (reader.ReadByte() != 0)");
-                    }
-                    else
-                    {
-                        sb.Append($"                {prop.Name} = reader.IsAtEnd() ? null : reader.");
-                        GenerateReadExpressionInline(sb, propType, HasLittleEndian(prop));
-                    }
-                }
+                if (prop.SetMethod != null)
+                    sb.AppendLine($"            var local_{prop.Name} = {readExpr};");
                 else
-                {
-                    // Check if it's a boolean - needs special handling
-                    if (propType.SpecialType == SpecialType.System_Boolean)
-                    {
-                        sb.Append($"                {prop.Name} = (reader.ReadByte() != 0)");
-                    }
-                    else
-                    {
-                        sb.Append($"                {prop.Name} = reader.");
-                        GenerateReadExpressionInline(sb, propType, HasLittleEndian(prop));
-                    }
-                }
-
-                sb.AppendLine(isLast ? "" : ",");
+                    sb.AppendLine($"            _ = {readExpr}; // getter-only — consumed from stream");
             }
 
+            sb.AppendLine();
+
+            // Phase 2 — construct object from locals (object initializer supports required properties).
+            var settableProps = allProps.Where(p => p.SetMethod != null).ToList();
+            sb.AppendLine($"            return new {fullTypeName}");
+            sb.AppendLine("            {");
+            for (var i = 0; i < settableProps.Count; i++)
+            {
+                var prop = settableProps[i];
+                var isLast = i == settableProps.Count - 1;
+                sb.AppendLine($"                {prop.Name} = local_{prop.Name}{(isLast ? "" : ",")}");
+            }
             sb.AppendLine("            };");
             sb.AppendLine("        }");
+        }
+
+        private static string BuildReadExpression(IPropertySymbol prop, ITypeSymbol propType, ITypeSymbol underlyingType, bool isNullable, CollectionMethodTracker tracker)
+        {
+            // CString
+            if (HasCStringAttribute(prop) && underlyingType.SpecialType == SpecialType.System_String)
+            {
+                var cstringLen = GetCStringLength(prop);
+                var inner = cstringLen.HasValue ? $"reader.ReadCString({cstringLen.Value})" : "reader.ReadCString(null)";
+                return isNullable ? $"reader.IsAtEnd() ? null : {inner}" : inner;
+            }
+
+            // PascalString
+            if (HasPascalString(prop) && underlyingType.SpecialType == SpecialType.System_String)
+                return isNullable ? "reader.IsAtEnd() ? null : reader.ReadPascalString()" : "reader.ReadPascalString()";
+
+            // Enum
+            if (underlyingType.TypeKind == TypeKind.Enum)
+            {
+                var enumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return isNullable
+                    ? $"reader.IsAtEnd() ? ({enumTypeName}?)null : ({enumTypeName})reader.ReadByte()"
+                    : $"({enumTypeName})reader.ReadByte()";
+            }
+
+            // Collection
+            if (IsCollectionType(underlyingType, out var elementType))
+            {
+                var lengthSize = GetPacketLengthSize(prop);
+                var fixedLen = GetFixedLength(prop);
+                var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen);
+                return $"{methodName}(ref reader)";
+            }
+
+            // byte[]
+            if (underlyingType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+            {
+                var fixedLen = GetFixedLength(prop);
+                if (fixedLen.HasValue)
+                    return $"reader.ReadFixedByteArray({fixedLen.Value})";
+                return $"reader.ReadByteArray({GetPacketLengthSize(prop)})";
+            }
+
+            // Custom reference type
+            if (ShouldGenerateSerializerFor(underlyingType, out var customType))
+            {
+                var customSafeName = GetSafeTypeName(customType);
+                return isNullable
+                    ? $"reader.IsAtEnd() ? null : Deserialize{customSafeName}(ref reader)"
+                    : $"Deserialize{customSafeName}(ref reader)";
+            }
+
+            // Boolean
+            if (underlyingType.SpecialType == SpecialType.System_Boolean)
+                return isNullable ? "reader.IsAtEnd() ? (bool?)null : (reader.ReadByte() != 0)" : "(reader.ReadByte() != 0)";
+
+            // Nullable primitive
+            if (isNullable)
+            {
+                var underlyingTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var sb2 = new StringBuilder($"reader.IsAtEnd() ? ({underlyingTypeName}?)null : reader.");
+                GenerateReadExpressionInline(sb2, propType, HasLittleEndian(prop));
+                return sb2.ToString();
+            }
+
+            // Primitive
+            var sbp = new StringBuilder("reader.");
+            GenerateReadExpressionInline(sbp, propType, HasLittleEndian(prop));
+            return sbp.ToString();
         }
 
         private static void GenerateReadExpressionInline(StringBuilder sb, ITypeSymbol type, bool littleEndian = false)
@@ -558,19 +547,22 @@ namespace RpcSourceGenerator
             }
 
             // Handle CString attribute on string properties
-            var cstrLen = GetCStringLength(property);
-            if (cstrLen.HasValue && underlyingType.SpecialType == SpecialType.System_String)
+            if (HasCStringAttribute(property) && underlyingType.SpecialType == SpecialType.System_String)
             {
+                var cstrLen = GetCStringLength(property);
+                var writeCall = cstrLen.HasValue
+                    ? $"writer.WriteCString({value}, {cstrLen.Value})"
+                    : $"writer.WriteCString({value}, null)";
                 if (needsCast)
                 {
                     sb.AppendLine($"            if ({valueExpression} != null)");
                     sb.AppendLine("            {");
-                    sb.AppendLine($"                writer.WriteCString({value}, {cstrLen.Value});");
+                    sb.AppendLine($"                {writeCall};");
                     sb.AppendLine("            }");
                 }
                 else
                 {
-                    sb.AppendLine($"            writer.WriteCString({value}, {cstrLen.Value});");
+                    sb.AppendLine($"            {writeCall};");
                 }
                 return;
             }
@@ -657,7 +649,7 @@ namespace RpcSourceGenerator
             // Look for PacketLength attribute
             var packetLengthAttr = property.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.Name == "PacketLengthAttribute" &&
-                                    a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+                                    (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
             
             if (packetLengthAttr is { ConstructorArguments.Length: > 0 })
             {
@@ -675,7 +667,7 @@ namespace RpcSourceGenerator
         {
             var cstrAttr = property.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.Name == "CStringAttribute" &&
-                                     a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+                                     (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
 
             if (cstrAttr is { ConstructorArguments.Length: > 0 })
             {
@@ -690,7 +682,7 @@ namespace RpcSourceGenerator
         {
             var fixedLenAttr = property.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.Name == "FixedLengthAttribute" &&
-                                     a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+                                     (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
 
             if (fixedLenAttr is { ConstructorArguments.Length: > 0 })
             {
@@ -704,12 +696,17 @@ namespace RpcSourceGenerator
         private static bool HasPascalString(IPropertySymbol property) =>
             property.GetAttributes()
                 .Any(a => a.AttributeClass?.Name == "PascalStringAttribute" &&
-                          a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+                          (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+
+        private static bool HasCStringAttribute(IPropertySymbol property) =>
+            property.GetAttributes()
+                .Any(a => a.AttributeClass?.Name == "CStringAttribute" &&
+                          (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
 
         private static bool HasLittleEndian(IPropertySymbol property) =>
             property.GetAttributes()
                 .Any(a => a.AttributeClass?.Name == "LittleEndianAttribute" &&
-                          a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Core.Infrastructure.Network");
+                          (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
 
         // Register a collection deserialize method and return its name
         private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)

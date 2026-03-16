@@ -15,6 +15,9 @@ public sealed class GameDataStore : IGameDataStore
     private volatile Snapshot? _snapshot;
 
     /// <inheritdoc />
+    public ClassData Classes => Current.Classes;
+    
+    /// <inheritdoc />
     public ItemData Items => Current.Items;
 
     /// <inheritdoc />
@@ -42,6 +45,7 @@ public sealed class GameDataStore : IGameDataStore
     /// Immutable point-in-time capture of all game data collections.
     /// </summary>
     internal sealed record Snapshot(
+        ClassData Classes,
         ItemData Items,
         CreatureData Creatures,
         ZoneData Zones);

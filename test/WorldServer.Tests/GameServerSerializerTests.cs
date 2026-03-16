@@ -1,5 +1,6 @@
 using System.Buffers;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using Shouldly;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;

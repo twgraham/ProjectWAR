@@ -1,4 +1,5 @@
 using WorldServerV2.Data.Entities;
+using WorldServerV2.Data.Models;
 
 namespace WorldServerV2.Services;
 
@@ -44,4 +45,6 @@ public interface ICharacterService
     /// Called once at startup (via hosted service or manual initialization).
     /// </summary>
     Task LoadDirectoryAsync();
+
+    Task CreateCharacterAsync(uint accountId, ushort realmId, NewCharacter request);
 }

@@ -10,22 +10,23 @@ namespace WorldServerV2.Data.Providers;
 /// Loads all zone/map-related data from the World database via EF Core.
 /// </summary>
 public sealed class ZoneDataProvider(
-    WorldDbContext db,
+    IDbContextFactory<WorldDbContext> dbContextFactory,
     ILogger<ZoneDataProvider> logger) : IDataProvider<ZoneData>
 {
-    public ZoneData Load()
+    public async Task<ZoneData> LoadAsync()
     {
-        var infos = db.ZoneInfos
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var infos = (await db.ZoneInfos
             .AsNoTracking()
-            .ToList()
+            .ToListAsync())
             .ToFrozenDictionary(z => z.ZoneId);
 
-        var jumps = db.ZoneJumps
+        var jumps = (await db.ZoneJumps
             .AsNoTracking()
             .Where(j => j.Enabled == 1)
-            .ToList()
+            .ToListAsync())
             .ToFrozenDictionary(j => j.Entry);
-
+        
         logger.LogInformation(
             "Loaded {ZoneCount} zones, {JumpCount} zone jumps",
             infos.Count,

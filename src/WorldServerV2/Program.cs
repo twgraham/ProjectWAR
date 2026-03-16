@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

@@ -218,7 +218,7 @@ public class CharacterServiceTests
 
         /// <summary>Creates a <see cref="CharacterService"/> backed by the in-memory db.</summary>
         public CharacterService CreateService()
-            => new(new InMemoryDbContextFactory(_options), NullLogger.Instance);
+            => new(new InMemoryDbContextFactory(_options), new GameDataStore(), NullLogger.Instance);
 
         public void Dispose() { /* InMemory cleans up on GC */ }
 

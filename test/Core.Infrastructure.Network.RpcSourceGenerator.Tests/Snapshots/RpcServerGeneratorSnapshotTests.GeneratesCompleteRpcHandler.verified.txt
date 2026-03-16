@@ -2,6 +2,7 @@
 using System;
 using System.Threading.Tasks;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace TestNamespace

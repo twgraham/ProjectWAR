@@ -36,6 +36,14 @@ namespace Core.Infrastructure.Network
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class LittleEndianAttribute : System.Attribute { }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class CStringAttribute : System.Attribute
+    {
+        public int? Length { get; }
+        public CStringAttribute() { Length = null; }
+        public CStringAttribute(int length) { Length = length; }
+    }
 }";
 
     [Fact]
@@ -520,6 +528,70 @@ namespace TestNamespace
         code.ShouldContain("WriteUInt16LE(");
         code.ShouldNotContain("ReadInt32()");  // big-endian variant must not appear for this property
         code.ShouldNotContain("ReadUInt16()"); // big-endian variant must not appear for this property
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCStringAttribute_FixedLength()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class NamePacket
+    {
+        [CString(20)]
+        public string Name { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(NamePacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadCString(20)");
+        code.ShouldContain("WriteCString(");
+        code.ShouldContain(", 20)");
+        code.ShouldNotContain("ReadCStringNullTerminated");
+        code.ShouldNotContain("WriteCStringNullTerminated");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCStringAttribute_NullTerminated()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class NamePacket
+    {
+        [CString]
+        public string Name { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(NamePacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadCString(null)");
+        code.ShouldContain("WriteCString(");
+        code.ShouldContain(", null)");
+        code.ShouldNotContain("ReadCStringNullTerminated");
+        code.ShouldNotContain("WriteCStringNullTerminated");
     }
 
     [Fact]

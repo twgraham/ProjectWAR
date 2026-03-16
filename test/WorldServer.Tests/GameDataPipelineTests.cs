@@ -3,9 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shouldly;
+using System.Threading;
 using WorldServerV2.Data;
 using WorldServerV2.Data.Domain;
 using WorldServerV2.Data.Entities;
+using WorldServerV2.Data.Models;
 using WorldServerV2.Data.Providers;
 
 namespace WorldServer.Tests;
@@ -66,17 +68,17 @@ public class GameDataPipelineTests
     // ── ItemDataProvider ───────────────────────────────────────────────
 
     [Fact]
-    public void ItemProvider_loads_items_into_frozen_dictionary()
+    public async Task ItemProvider_loads_items_into_frozen_dictionary()
     {
-        using var db = CreateDb(nameof(ItemProvider_loads_items_into_frozen_dictionary));
+        await using var db = CreateDb(nameof(ItemProvider_loads_items_into_frozen_dictionary));
         db.ItemInfos.AddRange(
             new ItemInfo { Entry = 100, Name = "Sword" },
             new ItemInfo { Entry = 200, Name = "Shield" },
             new ItemInfo { Entry = 300, Name = "Helm" });
-        db.SaveChanges();
+        await db.SaveChangesAsync();
 
-        var provider = new ItemDataProvider(db, NullLogger<ItemDataProvider>.Instance);
-        var data = provider.Load();
+        var provider = new ItemDataProvider(new TestDbContextFactory(db), NullLogger<ItemDataProvider>.Instance);
+        var data = await provider.LoadAsync();
 
         data.Infos.Count.ShouldBe(3);
         data.Infos[100].Name.ShouldBe("Sword");
@@ -85,12 +87,12 @@ public class GameDataPipelineTests
     }
 
     [Fact]
-    public void ItemProvider_handles_empty_table()
+    public async Task ItemProvider_handles_empty_table()
     {
-        using var db = CreateDb(nameof(ItemProvider_handles_empty_table));
-        var provider = new ItemDataProvider(db, NullLogger<ItemDataProvider>.Instance);
+        await using var db = CreateDb(nameof(ItemProvider_handles_empty_table));
+        var provider = new ItemDataProvider(new TestDbContextFactory(db), NullLogger<ItemDataProvider>.Instance);
 
-        var data = provider.Load();
+        var data = await provider.LoadAsync();
 
         data.Infos.ShouldBeEmpty();
     }
@@ -98,15 +100,15 @@ public class GameDataPipelineTests
     // ── CreatureDataProvider ───────────────────────────────────────────
 
     [Fact]
-    public void CreatureProvider_crosslinks_spawn_to_proto()
+    public async Task CreatureProvider_crosslinks_spawn_to_proto()
     {
-        using var db = CreateDb(nameof(CreatureProvider_crosslinks_spawn_to_proto));
+        await using var db = CreateDb(nameof(CreatureProvider_crosslinks_spawn_to_proto));
         db.CreatureProtos.Add(new CreatureProto { Entry = 42, Name = "Goblin" });
         db.CreatureSpawns.Add(new CreatureSpawn { Guid = 1, Entry = 42 });
-        db.SaveChanges();
+        await db.SaveChangesAsync();
 
-        var provider = new CreatureDataProvider(db, NullLogger<CreatureDataProvider>.Instance);
-        var data = provider.Load();
+        var provider = new CreatureDataProvider(new TestDbContextFactory(db), NullLogger<CreatureDataProvider>.Instance);
+        var data = await provider.LoadAsync();
 
         data.Protos.Count.ShouldBe(1);
         data.Spawns.Count.ShouldBe(1);
@@ -115,16 +117,16 @@ public class GameDataPipelineTests
     }
 
     [Fact]
-    public void CreatureProvider_logs_orphan_spawns_without_proto()
+    public async Task CreatureProvider_logs_orphan_spawns_without_proto()
     {
-        using var db = CreateDb(nameof(CreatureProvider_logs_orphan_spawns_without_proto));
+        await using var db = CreateDb(nameof(CreatureProvider_logs_orphan_spawns_without_proto));
         db.CreatureSpawns.Add(new CreatureSpawn { Guid = 1, Entry = 999 });
-        db.SaveChanges();
+        await db.SaveChangesAsync();
 
         var logger = new CapturingLogger<CreatureDataProvider>();
-        var provider = new CreatureDataProvider(db, logger);
+        var provider = new CreatureDataProvider(new TestDbContextFactory(db), logger);
 
-        var data = provider.Load();
+        var data = await provider.LoadAsync();
 
         data.Spawns[1].Proto.ShouldBeNull();
         logger.Entries.ShouldContain(e => e.LogLevel == LogLevel.Warning);
@@ -133,17 +135,17 @@ public class GameDataPipelineTests
     // ── ZoneDataProvider ───────────────────────────────────────────────
 
     [Fact]
-    public void ZoneProvider_loads_zones_and_enabled_jumps()
+    public async Task ZoneProvider_loads_zones_and_enabled_jumps()
     {
-        using var db = CreateDb(nameof(ZoneProvider_loads_zones_and_enabled_jumps));
+        await using var db = CreateDb(nameof(ZoneProvider_loads_zones_and_enabled_jumps));
         db.ZoneInfos.Add(new ZoneInfo { ZoneId = 10, Name = "Nordland" });
         db.ZoneJumps.AddRange(
             new ZoneJump { Entry = 1, Enabled = 1 },
             new ZoneJump { Entry = 2, Enabled = 0 });
-        db.SaveChanges();
+        await db.SaveChangesAsync();
 
-        var provider = new ZoneDataProvider(db, NullLogger<ZoneDataProvider>.Instance);
-        var data = provider.Load();
+        var provider = new ZoneDataProvider(new TestDbContextFactory(db), NullLogger<ZoneDataProvider>.Instance);
+        var data = await provider.LoadAsync();
 
         data.Infos.Count.ShouldBe(1);
         data.Infos[10].Name.ShouldBe("Nordland");
@@ -161,6 +163,11 @@ public class GameDataPipelineTests
 
         // Build a minimal service collection with constant providers
         var services = new ServiceCollection();
+        services.AddSingleton<IDataProvider<ClassData>>(
+            new ConstantProvider<ClassData>(
+                new ClassData(
+                    FrozenDictionary<Class, ClassInfo>.Empty,
+                    FrozenDictionary<Class, List<ClassInfoItem>>.Empty)));
         services.AddSingleton<IDataProvider<ItemData>>(
             new ConstantProvider<ItemData>(
                 new ItemData(FrozenDictionary<uint, ItemInfo>.Empty)));
@@ -207,6 +214,9 @@ public class GameDataPipelineTests
 
     private static GameDataStore.Snapshot CreateEmptySnapshot() =>
         new(
+            new ClassData(
+                FrozenDictionary<Class, ClassInfo>.Empty,
+                FrozenDictionary<Class, List<ClassInfoItem>>.Empty),
             new ItemData(FrozenDictionary<uint, ItemInfo>.Empty),
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
@@ -220,7 +230,21 @@ public class GameDataPipelineTests
     /// </summary>
     private sealed class ConstantProvider<T>(T value) : IDataProvider<T>
     {
-        public T Load() => value;
+        public Task<T> LoadAsync() => Task.FromResult(value);
+    }
+
+    /// <summary>
+    /// Test implementation of <see cref="IDbContextFactory{WorldDbContext}"/> that
+    /// returns a provided <see cref="WorldDbContext"/> instance. Intended for
+    /// unit tests that use an in-memory database instance.
+    /// </summary>
+    private sealed class TestDbContextFactory : IDbContextFactory<WorldDbContext>
+    {
+        private readonly WorldDbContext _db;
+        public TestDbContextFactory(WorldDbContext db) => _db = db;
+        public WorldDbContext CreateDbContext() => _db;
+        public ValueTask<WorldDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+            => new ValueTask<WorldDbContext>(_db);
     }
 
     /// <summary>

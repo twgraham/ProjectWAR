@@ -1,4 +1,4 @@
-namespace Core.Infrastructure.Network;
+namespace Core.Infrastructure.Network.Serialization;
 
 /// <summary>
 /// Marks a class as a packet serializer context for source generation.

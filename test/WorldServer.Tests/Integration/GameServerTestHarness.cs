@@ -1,8 +1,10 @@
 using System.Net;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data.Entities;
+using WorldServerV2.Data.Models;
 using WorldServerV2.Network;
 using WorldServerV2.Services;
 
@@ -171,5 +173,8 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
         public CharacterSummary? FindByName(string name) => null;
         public CharacterSummary? FindById(uint characterId) => null;
         public Task LoadDirectoryAsync() => Task.CompletedTask;
+
+        public Task CreateCharacterAsync(uint accountId, ushort realmId, NewCharacter request)
+            => Task.CompletedTask;
     }
 }

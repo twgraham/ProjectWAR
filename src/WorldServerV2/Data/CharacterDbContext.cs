@@ -133,7 +133,9 @@ public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> opti
             entity.ToTable("characters");
             entity.HasKey(e => e.CharacterId);
 
-            entity.Property(e => e.CharacterId).HasColumnName("CharacterId");
+            entity.Property(e => e.CharacterId)
+                .HasColumnName("CharacterId")
+                .ValueGeneratedOnAdd();
             entity.Property(e => e.Name).HasColumnName("Name").HasMaxLength(24);
             entity.Property(e => e.Surname).HasColumnName("Surname").HasMaxLength(24);
             entity.Property(e => e.RealmId).HasColumnName("RealmId");
@@ -265,6 +267,12 @@ public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> opti
             entity.Property(e => e.SecondaryDye).HasColumnName("SecondaryDye");
             entity.Property(e => e.BoundtoPlayer).HasColumnName("BoundtoPlayer");
             entity.Property(e => e.AlternateAppereanceEntry).HasColumnName("Alternate_AppereanceEntry");
+            
+            // Relationships
+            entity.HasOne(x => x.Character)
+                .WithMany(x => x.Items)
+                .HasForeignKey(x => x.CharacterId)
+                .IsRequired();
         });
     }
 
@@ -369,7 +377,9 @@ public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> opti
             entity.ToTable("characters_value");
             entity.HasKey(e => e.CharacterId);
 
-            entity.Property(e => e.CharacterId).HasColumnName("CharacterId");
+            entity.Property(e => e.CharacterId)
+                .HasColumnName("CharacterId")
+                .ValueGeneratedNever();
             entity.Property(e => e.Level).HasColumnName("Level");
             entity.Property(e => e.Xp).HasColumnName("Xp");
             entity.Property(e => e.XpMode).HasColumnName("XpMode");
@@ -416,6 +426,12 @@ public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> opti
             entity.Property(e => e.Lockouts).HasColumnName("Lockouts");
             // Preserves the original (typo-inclusive) column name from the SQL migration.
             entity.Property(e => e.DisconcetTime).HasColumnName("DisconcetTime");
+            
+            // Relationships
+            entity.HasOne(x => x.Character)
+                .WithOne(x => x.Value)
+                .HasForeignKey<CharacterValue>(x => x.CharacterId)
+                .IsRequired();
         });
     }
 

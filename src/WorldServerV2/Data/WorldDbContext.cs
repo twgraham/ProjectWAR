@@ -13,6 +13,8 @@ namespace WorldServerV2.Data;
 public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     : DbContext(options)
 {
+    public DbSet<ClassInfo> ClassInfos => Set<ClassInfo>();
+    public DbSet<ClassInfoItem> ClassInfoItems => Set<ClassInfoItem>();
     public DbSet<ItemInfo> ItemInfos => Set<ItemInfo>();
     public DbSet<CreatureProto> CreatureProtos => Set<CreatureProto>();
     public DbSet<CreatureSpawn> CreatureSpawns => Set<CreatureSpawn>();
@@ -21,11 +23,57 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigureClassInfo(modelBuilder);
+        ConfigureClassInfoItem(modelBuilder);
         ConfigureItemInfo(modelBuilder);
         ConfigureCreatureProto(modelBuilder);
         ConfigureCreatureSpawn(modelBuilder);
         ConfigureZoneInfo(modelBuilder);
         ConfigureZoneJump(modelBuilder);
+    }
+
+    private static void ConfigureClassInfo(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ClassInfo>(entity =>
+        {
+            entity.ToTable("characterinfo");
+
+            entity.HasKey(e => e.Id);
+                
+            entity.Property(e => e.Id)
+                .HasColumnName("career_line");
+            entity.Property(e => e.ClassId)
+                .HasColumnName("career")
+                .HasConversion<byte>();
+            entity.Property(e => e.ClassName).HasColumnName("career_name").HasMaxLength(255);
+            entity.Property(e => e.Faction)
+                .HasColumnName("realm")
+                .HasConversion<byte>();
+            entity.Property(e => e.Region).HasColumnName("region");
+            entity.Property(e => e.ZoneId).HasColumnName("zone_id");
+            entity.Property(x => x.WorldX).HasColumnName("world_x");
+            entity.Property(x => x.WorldY).HasColumnName("world_y");
+            entity.Property(x => x.WorldZ).HasColumnName("world_z");
+            entity.Property(x => x.WorldO).HasColumnName("world_o");
+            entity.Property(e => e.RallyPt).HasColumnName("rally_pt");
+            entity.Property(e => e.Skills).HasColumnName("skills");
+        });
+    }
+    
+    private static void ConfigureClassInfoItem(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ClassInfoItem>(entity =>
+        {
+            entity.ToTable("characterinfo_items");
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasColumnName("career_line");
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.SlotId).HasColumnName("slot_id");
+            entity.Property(e => e.Count).HasColumnName("count");
+            entity.Property(e => e.ModelId).HasColumnName("model_id");
+        });
     }
 
     private static void ConfigureItemInfo(ModelBuilder modelBuilder)

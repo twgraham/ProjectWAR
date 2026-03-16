@@ -12,6 +12,9 @@ namespace WorldServerV2.Data;
 /// </summary>
 public interface IGameDataStore
 {
+    /// <summary>Class definitions and starting attributes.</summary>
+    ClassData Classes { get; }
+    
     /// <summary>Item definitions and item sets.</summary>
     ItemData Items { get; }
 

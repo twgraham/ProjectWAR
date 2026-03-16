@@ -1,5 +1,4 @@
-using System.ComponentModel.DataAnnotations;
-using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization.Attributes;
 
 namespace WorldServerV2.Network.Dtos;
 
@@ -13,7 +12,7 @@ public class WorldEnterResponse
     public ushort Header { get; set; } = 0x0608;
 
     /// <summary>20 bytes of padding (reserved / unknown).</summary>
-    [Length(20, 20)]
+    [FixedLength(20)]
     public byte[] Padding { get; set; } = new byte[20];
 
     /// <summary>First port string ("38699").</summary>

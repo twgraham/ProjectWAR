@@ -9,10 +9,10 @@ namespace WorldServerV2.Data;
 /// </para>
 /// </summary>
 /// <typeparam name="TData">The domain data bundle type (e.g., <c>ItemData</c>).</typeparam>
-public interface IDataProvider<out TData>
+public interface IDataProvider<TData>
 {
     /// <summary>
     /// Loads and returns the immutable domain data.
     /// </summary>
-    TData Load();
+    Task<TData> LoadAsync();
 }

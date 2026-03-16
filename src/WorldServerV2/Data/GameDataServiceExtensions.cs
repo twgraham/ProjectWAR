@@ -22,7 +22,7 @@ public static class GameDataServiceExtensions
         string connectionString)
     {
         // EF Core DbContext — pooled for connection reuse
-        services.AddDbContextPool<WorldDbContext>(options =>
+        services.AddPooledDbContextFactory<WorldDbContext>(options =>
             options.UseNpgsql(connectionString)
                    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
@@ -33,6 +33,7 @@ public static class GameDataServiceExtensions
         services.AddSingleton<IGameDataStore>(sp => sp.GetRequiredService<GameDataStore>());
 
         // Data providers — one per domain
+        services.AddScoped<IDataProvider<ClassData>, ClassDataProvider>();
         services.AddScoped<IDataProvider<ItemData>, ItemDataProvider>();
         services.AddScoped<IDataProvider<CreatureData>, CreatureDataProvider>();
         services.AddScoped<IDataProvider<ZoneData>, ZoneDataProvider>();

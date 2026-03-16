@@ -1,6 +1,4 @@
-using System;
-
-namespace Core.Infrastructure.Network;
+namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 /// <summary>
 /// Specifies that a <c>string</c> property is serialized as a Pascal string:

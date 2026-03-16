@@ -1,4 +1,4 @@
-namespace Core.Infrastructure.Network;
+namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 /// <summary>
 /// Specifies that a numeric property should be serialized in little-endian byte order.

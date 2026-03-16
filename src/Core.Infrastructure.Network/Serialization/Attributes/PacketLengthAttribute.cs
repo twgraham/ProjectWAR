@@ -1,4 +1,4 @@
-namespace Core.Infrastructure.Network;
+namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 /// <summary>
 /// Specifies the number of bytes used to encode the length of a collection property in a packet.

@@ -7,4 +7,5 @@ namespace WorldServerV2.Network.Dtos;
 public class DumpArenasLargeRequest
 {
     public byte CharacterSlot { get; set; }
+    public byte Unk1 { get; set; }
 }

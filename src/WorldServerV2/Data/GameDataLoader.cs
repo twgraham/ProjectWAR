@@ -26,21 +26,23 @@ public sealed class GameDataLoader(
     IServiceScopeFactory scopeFactory,
     ILogger<GameDataLoader> logger) : IHostedService
 {
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Loading game data...");
         var sw = Stopwatch.StartNew();
 
         using var scope = scopeFactory.CreateScope();
-        var items = scope.ServiceProvider.GetRequiredService<IDataProvider<ItemData>>().Load();
-        var creatures = scope.ServiceProvider.GetRequiredService<IDataProvider<CreatureData>>().Load();
-        var zones = scope.ServiceProvider.GetRequiredService<IDataProvider<ZoneData>>().Load();
+        var classesTask = scope.ServiceProvider.GetRequiredService<IDataProvider<ClassData>>().LoadAsync();
+        var itemsTask = scope.ServiceProvider.GetRequiredService<IDataProvider<ItemData>>().LoadAsync();
+        var creaturesTask = scope.ServiceProvider.GetRequiredService<IDataProvider<CreatureData>>().LoadAsync();
+        var zonesTask = scope.ServiceProvider.GetRequiredService<IDataProvider<ZoneData>>().LoadAsync();
+        
+        await Task.WhenAll(classesTask, itemsTask, creaturesTask, zonesTask);
 
-        var snapshot = new GameDataStore.Snapshot(items, creatures, zones);
+        var snapshot = new GameDataStore.Snapshot(classesTask.Result, itemsTask.Result, creaturesTask.Result, zonesTask.Result);
         store.Initialize(snapshot);
 
         logger.LogInformation("Game data loaded in {ElapsedMs}ms", sw.ElapsedMilliseconds);
-        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

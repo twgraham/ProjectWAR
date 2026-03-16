@@ -1,3 +1,4 @@
+using Core.Infrastructure.Network.Serialization;
 using Shouldly;
 
 namespace Core.Infrastructure.Network.Tests;

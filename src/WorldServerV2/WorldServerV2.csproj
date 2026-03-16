@@ -5,6 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
       <UserSecretsId>4eaaea8a-49c8-4d88-884d-fdb7e257ee55</UserSecretsId>
   </PropertyGroup>
 

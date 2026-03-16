@@ -1,11 +1,11 @@
-using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Text;
+using Core.Infrastructure.Network.Serialization.Attributes;
 using FastGenericNew;
 
-namespace Core.Infrastructure.Network;
+namespace Core.Infrastructure.Network.Serialization;
 
 /// <summary>
 /// Binary packet serializer that uses reflection to serialize/deserialize structs.
@@ -612,25 +612,50 @@ public class BinaryPacketSerializer : IPacketSerializer
             return Encoding.GetString(stringBytes);
         }
 
-        public string ReadCString(int maxLength)
+        public string ReadCString(int? maxLength)
         {
-            if (maxLength <= 0)
-                return string.Empty;
+            if (maxLength.HasValue)
+            {
+                var length = maxLength.Value;
+                if (length <= 0)
+                    return string.Empty;
 
-            if (_position >= _span.Length)
-                return string.Empty;
+                if (_position >= _span.Length)
+                    return string.Empty;
 
-            if (_position + maxLength > _span.Length)
-                throw new InvalidOperationException("CString length exceeds buffer size");
+                if (_position + length > _span.Length)
+                    throw new InvalidOperationException("CString length exceeds buffer size");
 
-            var slice = _span.Slice(_position, maxLength);
-            var zeroIndex = slice.IndexOf((byte)0);
-            var strLen = zeroIndex >= 0 ? zeroIndex : maxLength;
-            var result = Encoding.GetString(slice.Slice(0, strLen));
+                var slice = _span.Slice(_position, length);
+                var zeroIndex = slice.IndexOf((byte)0);
+                var strLen = zeroIndex >= 0 ? zeroIndex : length;
+                var result = Encoding.GetString(slice.Slice(0, strLen));
 
-            // Advance by the full field length (fixed-size C string)
-            _position += maxLength;
-            return result;
+                // Advance by the full field length (fixed-size C string)
+                _position += length;
+                return result;
+            }
+            else
+            {
+                // Null-terminated: scan until \0, consuming the terminator
+                if (_position >= _span.Length)
+                    return string.Empty;
+
+                var remaining = _span.Slice(_position);
+                var zeroIndex = remaining.IndexOf((byte)0);
+
+                if (zeroIndex < 0)
+                {
+                    // No null terminator — consume to end of span
+                    var all = Encoding.GetString(remaining);
+                    _position = _span.Length;
+                    return all;
+                }
+
+                var str = Encoding.GetString(remaining.Slice(0, zeroIndex));
+                _position += zeroIndex + 1; // consume string bytes + null terminator
+                return str;
+            }
         }
 
         /// <summary>Reads a Pascal string: a 1-byte length prefix followed by that many bytes.</summary>
@@ -855,33 +880,53 @@ public class BinaryPacketSerializer : IPacketSerializer
             lengthSpan[0] = (byte)actualWritten;
         }
 
-        public void WriteCString(string value, int length)
+        public void WriteCString(string value, int? length)
         {
-            if (length <= 0)
-                throw new InvalidOperationException("CString length must be positive");
-
-            // Fill fixed-length field
-            var span = _writer.GetSpan(length);
-
-            if (string.IsNullOrEmpty(value))
+            if (length.HasValue)
             {
-                for (int i = 0; i < length; i++)
+                var fieldLen = length.Value;
+                if (fieldLen <= 0)
+                    throw new InvalidOperationException("CString length must be positive");
+
+                // Fill fixed-width field
+                var span = _writer.GetSpan(fieldLen);
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    for (int i = 0; i < fieldLen; i++)
+                        span[i] = 0;
+                    _writer.Advance(fieldLen);
+                    return;
+                }
+
+                var bytesWritten = Encoding.GetBytes(value, span);
+                if (bytesWritten >= fieldLen)
+                    throw new InvalidOperationException($"String encoded length {bytesWritten} exceeds CString field length {fieldLen}");
+
+                // Null-terminate and zero-pad the rest
+                span[bytesWritten] = 0;
+                for (int i = bytesWritten + 1; i < fieldLen; i++)
                     span[i] = 0;
-                _writer.Advance(length);
-                return;
+
+                _writer.Advance(fieldLen);
             }
+            else
+            {
+                // Null-terminated: emit string bytes followed by \0
+                if (string.IsNullOrEmpty(value))
+                {
+                    var termSpan = _writer.GetSpan(1);
+                    termSpan[0] = 0;
+                    _writer.Advance(1);
+                    return;
+                }
 
-            var bytesWritten = Encoding.GetBytes(value, span);
-            if (bytesWritten >= length)
-                throw new InvalidOperationException($"String encoded length {bytesWritten} exceeds CString field length {length}");
-
-            // Null-terminate
-            span[bytesWritten] = 0;
-            // Pad the rest with zeros
-            for (int i = bytesWritten + 1; i < length; i++)
-                span[i] = 0;
-
-            _writer.Advance(length);
+                var maxBytes = Encoding.GetMaxByteCount(value.Length);
+                var span = _writer.GetSpan(maxBytes + 1);
+                var bytesWritten = Encoding.GetBytes(value, span);
+                span[bytesWritten] = 0; // null terminator
+                _writer.Advance(bytesWritten + 1);
+            }
         }
 
         public void WriteByteArray(byte[] value, int lengthSize = 4)

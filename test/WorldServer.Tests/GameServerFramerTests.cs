@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using MELT;
 using Microsoft.Extensions.Logging;
 using Shouldly;
