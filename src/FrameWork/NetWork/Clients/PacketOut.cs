@@ -678,62 +678,6 @@ namespace FrameWork
             return GetType().Name;
         }
 
-        #region Mythic
-
-        private static readonly ThreadLocal<byte[]> ThreadLocalKey = new ThreadLocal<byte[]>(() => new byte[256]);
-
-        public static void EncryptMythicRC4(byte[] key, byte[] packet, int offset, int packetLen)
-        {
-            try
-            {
-                int x = 0;
-                int y = 0;
-
-                int pos;
-                byte tmp;
-
-                int midpoint = packetLen / 2;
-
-                byte[] k = ThreadLocalKey.Value;
-
-                Buffer.BlockCopy(key, 0, k, 0, 256);
-
-                for (pos = midpoint; pos < packetLen; ++pos)
-                {
-                    x = (x + 1) & 255;
-                    y = (y + k[x]) & 255;
-
-                    tmp = k[x];
-                    k[x] = k[y];
-                    k[y] = tmp;
-
-                    tmp = (byte)((k[x] + k[y]) & 255);
-                    y = (y + packet[pos + offset]) & 255;
-                    packet[pos + offset] ^= k[tmp];
-                }
-
-                for (pos = 0; pos < midpoint; ++pos)
-                {
-                    x = (x + 1) & 255;
-                    y = (y + k[x]) & 255;
-
-                    tmp = k[x];
-                    k[x] = k[y];
-                    k[y] = tmp;
-
-                    tmp = (byte)((k[x] + k[y]) & 255);
-                    y = (y + packet[pos + offset]) & 255;
-                    packet[pos + offset] ^= k[tmp];
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Error("PacketOut", "EncryptMythicRC4 : Failled !" + e);
-            }
-        }
-
-        #endregion Mythic
-
         #region Gamebryo
 
         public void WriteGamebryoSize()

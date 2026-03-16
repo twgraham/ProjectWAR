@@ -1,4 +1,6 @@
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
+using Core.Infrastructure.Network.Serialization.Attributes;
 using LauncherServer.Dtos;
 
 namespace Launcher.NetWork;

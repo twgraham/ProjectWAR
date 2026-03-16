@@ -17,7 +17,6 @@ public abstract class Client : IDisposable
     private readonly byte[] _receiveBuffer;
     private readonly Channel<PacketEnvelope> _receiveQueue;
     private readonly Channel<ReadOnlyMemory<byte>> _sendQueue;
-    private readonly IByteTransformer _byteTransformer;
     private readonly int _errorThreshold;
     private Task _receiveTask;
     private Task _processTask;
@@ -48,24 +47,18 @@ public abstract class Client : IDisposable
     /// Creates a new client instance.
     /// </summary>
     /// <param name="tcpClient">The connected TcpClient.</param>
-    /// <param name="serializerFactory">Factory to create the packet serializer.</param>
-    /// <param name="byteTransformer">Optional byte transformer for encryption/decryption.</param>
+    /// <param name="serializer">The packet serializer.</param>
     /// <param name="receiveBufferSize">Size of the receive ring buffer in bytes.</param>
     /// <param name="errorThreshold">Number of handler errors before disconnection.</param>
     protected Client(
         TcpClient tcpClient,
-        IPacketSerializerFactory serializerFactory,
-        IByteTransformer byteTransformer = null,
+        IPacketSerializer serializer,
         int receiveBufferSize = 65536,
         int errorThreshold = 3)
     {
         _tcpClient = tcpClient ?? throw new ArgumentNullException(nameof(tcpClient));
-        if (serializerFactory == null)
-            throw new ArgumentNullException(nameof(serializerFactory));
-
         _stream = _tcpClient.GetStream();
-        Serializer = serializerFactory.Create();
-        _byteTransformer = byteTransformer;
+        Serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         _receiveBuffer = new byte[receiveBufferSize];
         _receiveQueue = Channel.CreateUnbounded<PacketEnvelope>();
         _sendQueue = Channel.CreateUnbounded<ReadOnlyMemory<byte>>();
@@ -135,24 +128,6 @@ public abstract class Client : IDisposable
                 // Update buffer tracking
                 bufferOffset += bytesRead;
 
-                // Apply byte transformation if configured
-                var dataSpan = new ReadOnlySpan<byte>(_receiveBuffer, 0, bufferOffset);
-                if (_byteTransformer != null)
-                {
-                    var transformBuffer = ArrayPool<byte>.Shared.Rent(bufferOffset * 2);
-                    try
-                    {
-                        var transformedLength = _byteTransformer.Transform(dataSpan, transformBuffer);
-                        // Copy transformed data back to receive buffer
-                        Buffer.BlockCopy(transformBuffer, 0, _receiveBuffer, 0, transformedLength);
-                        bufferOffset = transformedLength;
-                    }
-                    finally
-                    {
-                        ArrayPool<byte>.Shared.Return(transformBuffer);
-                    }
-                }
-
                 // Extract and queue packets from buffer
                 bufferOffset = await ExtractAndQueuePacketsAsync(bufferOffset, cancellationToken).ConfigureAwait(false);
 
@@ -188,12 +163,13 @@ public abstract class Client : IDisposable
             var opcode = ExtractOpcode(packetData.Span, out var payloadOffset);
             var payloadSlice = packetData[payloadOffset..];
 
-            // Copy payload to a new array — the ReadOnlyMemory slice points into _receiveBuffer
+            // Copy payload into pooled memory — the ReadOnlyMemory slice points into _receiveBuffer
             // which may be overwritten by a subsequent read before ProcessLoopAsync consumes it.
-            var payloadCopy = payloadSlice.ToArray();
+            var owner = MemoryPool<byte>.Shared.Rent(payloadSlice.Length);
+            payloadSlice.Span.CopyTo(owner.Memory.Span);
 
             // Queue packet for processing
-            await _receiveQueue.Writer.WriteAsync(new PacketEnvelope(opcode, payloadCopy), cancellationToken)
+            await _receiveQueue.Writer.WriteAsync(new PacketEnvelope(opcode, owner, payloadSlice.Length), cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -252,6 +228,10 @@ public abstract class Client : IDisposable
                         return;
                     }
                 }
+                finally
+                {
+                    envelope.Dispose();
+                }
             }
         }
         catch (OperationCanceledException)
@@ -262,14 +242,26 @@ public abstract class Client : IDisposable
 
     private async Task SendLoopAsync(CancellationToken cancellationToken)
     {
+        const int maxWritesBeforeFlush = 32;
+
         try
         {
+            var writesSinceFlush = 0;
+
             await foreach (var data in _sendQueue.Reader.ReadAllAsync(cancellationToken))
             {
                 try
                 {
                     await _stream.WriteAsync(data, cancellationToken).ConfigureAwait(false);
-                    await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    writesSinceFlush++;
+
+                    // Flush when the queue is momentarily empty or after a batch limit
+                    // to prevent data from sitting unflushed under sustained load.
+                    if (_sendQueue.Reader.Count == 0 || writesSinceFlush >= maxWritesBeforeFlush)
+                    {
+                        await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                        writesSinceFlush = 0;
+                    }
                 }
                 catch (IOException)
                 {

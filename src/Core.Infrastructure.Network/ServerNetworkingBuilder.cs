@@ -11,9 +11,9 @@ internal class ServerNetworkingBuilder : IServerNetworkingBuilder
         _services = services;
     }
     
-    public IServerNetworkingBuilder WithPacketFramer<T>() where T : class, IPacketFramer
+    public IServerNetworkingBuilder WithPacketFramer<T>(ServiceLifetime lifetime = ServiceLifetime.Transient) where T : class, IPacketFramer
     {
-        _services.AddSingleton<IPacketFramer, T>();
+        _services.Add(new ServiceDescriptor(typeof(IPacketFramer), typeof(T), lifetime));
         return this;
     }
 
@@ -23,13 +23,14 @@ internal class ServerNetworkingBuilder : IServerNetworkingBuilder
         return this;
     }
 
-    public IServerNetworkingBuilder WithPacketSerializerFactory<T>() where T : class, IPacketSerializerFactory
+    public IServerNetworkingBuilder WithPacketSerializer<T>(ServiceLifetime lifetime = ServiceLifetime.Transient)
+        where T : class, IPacketSerializer
     {
-        _services.AddSingleton<IPacketSerializerFactory, T>();
+        _services.Add(new ServiceDescriptor(typeof(IPacketSerializer), typeof(T), lifetime));
         return this;
     }
 
-    public IServerNetworkingBuilder WithPacketSerializerFactory(IPacketSerializerFactory packetSerializerFactory)
+    public IServerNetworkingBuilder WithPacketSerializer(IPacketSerializer packetSerializerFactory)
     {
         _services.AddSingleton(packetSerializerFactory);
         return this;

@@ -1,0 +1,43 @@
+using WorldServerV2.World.Components;
+
+namespace WorldServerV2.World.Entities;
+
+/// <summary>
+/// Abstract base for all combat-capable entities (players, creatures, pets).
+/// Provides guaranteed <see cref="Health"/>, <see cref="Level"/>, <see cref="Realm"/>,
+/// and <see cref="Faction"/> as direct fields — no component lookup needed.
+/// <para>
+/// Combat systems can accept <c>UnitEntity</c> as a parameter type and be confident
+/// that health, level, and realm are always available.
+/// </para>
+/// </summary>
+public abstract class UnitEntity : WorldEntity
+{
+    protected UnitEntity(ushort objectId, EntityType type, string name, uint maxHealth)
+        : base(objectId, type, name)
+    {
+        Health = new HealthComponent(maxHealth);
+    }
+
+    /// <summary>Health pool — always present on units. Never null.</summary>
+    public HealthComponent Health { get; }
+
+    /// <summary>Unit level (1–40 for players, variable for creatures).</summary>
+    public byte Level { get; set; }
+
+    /// <summary>Faction affiliation (Order / Destruction / Neutral).</summary>
+    public byte Realm { get; set; }
+
+    /// <summary>Raw faction value used for aggression rules.</summary>
+    public byte Faction { get; set; }
+
+    /// <summary>
+    /// Override to tick unit-specific state (HP regen, combat timers) before
+    /// optional component ticks.
+    /// </summary>
+    public override void Update(long tick)
+    {
+        // TODO: HP regen, combat timers (System 4)
+        base.Update(tick);
+    }
+}

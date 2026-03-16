@@ -23,6 +23,27 @@ namespace Core.Infrastructure.Network
         public int ByteCount { get; }
         public PacketLengthAttribute(int byteCount) { ByteCount = byteCount; }
     }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class FixedLengthAttribute : System.Attribute
+    {
+        public int Length { get; }
+        public FixedLengthAttribute(int length) { Length = length; }
+    }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class PascalStringAttribute : System.Attribute { }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class LittleEndianAttribute : System.Attribute { }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class CStringAttribute : System.Attribute
+    {
+        public int? Length { get; }
+        public CStringAttribute() { Length = null; }
+        public CStringAttribute(int length) { Length = length; }
+    }
 }";
 
     [Fact]
@@ -316,6 +337,69 @@ namespace TestNamespace
     }
 
     [Fact]
+    public void GeneratesSerializer_WithByteArrayProperty()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class PacketWithBytes
+    {
+        public ushort Header { get; set; }
+        public byte[] Payload { get; set; }
+        public byte Trailer { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(PacketWithBytes))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize path should use ReadByteArray
+        code.ShouldContain("ReadByteArray");
+        // Serialize path should use WriteByteArray
+        code.ShouldContain("WriteByteArray");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithByteArrayAndPacketLength()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class PacketWithSizedBytes
+    {
+        public byte Id { get; set; }
+        [PacketLength(2)]
+        public byte[] Data { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(PacketWithSizedBytes))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Should use length size 2 from the attribute
+        code.ShouldContain("ReadByteArray(2)");
+        code.ShouldContain("WriteByteArray(obj.Data, 2)");
+    }
+
+    [Fact]
     public void GeneratesSerializer_WithPacketLengthAttribute()
     {
         var source = @"
@@ -348,6 +432,199 @@ namespace TestNamespace
         
         
         
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithFixedLengthAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class FixedPayload
+    {
+        [FixedLength(8)]
+        public byte[] Hash { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(FixedPayload))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadFixedByteArray(8)");
+        code.ShouldContain("WriteFixedByteArray");
+        code.ShouldNotContain("ReadByteArray"); // no length-prefix variant should appear for this property
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithPascalStringAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class ChatMessage
+    {
+        [PascalString]
+        public string Text { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(ChatMessage))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadPascalString()");
+        code.ShouldContain("WritePascalString");
+        code.ShouldNotContain("ReadString()");  // regular length-prefixed read must not appear
+        code.ShouldNotContain("WriteString("); // regular length-prefixed write must not appear
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithLittleEndianAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class LittleEndianPacket
+    {
+        [LittleEndian]
+        public int Counter { get; set; }
+        [LittleEndian]
+        public ushort Flags { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(LittleEndianPacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadInt32LE()");
+        code.ShouldContain("WriteInt32LE(");
+        code.ShouldContain("ReadUInt16LE()");
+        code.ShouldContain("WriteUInt16LE(");
+        code.ShouldNotContain("ReadInt32()");  // big-endian variant must not appear for this property
+        code.ShouldNotContain("ReadUInt16()"); // big-endian variant must not appear for this property
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCStringAttribute_FixedLength()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class NamePacket
+    {
+        [CString(20)]
+        public string Name { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(NamePacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadCString(20)");
+        code.ShouldContain("WriteCString(");
+        code.ShouldContain(", 20)");
+        code.ShouldNotContain("ReadCStringNullTerminated");
+        code.ShouldNotContain("WriteCStringNullTerminated");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCStringAttribute_NullTerminated()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class NamePacket
+    {
+        [CString]
+        public string Name { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(NamePacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        code.ShouldContain("ReadCString(null)");
+        code.ShouldContain("WriteCString(");
+        code.ShouldContain(", null)");
+        code.ShouldNotContain("ReadCStringNullTerminated");
+        code.ShouldNotContain("WriteCStringNullTerminated");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithFixedLengthOnCollection()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+using System.Collections.Generic;
+
+namespace TestNamespace
+{
+    public class FixedCollectionPacket
+    {
+        [FixedLength(4)]
+        public List<int> Items { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(FixedCollectionPacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Fixed-length collection uses a compile-time constant — no length-prefix read/write
+        code.ShouldContain("const int length = 4");
+        code.ShouldContain("FixedLength(4)");  // validation message
+        code.ShouldNotContain("ReadByte()");   // no 1-byte length prefix read
+        code.ShouldNotContain("WriteByte(");   // no 1-byte length prefix write
     }
 
     private GeneratorTestResult RunGenerator(string source)

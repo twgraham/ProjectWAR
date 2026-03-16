@@ -10,6 +10,7 @@
   <Folder Name="/src/">
     <Project Path="src/AccountCacher/AccountCacher.csproj" />
     <Project Path="src/Common/Common.csproj" />
+    <Project Path="src/Core.Infrastructure.Cryptography/Core.Infrastructure.Cryptography.csproj" />
     <Project Path="src/Core.Infrastructure.Network.RpcSourceGenerators/Core.Infrastructure.Network.RpcSourceGenerators.csproj" />
     <Project Path="src/Core.Infrastructure.Network/Core.Infrastructure.Network.csproj" />
     <Project Path="src/FrameWork/FrameWork.csproj" />
@@ -19,10 +20,13 @@
     <Project Path="src/LobbyServer/LobbyServer.csproj" />
     <Project Path="src/WarZone/WarZone.vcxproj" />
     <Project Path="src/WorldServer/WorldServer.csproj" />
+    <Project Path="src/WorldServerV2/WorldServerV2.csproj" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/Core.Infrastructure.Cryptography.Tests/Core.Infrastructure.Cryptography.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.RpcSourceGenerator.Tests/Core.Infrastructure.Network.RpcSourceGenerator.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.Tests/Core.Infrastructure.Network.Tests.csproj" />
     <Project Path="test/LobbyServer.Tests/LobbyServer.Tests.csproj" />
+    <Project Path="test/WorldServer.Tests/WorldServer.Tests.csproj" />
   </Folder>
 </Solution>

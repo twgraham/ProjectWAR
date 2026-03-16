@@ -10,11 +10,13 @@ public interface IPacketFramer
     /// <summary>
     /// Attempts to extract a complete packet from the receive buffer.
     /// On success, <paramref name="buffer"/> is advanced past the consumed data.
+    /// The buffer is mutable to allow in-place transformations (e.g. decryption)
+    /// without allocating intermediate copies.
     /// </summary>
-    /// <param name="buffer">The accumulated receive buffer (advanced on success).</param>
-    /// <param name="packet">The extracted packet bytes, if successful.</param>
+    /// <param name="buffer">The mutable receive buffer (advanced on success).</param>
+    /// <param name="packet">The extracted packet bytes (read-only view), if successful.</param>
     /// <returns>True if a packet was extracted; false if more data is needed.</returns>
-    bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet);
+    bool TryExtractPacket(ref Memory<byte> buffer, out ReadOnlyMemory<byte> packet);
 
     /// <summary>
     /// Extracts the opcode from a complete packet.

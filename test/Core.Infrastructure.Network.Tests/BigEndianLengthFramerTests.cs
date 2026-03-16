@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Core.Infrastructure.Network.Serialization;
 using Shouldly;
 
 namespace Core.Infrastructure.Network.Tests;
@@ -14,7 +15,7 @@ public class BigEndianLengthFramerTests
         var serializer = new BinaryPacketSerializer();
         var payload = new TestPayload { Id = 42 };
         var created = _framer.CreatePacket((byte)0x10, payload, serializer);
-        var buffer = created;
+        Memory<byte> buffer = created.ToArray();
 
         // WHEN: Extracting a packet from the buffer
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();
@@ -31,7 +32,7 @@ public class BigEndianLengthFramerTests
     public void TryExtractPacket_EmptyBuffer_ReturnsFalse()
     {
         // GIVEN: An empty buffer with no data
-        var buffer = ReadOnlyMemory<byte>.Empty;
+        var buffer = Memory<byte>.Empty;
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails and returns false
@@ -42,7 +43,7 @@ public class BigEndianLengthFramerTests
     public void TryExtractPacket_IncompleteLengthHeader_ReturnsFalse()
     {
         // GIVEN: A buffer with fewer than 4 bytes (incomplete big-endian length header)
-        var buffer = new ReadOnlyMemory<byte>(new byte[] { 0x00, 0x00, 0x05 });
+        var buffer = new Memory<byte>(new byte[] { 0x00, 0x00, 0x05 });
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails and buffer remains unchanged
@@ -60,7 +61,7 @@ public class BigEndianLengthFramerTests
         var combined = new byte[4 + realPacket.Length];
         combined[0] = 0; combined[1] = 0; combined[2] = 0; combined[3] = 0;
         realPacket.CopyTo(combined.AsMemory(4));
-        var buffer = new ReadOnlyMemory<byte>(combined);
+        var buffer = new Memory<byte>(combined);
 
         // WHEN: Extracting a packet
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();
@@ -78,7 +79,7 @@ public class BigEndianLengthFramerTests
         BinaryPrimitives.WriteInt32BigEndian(data, -1);
         data[4] = 0x01;
         data[5] = 0x02; data[6] = 0x03; data[7] = 0x04;
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails due to invalid negative length
@@ -92,7 +93,7 @@ public class BigEndianLengthFramerTests
         var data = new byte[8];
         BinaryPrimitives.WriteInt32BigEndian(data, 100);
         data[4] = 0x01;
-        var buffer = new ReadOnlyMemory<byte>(data);
+        var buffer = new Memory<byte>(data);
 
         // WHEN: Attempting to extract a packet
         // THEN: Extraction fails due to insufficient data
@@ -110,7 +111,7 @@ public class BigEndianLengthFramerTests
         var combined = new byte[12 + realPacket.Length];
         realPacket.CopyTo(combined.AsMemory(12));
 
-        var buffer = new ReadOnlyMemory<byte>(combined);
+        var buffer = new Memory<byte>(combined);
 
         _framer.TryExtractPacket(ref buffer, out var packet).ShouldBeTrue();
         var opcode = _framer.ExtractOpcode(packet.Span, out _);
@@ -140,7 +141,7 @@ public class BigEndianLengthFramerTests
 
         // WHEN: Creating a packet and then extracting it
         var packetBytes = _framer.CreatePacket((byte)0x55, original, serializer);
-        var buffer = packetBytes;
+        Memory<byte> buffer = packetBytes.ToArray();
         _framer.TryExtractPacket(ref buffer, out var extracted).ShouldBeTrue();
 
         // THEN: The extracted packet contains the original data with correct opcode
@@ -160,7 +161,7 @@ public class BigEndianLengthFramerTests
 
         // WHEN: Creating a packet and extracting it
         var packetBytes = _framer.CreatePacket((byte)0x01, original, serializer);
-        var buffer = packetBytes;
+        Memory<byte> buffer = packetBytes.ToArray();
         _framer.TryExtractPacket(ref buffer, out var extracted).ShouldBeTrue();
 
         // THEN: A valid packet is created with the correct opcode

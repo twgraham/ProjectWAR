@@ -10,7 +10,9 @@ public sealed class VarintLengthFramer : IPacketFramer
 {
     private const int OpcodeSize = sizeof(byte);
 
-    public bool TryExtractPacket(ref ReadOnlyMemory<byte> buffer, out ReadOnlyMemory<byte> packet)
+    private readonly ArrayBufferWriter<byte> _payloadWriter = new(256);
+
+    public bool TryExtractPacket(ref Memory<byte> buffer, out ReadOnlyMemory<byte> packet)
     {
         packet = default;
 
@@ -56,10 +58,10 @@ public sealed class VarintLengthFramer : IPacketFramer
 
     public ReadOnlyMemory<byte> CreatePacket<T>(byte opcode, T payload, IPacketSerializer serializer)
     {
-        // Serialize payload to determine size
-        var payloadWriter = new ArrayBufferWriter<byte>();
-        serializer.Serialize(payloadWriter, payload);
-        var payloadSize = payloadWriter.WrittenCount;
+        // Reuse the instance writer — safe because each connection gets its own framer
+        _payloadWriter.ResetWrittenCount();
+        serializer.Serialize(_payloadWriter, payload);
+        var payloadSize = _payloadWriter.WrittenCount;
 
         var varintSize = ComputeVarintSize(payloadSize);
         var packet = new byte[varintSize + OpcodeSize + payloadSize];
@@ -67,12 +69,12 @@ public sealed class VarintLengthFramer : IPacketFramer
 
         WriteVarint(span, payloadSize);
         span[varintSize] = opcode;
-        payloadWriter.WrittenSpan.CopyTo(span.Slice(varintSize + OpcodeSize));
+        _payloadWriter.WrittenSpan.CopyTo(span.Slice(varintSize + OpcodeSize));
 
         return packet;
     }
 
-    private static int ReadVarint(ref ReadOnlyMemory<byte> buffer)
+    private static int ReadVarint(ref Memory<byte> buffer)
     {
         var size = 0;
         var byteCount = 0;

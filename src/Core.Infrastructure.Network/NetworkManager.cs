@@ -111,8 +111,8 @@ public sealed class NetworkManager : IHostedService, IDisposable
     /// </summary>
     public void DisconnectClient(IConnectionContext connection)
     {
-        if (connection == null) throw new ArgumentNullException(nameof(connection));
-        connection.Disconnect(DisconnectReason.ServerShutdown);
+        ArgumentNullException.ThrowIfNull(connection);
+        connection.Disconnect("Disconnected by server");
     }
 
     /// <summary>

@@ -233,12 +233,11 @@ namespace RpcSourceGenerator
 
                     // Determine return type
                     var returnType = member.ReturnType;
-                    var isAsync = returnType.Name == "Task" || returnType.Name == "ValueTask";
+                    var isAsync = returnType.Name is "Task" or "ValueTask";
                     var hasResponse = false;
                     ITypeSymbol responseType = null;
 
-                    if (isAsync && returnType is INamedTypeSymbol namedReturnType &&
-                        namedReturnType.TypeArguments.Length > 0)
+                    if (isAsync && returnType is INamedTypeSymbol { TypeArguments.Length: > 0 } namedReturnType)
                     {
                         hasResponse = true;
                         responseType = namedReturnType.TypeArguments[0];
@@ -249,6 +248,12 @@ namespace RpcSourceGenerator
                         responseType = returnType;
                     }
 
+                    // Detect RpcResult<T> wrapper so the generated code can use
+                    // .HasValue / .Value instead of a null check.
+                    var isRpcResult = responseType is INamedTypeSymbol { Name: "RpcResult" } namedResponseType &&
+                                      namedResponseType.ContainingNamespace?.ToString() == "Core.Infrastructure.Network" &&
+                                      namedResponseType.TypeArguments.Length == 1;
+
                     hasRpcMethods = true;
                     groupInfo.Methods.Add(new RpcMethodInfo
                     {
@@ -258,6 +263,7 @@ namespace RpcSourceGenerator
                         ResponseOpcode = responseOpcode,
                         ResponseType = responseType?.ToDisplayString(),
                         HasResponse = hasResponse,
+                        IsRpcResult = isRpcResult,
                         IsAsync = isAsync,
                         Parameters = parameters,
                         HasServices = parameters.Any(p => p.Kind == ParameterKind.Service)
@@ -295,6 +301,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Core.Infrastructure.Network;");
+            sb.AppendLine("using Core.Infrastructure.Network.Serialization;");
             sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
             sb.AppendLine();
 
@@ -429,9 +436,18 @@ namespace RpcSourceGenerator
                 if (method.HasResponse)
                 {
                     sb.AppendLine($"                    var response = handler.{method.MethodName}({args});");
-                    sb.AppendLine("                    if (response != null)");
-                    sb.AppendLine(
-                        $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
+                    if (method.IsRpcResult)
+                    {
+                        sb.AppendLine("                    if (response.HasValue)");
+                        sb.AppendLine(
+                            $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response.Value!);");
+                    }
+                    else
+                    {
+                        sb.AppendLine("                    if (response != null)");
+                        sb.AppendLine(
+                            $"                        connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
+                    }
                 }
                 else
                 {
@@ -471,9 +487,18 @@ namespace RpcSourceGenerator
             if (method.HasResponse)
             {
                 sb.AppendLine($"                var response = await handler.{method.MethodName}({args});");
-                sb.AppendLine("                if (response != null)");
-                sb.AppendLine(
-                    $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
+                if (method.IsRpcResult)
+                {
+                    sb.AppendLine("                if (response.HasValue)");
+                    sb.AppendLine(
+                        $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response.Value!);");
+                }
+                else
+                {
+                    sb.AppendLine("                if (response != null)");
+                    sb.AppendLine(
+                        $"                    connection.SendResponse(0x{method.ResponseOpcode:X2}, response);");
+                }
             }
             else
             {
@@ -541,6 +566,7 @@ namespace RpcSourceGenerator
             public byte ResponseOpcode { get; set; }
             public string ResponseType { get; set; }
             public bool HasResponse { get; set; }
+            public bool IsRpcResult { get; set; }
             public bool IsAsync { get; set; }
             public List<RpcParameterInfo> Parameters { get; set; }
             public bool HasServices { get; set; }

@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Http;
 using Core.Infrastructure.Network;
+using Core.Infrastructure.Network.Serialization;
 using FrameWork;
 using Grpc.Net.Client;
 using LauncherServer;
@@ -36,7 +37,7 @@ try
 
             s.AddServerNetworking(IPEndPoint.Parse($"127.0.0.1:{config.LauncherServerPort}"))
                 .WithPacketFramer<BigEndianLengthFramer>()
-                .WithPacketSerializerFactory<BinaryPacketSerializerFactory>()
+                .WithPacketSerializer<BinaryPacketSerializer>()
                 .AddDefaultPacketHandlers();
         });
 

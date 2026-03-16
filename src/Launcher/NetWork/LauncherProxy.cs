@@ -15,11 +15,10 @@ public partial class LauncherProxy : Client
 
     public LauncherProxy(
         TcpClient tcpClient,
-        IPacketSerializerFactory serializerFactory,
-        IByteTransformer byteTransformer = null,
+        IPacketSerializer serializer,
         int receiveBufferSize = 65536,
         int errorThreshold = 3) : base(
-        tcpClient, serializerFactory, byteTransformer, receiveBufferSize, errorThreshold)
+        tcpClient, serializer, receiveBufferSize, errorThreshold)
     {
     }
 

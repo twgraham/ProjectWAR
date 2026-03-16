@@ -51,6 +51,15 @@ namespace Core.Infrastructure.Network
         void Dispatch(byte opcode, System.ReadOnlyMemory<byte> payload,
             System.IServiceProvider services, IPacketSerializer serializer, IConnectionContext connection);
     }
+
+    public readonly struct RpcResult<T>
+    {
+        public T? Value { get; }
+        public bool HasValue { get; }
+        private RpcResult(T value) { Value = value; HasValue = true; }
+        public static RpcResult<T> NoResponse => default;
+        public static implicit operator RpcResult<T>(T value) => new RpcResult<T>(value);
+    }
 }";
 
     [Fact]
@@ -207,6 +216,76 @@ namespace TestNamespace
         code.ShouldContain("_ = DispatchAsync_HandleLogin(handler, request, connection);");
         code.ShouldContain("var response = await handler.HandleLogin(request);");
         code.ShouldContain("connection.SendResponse(0x11, response)");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_WithSynchronousMethod_ReturnsRpcResult()
+    {
+        var source = @"
+using System;
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class LoginRequest { }
+    public class LoginResponse { }
+
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
+    {
+        [Rpc(0x10, 0x11)]
+        public RpcResult<LoginResponse> HandleLogin(LoginRequest request)
+        {
+            return new LoginResponse();
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        result.GeneratedTrees.ShouldHaveSingleItem();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x10:");
+        code.ShouldContain("var response = handler.HandleLogin(request);");
+        code.ShouldContain("if (response.HasValue)");
+        code.ShouldContain("connection.SendResponse(0x11, response.Value!)");
+        code.ShouldNotContain("if (response != null)");
+    }
+
+    [Fact]
+    public void GeneratesDispatcher_WithAsyncMethod_ReturnsTaskOfRpcResult()
+    {
+        var source = @"
+using System;
+using System.Threading.Tasks;
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class LoginRequest { }
+    public class LoginResponse { }
+
+    public partial class TestHandler : Core.Infrastructure.Network.IPacketHandler
+    {
+        [Rpc(0x10, 0x11)]
+        public async Task<RpcResult<LoginResponse>> HandleLogin(LoginRequest request)
+        {
+            return await Task.FromResult(new LoginResponse());
+        }
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        result.GeneratedTrees.ShouldHaveSingleItem();
+        var code = result.GeneratedTrees[0].ToString();
+        code.ShouldContain("case 0x10:");
+        code.ShouldContain("_ = DispatchAsync_HandleLogin(handler, request, connection);");
+        code.ShouldContain("var response = await handler.HandleLogin(request);");
+        code.ShouldContain("if (response.HasValue)");
+        code.ShouldContain("connection.SendResponse(0x11, response.Value!)");
+        code.ShouldNotContain("if (response != null)");
     }
 
     [Fact]

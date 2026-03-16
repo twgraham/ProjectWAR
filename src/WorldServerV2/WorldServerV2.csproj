@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+      <UserSecretsId>4eaaea8a-49c8-4d88-884d-fdb7e257ee55</UserSecretsId>
+  </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="WorldServer.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="..\..\protos\common\**\*.proto" ProtoRoot="..\..\protos" />
+        <Protobuf Include="..\..\protos\AccountMgr.proto" GrpcServices="Client" ProtoRoot="..\..\protos" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Core.Infrastructure.Cryptography\Core.Infrastructure.Cryptography.csproj" />
+      <ProjectReference Include="..\Core.Infrastructure.Network.RpcSourceGenerators\Core.Infrastructure.Network.RpcSourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="..\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Google.Protobuf" Version="3.32.1" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+      <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+      <PackageReference Include="Grpc.Tools" Version="2.72.0">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="appsettings.json">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="appsettings.development.json">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+</Project>

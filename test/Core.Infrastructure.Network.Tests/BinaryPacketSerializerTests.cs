@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
+using Core.Infrastructure.Network.Serialization;
+using Core.Infrastructure.Network.Serialization.Attributes;
 using Shouldly;
 
 namespace Core.Infrastructure.Network.Tests;
@@ -572,25 +574,326 @@ public class BinaryPacketSerializerTests
         result.ReadOnly.ShouldBe(0);
     }
 
-    [Fact]
-    public void Factory_CreateReturnsSameInstance()
-    {
-        // GIVEN: A BinaryPacketSerializerFactory instance
-        var factory = new BinaryPacketSerializerFactory();
-
-        // WHEN: Calling Create() multiple times
-        var a = factory.Create();
-        var b = factory.Create();
-
-        // THEN: The factory returns the same singleton instance
-        a.ShouldBeSameAs(b);
-    }
-
     private T RoundTrip<T>(T original)
     {
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(writer, original);
         return _serializer.Deserialize<T>(writer.WrittenSpan);
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLengthAttribute_ExactLength()
+    {
+        // GIVEN: A packet with a 4-byte fixed field set to exactly 4 bytes
+        var original = new FixedLengthByteArrayPacket { Data = new byte[] { 0x01, 0x02, 0x03, 0x04 } };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<FixedLengthByteArrayPacket>(original);
+
+        // THEN: All four bytes are preserved and no length prefix byte is in the wire format
+        result.Data.ShouldBe(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(4); // exactly 4 bytes, no length prefix
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLengthAttribute_ShorterArrayIsPadded()
+    {
+        // GIVEN: A packet with a 4-byte fixed field set to only 2 bytes
+        var original = new FixedLengthByteArrayPacket { Data = new byte[] { 0xAA, 0xBB } };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<FixedLengthByteArrayPacket>(original);
+
+        // THEN: The 2 content bytes are followed by 2 zero-padding bytes
+        result.Data.ShouldBe(new byte[] { 0xAA, 0xBB, 0x00, 0x00 });
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLengthAttribute_LongerArrayIsTruncated()
+    {
+        // GIVEN: A packet with a 4-byte fixed field set to 6 bytes
+        var original = new FixedLengthByteArrayPacket { Data = new byte[] { 1, 2, 3, 4, 5, 6 } };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<FixedLengthByteArrayPacket>(original);
+
+        // THEN: Only the first 4 bytes are preserved
+        result.Data.ShouldBe(new byte[] { 1, 2, 3, 4 });
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLengthAttribute_WithNeighbouringProperties()
+    {
+        // GIVEN: A packet where a fixed byte field sits between two other properties
+        var original = new FixedLengthWithNeighboursPacket
+        {
+            Before = 0x11,
+            Fixed = new byte[] { 0xAA, 0xBB, 0xCC },
+            After = 0x22,
+        };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<FixedLengthWithNeighboursPacket>(original);
+
+        // THEN: All values are correctly preserved with a total wire size of 5 bytes
+        result.Before.ShouldBe((byte)0x11);
+        result.Fixed.ShouldBe(new byte[] { 0xAA, 0xBB, 0xCC });
+        result.After.ShouldBe((byte)0x22);
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(5); // 1 + 3 + 1
+    }
+
+    [Fact]
+    public void RoundTrip_PascalString_NormalString()
+    {
+        // GIVEN: A packet with a Pascal string property
+        var original = new PascalStringPacket { Name = "Hello" };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<PascalStringPacket>(original);
+
+        // THEN: The string is preserved and the wire format is [length:1][bytes:N] with no null terminator
+        result.Name.ShouldBe("Hello");
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(1 + 5); // 1-byte length + 5 bytes for "Hello"
+        writer.WrittenSpan[0].ShouldBe((byte)5); // length byte
+    }
+
+    [Fact]
+    public void RoundTrip_PascalString_EmptyString()
+    {
+        // GIVEN: A packet with an empty Pascal string
+        var original = new PascalStringPacket { Name = "" };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<PascalStringPacket>(original);
+
+        // THEN: An empty string round-trips correctly as a single zero byte
+        result.Name.ShouldBe("");
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(1);   // just the length byte 0x00
+        writer.WrittenSpan[0].ShouldBe((byte)0);
+    }
+
+    [Fact]
+    public void RoundTrip_PascalString_WithNeighbouringProperties()
+    {
+        // GIVEN: A Pascal string field flanked by two byte properties
+        var original = new PascalStringWithNeighboursPacket
+        {
+            Before = 0xAA,
+            Text = "Hi",
+            After = 0xBB,
+        };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<PascalStringWithNeighboursPacket>(original);
+
+        // THEN: All three fields are correctly preserved
+        result.Before.ShouldBe((byte)0xAA);
+        result.Text.ShouldBe("Hi");
+        result.After.ShouldBe((byte)0xBB);
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(1 + 1 + 2 + 1); // Before(1) + length(1) + "Hi"(2) + After(1)
+    }
+
+    [Fact]
+    public void RoundTrip_LittleEndian_Int32()
+    {
+        // GIVEN: A packet whose int is tagged with [LittleEndian]
+        var original = new LittleEndianInt32Packet { Value = 0x01020304 };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<LittleEndianInt32Packet>(original);
+
+        // THEN: Value round-trips correctly
+        result.Value.ShouldBe(0x01020304);
+
+        // AND: The wire bytes are in little-endian order (LSB first)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenSpan[0].ShouldBe((byte)0x04); // LSB
+        writer.WrittenSpan[1].ShouldBe((byte)0x03);
+        writer.WrittenSpan[2].ShouldBe((byte)0x02);
+        writer.WrittenSpan[3].ShouldBe((byte)0x01); // MSB
+    }
+
+    [Fact]
+    public void RoundTrip_LittleEndian_UInt16()
+    {
+        // GIVEN: A packet whose ushort is tagged with [LittleEndian]
+        var original = new LittleEndianUInt16Packet { Value = 0xABCD };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<LittleEndianUInt16Packet>(original);
+
+        // THEN: Value round-trips correctly
+        result.Value.ShouldBe((ushort)0xABCD);
+
+        // AND: The wire bytes are in little-endian order (LSB first)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenSpan[0].ShouldBe((byte)0xCD); // LSB
+        writer.WrittenSpan[1].ShouldBe((byte)0xAB); // MSB
+    }
+
+    [Fact]
+    public void RoundTrip_LittleEndian_DoesNotAffectBigEndianSibling()
+    {
+        // GIVEN: A packet with one big-endian and one little-endian int field
+        var original = new LittleEndianMixedPacket { BigEndian = 0x11223344, LittleEndian = 0x55667788 };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<LittleEndianMixedPacket>(original);
+
+        // THEN: Both values round-trip correctly
+        result.BigEndian.ShouldBe(0x11223344);
+        result.LittleEndian.ShouldBe(0x55667788);
+
+        // AND: First 4 bytes are big-endian, next 4 are little-endian
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenSpan[0].ShouldBe((byte)0x11); // BigEndian MSB first
+        writer.WrittenSpan[4].ShouldBe((byte)0x88); // LittleEndian LSB first
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLength_TypedArray()
+    {
+        // GIVEN: A packet with [FixedLength(3)] int[]
+        var original = new FixedLengthTypedArrayPacket { Values = new[] { 1, 2, 3 } };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<FixedLengthTypedArrayPacket>(original);
+
+        // THEN: Values are preserved
+        result.Values.ShouldBe(new[] { 1, 2, 3 });
+
+        // AND: No length prefix written — wire size is exactly 3 * 4 = 12 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(12);
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLength_TypedArray_WithNeighbours()
+    {
+        // GIVEN: A packet with surrounding bytes flanking a [FixedLength(2)] ushort[]
+        var original = new FixedLengthTypedArrayWithNeighboursPacket
+            { Before = 0xAA, Items = new ushort[] { 0x0102, 0x0304 }, After = 0xBB };
+
+        // WHEN
+        var result = RoundTrip<FixedLengthTypedArrayWithNeighboursPacket>(original);
+
+        // THEN: Surrounding bytes + array values intact
+        result.Before.ShouldBe((byte)0xAA);
+        result.Items.ShouldBe(new ushort[] { 0x0102, 0x0304 });
+        result.After.ShouldBe((byte)0xBB);
+
+        // AND: Wire size = 1 + 2*2 + 1 = 6 bytes (no length prefix)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(6);
+    }
+
+    [Fact]
+    public void RoundTrip_FixedLength_List()
+    {
+        // GIVEN: A packet with [FixedLength(3)] List<int>
+        var original = new FixedLengthListPacket { Values = new List<int> { 10, 20, 30 } };
+
+        // WHEN
+        var result = RoundTrip<FixedLengthListPacket>(original);
+
+        // THEN: Values preserved
+        result.Values.ShouldBe(new List<int> { 10, 20, 30 });
+
+        // AND: No length prefix — wire size is exactly 3 * 4 = 12 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(12);
+    }
+
+    [Fact]
+    public void FixedLength_TypedArray_Throws_WhenCountMismatch()
+    {
+        // GIVEN: An array with the wrong element count
+        var original = new FixedLengthTypedArrayPacket { Values = new[] { 1, 2 } }; // expects 3
+
+        // WHEN / THEN: Serialize throws
+        var writer = new ArrayBufferWriter<byte>();
+        Should.Throw<InvalidOperationException>(() => _serializer.Serialize(writer, original))
+            .Message.ShouldContain("FixedLength");
+    }
+
+    [Fact]
+    public void RoundTrip_CString_FixedLength()
+    {
+        // GIVEN: A [CString(8)] string shorter than the field
+        var original = new FixedCStringPacket { Name = "Hello" };
+
+        // WHEN
+        var result = RoundTrip<FixedCStringPacket>(original);
+
+        // THEN: string value is preserved
+        result.Name.ShouldBe("Hello");
+
+        // AND: exactly 8 bytes written (padded with \0)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(8);
+        writer.WrittenSpan[5].ShouldBe((byte)0); // null terminator at index 5
+    }
+
+    [Fact]
+    public void RoundTrip_CString_NullTerminated()
+    {
+        // GIVEN: A [CString] (no length) packet — wire format is string bytes + \0
+        var original = new NullTerminatedCStringPacket { Name = "WAR" };
+
+        // WHEN
+        var result = RoundTrip<NullTerminatedCStringPacket>(original);
+
+        // THEN: string value is preserved
+        result.Name.ShouldBe("WAR");
+
+        // AND: wire is exactly the encoded bytes + 1 null terminator (no fixed padding)
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(4); // 3 chars + \0
+        writer.WrittenSpan[3].ShouldBe((byte)0);
+    }
+
+    [Fact]
+    public void RoundTrip_CString_NullTerminated_WithNeighbours()
+    {
+        // GIVEN: Surrounding byte properties bracket a null-terminated CString
+        var original = new NullTerminatedCStringWithNeighboursPacket
+            { Before = 0xAA, Middle = "Hi", After = 0xBB };
+
+        // WHEN
+        var result = RoundTrip<NullTerminatedCStringWithNeighboursPacket>(original);
+
+        // THEN
+        result.Before.ShouldBe((byte)0xAA);
+        result.Middle.ShouldBe("Hi");
+        result.After.ShouldBe((byte)0xBB);
+
+        // AND: wire = 0xAA + 'H' + 'i' + 0x00 + 0xBB = 5 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(5);
     }
 
     public class BytePacket { public byte Value { get; set; } }
@@ -627,9 +930,96 @@ public class BinaryPacketSerializerTests
         public byte[] Data { get; set; } = Array.Empty<byte>();
     }
 
+    public class FixedLengthByteArrayPacket
+    {
+        [FixedLength(4)]
+        public byte[] Data { get; set; } = Array.Empty<byte>();
+    }
+
+    public class FixedLengthWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [FixedLength(3)]
+        public byte[] Fixed { get; set; } = Array.Empty<byte>();
+        public byte After { get; set; }
+    }
+
+    public class PascalStringPacket
+    {
+        [PascalString]
+        public string Name { get; set; } = "";
+    }
+
+    public class PascalStringWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [PascalString]
+        public string Text { get; set; } = "";
+        public byte After { get; set; }
+    }
+
+    public class LittleEndianInt32Packet
+    {
+        [LittleEndian]
+        public int Value { get; set; }
+    }
+
+    public class LittleEndianUInt16Packet
+    {
+        [LittleEndian]
+        public ushort Value { get; set; }
+    }
+
+    public class LittleEndianMixedPacket
+    {
+        public int BigEndian { get; set; }
+        [LittleEndian]
+        public int LittleEndian { get; set; }
+    }
+
+    public class FixedLengthTypedArrayPacket
+    {
+        [FixedLength(3)]
+        public int[] Values { get; set; } = Array.Empty<int>();
+    }
+
+    public class FixedLengthTypedArrayWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [FixedLength(2)]
+        public ushort[] Items { get; set; } = Array.Empty<ushort>();
+        public byte After { get; set; }
+    }
+
+    public class FixedLengthListPacket
+    {
+        [FixedLength(3)]
+        public List<int> Values { get; set; } = new();
+    }
+
     public class UnsupportedTypePacket
     {
         public Dictionary<string, string> Map { get; set; } = new();
+    }
+
+    public class FixedCStringPacket
+    {
+        [CString(8)]
+        public string Name { get; set; } = "";
+    }
+
+    public class NullTerminatedCStringPacket
+    {
+        [CString]
+        public string Name { get; set; } = "";
+    }
+
+    public class NullTerminatedCStringWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [CString]
+        public string Middle { get; set; } = "";
+        public byte After { get; set; }
     }
 
     public enum TestStatus : byte
