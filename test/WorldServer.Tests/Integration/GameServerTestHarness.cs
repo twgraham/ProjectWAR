@@ -176,5 +176,8 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
 
         public Task CreateCharacterAsync(uint accountId, ushort realmId, NewCharacter request)
             => Task.CompletedTask;
+
+        public Task DeleteCharacterAsync(Character character)
+            => Task.CompletedTask;
     }
 }
