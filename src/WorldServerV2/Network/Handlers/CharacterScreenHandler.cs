@@ -98,6 +98,8 @@ public class CharacterScreenHandler : IPacketHandler
         {
             await characterService.CreateCharacterAsync(context.Account.Id, (ushort)realmInfo.RealmId,
                 request.ToNewCharacterModel());
+            
+            context.Session.Characters = await characterService.GetCharactersForAccountAsync(context.Account.Id);
 
             return new AccountCharacterModifiedResponse
             {

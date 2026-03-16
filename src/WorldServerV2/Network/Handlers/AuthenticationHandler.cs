@@ -52,7 +52,7 @@ public class AuthenticationHandler : IPacketHandler
                 break;
             case 1:
             {
-                if (request.Key.Length != 256)
+                if (request.Key.Length < 256)
                 {
                     _logger.LogError("Invalid encryption key length: {KeyLength}", request.Key.Length);
                     context.Disconnect("Invalid encryption key");
