@@ -14,6 +14,7 @@ namespace WorldServerV2.Network;
     typeof(ConnectRequest),
     typeof(ConnectResponse),
     typeof(CreateCharacterRequest),
+    typeof(DeleteCharacterRequest),
     typeof(DeleteNameRequest),
     typeof(DumpArenasLargeRequest),
     typeof(EncryptKeyRequest),

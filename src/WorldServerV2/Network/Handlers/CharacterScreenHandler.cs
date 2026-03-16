@@ -119,4 +119,24 @@ public class CharacterScreenHandler : IPacketHandler
             return RpcResult<AccountCharacterModifiedResponse>.NoResponse;
         }
     }
+
+    [Rpc((int)Opcodes.F_DELETE_CHARACTER, (int)Opcodes.F_SEND_CHARACTER_RESPONSE)]
+    public async Task<RpcResult<AccountCharacterModifiedResponse>> F_DELETE_CHARACTER(DeleteCharacterRequest request,
+        IConnectionContext context, [FromServices] ICharacterService characterService)
+    {
+        // A users characters should be available on the session
+        var character = context.Session.Characters.FirstOrDefault(x => x.SlotId == request.SlotId);
+        
+        if (character == null)
+            return RpcResult<AccountCharacterModifiedResponse>.NoResponse;
+        
+        await characterService.DeleteCharacterAsync(character);
+
+        context.Session.Characters = await characterService.GetCharactersForAccountAsync(context.Account.Id);
+
+        return new AccountCharacterModifiedResponse
+        {
+            AccountUsername = context.Account.Username
+        };
+    }
 }
