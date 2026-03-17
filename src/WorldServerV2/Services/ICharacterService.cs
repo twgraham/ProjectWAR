@@ -47,4 +47,6 @@ public interface ICharacterService
     Task LoadDirectoryAsync();
 
     Task CreateCharacterAsync(uint accountId, ushort realmId, NewCharacter request);
+    
+    Task DeleteCharacterAsync(Character character);
 }

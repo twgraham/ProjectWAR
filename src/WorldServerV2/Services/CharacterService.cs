@@ -148,5 +148,20 @@ internal sealed class CharacterService : ICharacterService
         db.Characters.Add(character);
         
         await db.SaveChangesAsync();
+        
+        var summary = new CharacterSummary(character.CharacterId, character.Name, character.Realm, character.Career, (int)accountId);
+        
+        _byId[character.CharacterId] = summary;
+        _byName[character.Name] = summary;
+    }
+
+    public async Task DeleteCharacterAsync(Character character)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        db.Characters.Remove(character);
+        await db.SaveChangesAsync();
+        
+        _byId.TryRemove(character.CharacterId, out _);
+        _byName.TryRemove(character.Name, out _);
     }
 }
