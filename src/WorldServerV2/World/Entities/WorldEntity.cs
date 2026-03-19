@@ -1,4 +1,5 @@
 using WorldServerV2.World.Components;
+using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.World.Entities;
 
@@ -34,8 +35,18 @@ public abstract class WorldEntity
 
     // ── Identity ────────────────────────────────────────────────────────
 
-    /// <summary>Runtime object identifier (protocol-level, ushort range).</summary>
-    public ushort ObjectId { get; }
+    /// <summary>
+    /// Runtime object identifier (protocol-level, ushort range).
+    /// Assigned by the <see cref="Region"/> when the entity enters the world
+    /// and released when it is removed.
+    /// </summary>
+    public ushort ObjectId { get; private set; }
+
+    /// <summary>
+    /// Assigns (or clears) the OID for this entity. Called by the <see cref="Region"/>
+    /// during add/remove — not intended for direct use by game systems.
+    /// </summary>
+    internal void AssignOid(ushort oid) => ObjectId = oid;
 
     /// <summary>The concrete entity type discriminator.</summary>
     public EntityType Type { get; }
@@ -47,6 +58,20 @@ public abstract class WorldEntity
 
     /// <summary>Current position in the world. Updated by movement systems.</summary>
     public WorldPosition Position { get; set; }
+
+    // ── Visibility ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Cached set of nearby entities, maintained by the <see cref="Region"/> during its tick.
+    /// Game systems read this freely; only the region's visibility update writes to it.
+    /// </summary>
+    public VisibilitySet Visibility { get; } = new();
+
+    /// <summary>
+    /// Position at the time of the last visibility scan. Used by the region to determine
+    /// if the entity has moved far enough to warrant a re-scan.
+    /// </summary>
+    internal WorldPosition LastVisibilityCheckPosition { get; set; }
 
     // ── Optional Component Bag ──────────────────────────────────────────
 

@@ -44,9 +44,7 @@ internal sealed class CharacterService : ICharacterService
         _gameDataStore = gameDataStore;
         _logger = logger;
     }
-
-    // ── Session-scoped ──────────────────────────────────────────────
-
+    
     /// <inheritdoc />
     public async Task<IReadOnlyList<Character>> GetCharactersForAccountAsync(uint accountId)
     {
@@ -65,9 +63,7 @@ internal sealed class CharacterService : ICharacterService
 
         return characters;
     }
-
-    // ── Lightweight projections ─────────────────────────────────────
-
+    
     /// <inheritdoc />
     public CharacterSummary? FindByName(string name)
         => _byName.TryGetValue(name, out var summary) ? summary : null;
@@ -102,48 +98,7 @@ internal sealed class CharacterService : ICharacterService
 
     public async Task CreateCharacterAsync(uint accountId, ushort realmId, NewCharacter model)
     {
-        var classInfo = _gameDataStore.Classes.Infos[model.Class];
-        var classItems = _gameDataStore.Classes.Items[model.Class];
-
-        var character = new Character {
-            AccountId = (int)accountId,
-            SlotId = model.Slot,
-            Name = model.Name,
-            Race = (byte)model.Race,
-            Sex = (byte)model.Sex,
-            Career = (byte)model.Class,
-            Traits = model.Traits,
-            ModelId =  model.Model,
-            Realm = (byte)model.Race.GetFaction(),
-            RealmId = realmId,
-            FirstConnect = true,
-            Value = new CharacterValue
-            {
-                Level = 1,
-                Money = 2000,
-                Online = false,
-                RallyPoint = classInfo.RallyPt,
-                RegionId = classInfo.Region,
-                ZoneId = classInfo.ZoneId,
-                Renown = 0,
-                RenownRank = 1,
-                RestXp = 0,
-                Skills = classInfo.Skills,
-                Speed = 100,
-                PlayedTime = 0,
-                WorldX =  classInfo.WorldX,
-                WorldY = classInfo.WorldY,
-                WorldZ = classInfo.WorldZ,
-                WorldO =  classInfo.WorldO,
-            },
-            Items = classItems.Select(x => new CharacterItem
-            {
-                Entry = x.Entry,
-                SlotId = x.SlotId,
-                ModelId = x.ModelId,
-                Counts = x.Count,
-            }).ToList()
-        };
+        var character = model.ToEntity(accountId, realmId, _gameDataStore.Classes);
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         db.Characters.Add(character);
         
