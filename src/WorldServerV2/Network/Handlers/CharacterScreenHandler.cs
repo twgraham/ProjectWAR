@@ -76,7 +76,7 @@ public class CharacterScreenHandler : IPacketHandler
     {
         return new OpenGameResponse
         {
-            CharacterInitialized = playerService.GetPlayer(context.Session) == null
+            CharacterRequiresInitialize = playerService.GetPlayer(context.Session) == null
         };
     }
     
@@ -138,5 +138,20 @@ public class CharacterScreenHandler : IPacketHandler
         {
             AccountUsername = context.Account.Username
         };
+    }
+
+    [Rpc((int)Opcodes.F_INIT_PLAYER)]
+    public async Task F_INIT_PLAYER(InitializePlayerRequest request, IConnectionContext context,
+        [FromServices] PlayerService playerService)
+    {
+        var player = playerService.GetPlayer(context.Session);
+        if (player == null)
+        {
+            _logger.LogError("No player bound to session {SessionId} in F_INIT_PLAYER", context.Session.Id);
+            context.Disconnect("No player in F_INIT_PLAYER");
+            return;
+        }
+
+        // TODO: Initialize player state and send to client (System 5: Player Enter World)
     }
 }

@@ -54,10 +54,11 @@ public class WorldEntityTests
     public void Entity_position_is_mutable()
     {
         var entity = MakePlayer();
-        var pos = new WorldPosition(100, 200, 50, 1024, 5);
+        var pos = new WorldPosition(1, 100, 200, 50, 1024, 5);
 
         entity.Position = pos;
 
+        entity.Position.RegionId.ShouldBe((ushort)1);
         entity.Position.X.ShouldBe(100);
         entity.Position.Y.ShouldBe(200);
         entity.Position.Z.ShouldBe(50);
