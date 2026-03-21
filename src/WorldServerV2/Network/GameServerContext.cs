@@ -33,6 +33,7 @@ namespace WorldServerV2.Network;
     typeof(RequestCharacterRequest),
     typeof(RequestCharacterResponse),
     typeof(RequestCharacterErrorResponse),
+    typeof(RequestWorldLargeRequest),
     typeof(WorldEnterResponse))]
 public partial class GameServerContext
 {

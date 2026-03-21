@@ -14,16 +14,15 @@ public abstract class RegionCommand
     /// <summary>Add an entity to the region at the specified position.</summary>
     /// <param name="entity">The entity to add.</param>
     /// <param name="position">Where to place the entity.</param>
-    /// <param name="onAdded">
-    /// Optional callback invoked on the region thread immediately after the entity has been
-    /// placed and assigned an OID. Used by the player-init pipeline to run Phase B/C
-    /// (compute + serialize) on the region thread where the OID is guaranteed to be available.
-    /// </param>
-    public sealed class AddEntity(WorldEntity entity, WorldPosition position, Action<WorldEntity>? onAdded = null) : RegionCommand
+    /// <param name="placed">Optional signal set after the entity is placed in its cell.</param>
+    public sealed class AddEntity(
+        WorldEntity entity,
+        WorldPosition position,
+        TaskCompletionSource<bool>? placed = null) : RegionCommand
     {
         public WorldEntity Entity { get; } = entity ?? throw new ArgumentNullException(nameof(entity));
         public WorldPosition Position { get; } = position;
-        public Action<WorldEntity>? OnAdded { get; } = onAdded;
+        public TaskCompletionSource<bool>? Placed { get; } = placed;
     }
 
     /// <summary>Remove an entity from the region.</summary>

@@ -10,9 +10,11 @@ namespace WorldServerV2.Services;
 /// character screen into the live game world. Implements Phase B (compute) and Phase C
 /// (serialize/send) of the three-phase model described in the architecture doc §8.
 /// <para>
-/// <b>Threading</b>: <see cref="Initialize"/> is invoked on the region thread via the
-/// <c>AddEntity</c> callback, guaranteeing the player's OID is already assigned and
-/// no concurrent mutation can occur against entity state.
+/// <b>Threading</b>: <see cref="Initialize"/> is invoked on the <b>handler thread</b>
+/// after the caller has reserved an OID via <c>Region.ReserveOid()</c>. This keeps
+/// all computation and packet serialization off the region tick loop.
+/// <see cref="GameSession.Send{T}"/> is thread-safe (channel-based send queue), so
+/// packets can be enqueued from any thread.
 /// </para>
 /// <para>
 /// <b>Packet sequence</b> (minimum viable set):
@@ -24,8 +26,9 @@ namespace WorldServerV2.Services;
 ///   <item><c>S_PLAYER_LOADED</c> (0x89) — data-complete marker</item>
 ///   <item><c>F_MAX_VELOCITY</c> (0x1E) — speed (sent twice, matching old server)</item>
 ///   <item><c>F_PLAYER_STATS</c> (0x46) — stats (sent twice, matching old server)</item>
-///   <item><c>F_PLAYER_INIT_COMPLETE</c> (0xEF) — init-done signal</item>
 /// </list>
+/// <c>F_PLAYER_INIT_COMPLETE</c> (0xEF) is sent by the caller (<c>CharacterScreenHandler</c>)
+/// after the entity has been placed in the region via <c>Region.AddAsync()</c>.
 /// After the client processes init-complete, it sends <c>F_REQUEST_WORLD_LARGE</c>,
 /// which is handled separately (sends <c>F_SET_TIME</c> + <c>S_WORLD_SENT</c>).
 /// </para>
@@ -50,10 +53,10 @@ public sealed class PlayerInitPipeline
 
     /// <summary>
     /// Executes Phase B (compute mutable state) and Phase C (serialize and send packets)
-    /// for the given player. Must be called on the region thread after the entity has been
-    /// placed and assigned an OID.
+    /// for the given player. Called on the handler thread after the entity has been
+    /// assigned a pre-reserved OID via <c>Region.ReserveOid()</c>.
     /// </summary>
-    /// <param name="player">The player entity with an assigned OID.</param>
+    /// <param name="player">The player entity with a pre-assigned OID.</param>
     /// <param name="session">The player's network session for sending packets.</param>
     public void Initialize(PlayerEntity player, GameSession session)
     {
@@ -132,16 +135,11 @@ public sealed class PlayerInitPipeline
         // 7. F_PLAYER_STATS (again, matching old server behavior)
         session.SendPlayerStats(statsResponse);
 
-        // 8. F_PLAYER_INIT_COMPLETE — final init signal
-        session.SendPlayerInitComplete(new PlayerInitCompleteResponse
-        {
-            Oid = player.ObjectId,
-        });
-
-        session.State = ClientState.Playing;
+        // F_PLAYER_INIT_COMPLETE and state transition to Playing are handled by the
+        // caller (CharacterScreenHandler) after the entity has been placed in the region.
 
         _logger.LogInformation(
-            "Player {Name} ({CharId}, OID {Oid}) initialization complete — session {SessionId} → Playing",
+            "Player {Name} ({CharId}, OID {Oid}) init packets sent — awaiting placement",
             player.Name, player.CharacterId, player.ObjectId, session.Id);
     }
 

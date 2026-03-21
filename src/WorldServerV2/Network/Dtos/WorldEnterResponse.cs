@@ -1,3 +1,4 @@
+using System.Text;
 using Core.Infrastructure.Network.Serialization.Attributes;
 
 namespace WorldServerV2.Network.Dtos;
@@ -16,14 +17,14 @@ public class WorldEnterResponse
     public byte[] Padding { get; set; } = new byte[20];
 
     /// <summary>First port string ("38699").</summary>
-    [CString(5)]
-    public string Port1 { get; set; } = "38699";
+    [FixedLength(5)]
+    public byte[] Port1 { get; set; } = Encoding.ASCII.GetBytes("38699");
 
     /// <summary>Second port string ("38700").</summary>
-    [CString(5)]
-    public string Port2 { get; set; } = "38700";
+    [FixedLength(5)]
+    public byte[] Port2 { get; set; } = Encoding.ASCII.GetBytes("38700");
 
     /// <summary>IP address string.</summary>
-    [CString(20)]
-    public string IpAddress { get; set; } = "0.0.0.0";
+    [FixedLength(7)]
+    public byte[] IpAddress { get; set; } = Encoding.ASCII.GetBytes("0.0.0.0");
 }

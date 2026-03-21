@@ -193,20 +193,52 @@ public class CharacterScreenHandler : IPacketHandler
             charValue.WorldX, charValue.WorldY,
             charValue.WorldZ, (ushort)charValue.WorldO);
 
-        // Capture the session reference for the closure — the callback executes on the
-        // region thread, so we must not touch IConnectionContext there.
+        // Capture the session reference — used by the pipeline for sending packets.
         var session = context.Session;
 
         _logger.LogInformation(
-            "Enqueueing player {Name} ({CharId}) into region {RegionId} at ({X}, {Y}, {Z})",
+            "Initializing player {Name} ({CharId}) for region {RegionId} at ({X}, {Y}, {Z})",
             player.Name, player.CharacterId, regionId,
             charValue.WorldX, charValue.WorldY, charValue.WorldZ);
 
-        // Enqueue the player into the region with a callback that runs Phase B + C
-        // on the region thread after OID assignment.
-        region.EnqueueAdd(player, position, onAdded: entity =>
+        // Reserve an OID from the region's thread-safe pool. The reservation is
+        // IDisposable — if init fails, the using block returns the OID to the pool.
+        // Once consumed by EnqueueAdd, disposal is a no-op.
+        using var reservation = region.ReserveOid();
+        try
         {
-            initPipeline.Initialize((PlayerEntity)entity, session);
+            player.AssignOid(reservation.Oid);
+
+            // ── Phase B + C run here, on the handler thread ─────────────
+            // The client is on a loading screen and cannot interact.
+            // GameSession.Send is thread-safe (channel-based send queue).
+            initPipeline.Initialize(player, session);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Player init failed for {Name} ({CharId}) — OID {Oid} will be released",
+                player.Name, player.CharacterId, reservation.Oid);
+            context.Disconnect("Player initialization failed");
+            return;
+            // reservation.Dispose() runs at method exit, returning the OID to the pool.
+        }
+
+        // Add the fully-initialized player into the region. This consumes the
+        // reservation — subsequent disposal at end of scope is a no-op.
+        // We await placement so the entity is in a cell before the client receives
+        // INIT_COMPLETE and can interact with the world.
+        await region.AddAsync(player, position, reservation);
+
+        // Now that the entity is placed, send the final init signal.
+        session.SendPlayerInitComplete(new PlayerInitCompleteResponse
+        {
+            Oid = player.ObjectId,
         });
+        session.State = ClientState.Playing;
+
+        _logger.LogInformation(
+            "Player {Name} ({CharId}, OID {Oid}) initialization complete — session {SessionId} → Playing",
+            player.Name, player.CharacterId, player.ObjectId, session.Id);
     }
 }
