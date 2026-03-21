@@ -4,6 +4,7 @@ using WorldServerV2.Data;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Network.Handlers;
 
@@ -142,7 +143,10 @@ public class CharacterScreenHandler : IPacketHandler
 
     [Rpc((int)Opcodes.F_INIT_PLAYER)]
     public async Task F_INIT_PLAYER(InitializePlayerRequest request, IConnectionContext context,
-        [FromServices] PlayerService playerService)
+        [FromServices] PlayerService playerService,
+        [FromServices] PlayerInitPipeline initPipeline,
+        [FromServices] RegionManager regionManager,
+        [FromServices] GameDataStore gameDataStore)
     {
         var player = playerService.GetPlayer(context.Session);
         if (player == null)
@@ -152,6 +156,57 @@ public class CharacterScreenHandler : IPacketHandler
             return;
         }
 
-        // TODO: Initialize player state and send to client (System 5: Player Enter World)
+        var charValue = player.Character.Value;
+        if (charValue == null)
+        {
+            _logger.LogError("Character {CharId} has no CharacterValue record", player.CharacterId);
+            context.Disconnect("Missing character value data");
+            return;
+        }
+
+        // Resolve the region from the character's saved position.
+        var regionId = (ushort)charValue.RegionId;
+        var region = regionManager.GetOrCreate(regionId);
+
+        // Ensure the region tick thread is running.
+        if (!region.IsRunning)
+            region.Start();
+
+        // Look up zone info for coordinate offsets.
+        var zoneId = charValue.ZoneId;
+        int offX = 0, offY = 0;
+        if (gameDataStore.Zones.Infos.TryGetValue(zoneId, out var zoneInfo))
+        {
+            offX = zoneInfo.OffX;
+            offY = zoneInfo.OffY;
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Zone {ZoneId} not found in game data for character {CharId} — using zero offsets",
+                zoneId, player.CharacterId);
+        }
+
+        // Build the world position from the character's saved coordinates.
+        var position = WorldPosition.FromZoneLocal(
+            regionId, zoneId, offX, offY,
+            charValue.WorldX, charValue.WorldY,
+            charValue.WorldZ, (ushort)charValue.WorldO);
+
+        // Capture the session reference for the closure — the callback executes on the
+        // region thread, so we must not touch IConnectionContext there.
+        var session = context.Session;
+
+        _logger.LogInformation(
+            "Enqueueing player {Name} ({CharId}) into region {RegionId} at ({X}, {Y}, {Z})",
+            player.Name, player.CharacterId, regionId,
+            charValue.WorldX, charValue.WorldY, charValue.WorldZ);
+
+        // Enqueue the player into the region with a callback that runs Phase B + C
+        // on the region thread after OID assignment.
+        region.EnqueueAdd(player, position, onAdded: entity =>
+        {
+            initPipeline.Initialize((PlayerEntity)entity, session);
+        });
     }
 }

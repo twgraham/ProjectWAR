@@ -131,9 +131,15 @@ public sealed class Region : IDisposable
     /// Enqueues an entity to be added to this region at the next tick.
     /// Safe to call from any thread.
     /// </summary>
-    public void EnqueueAdd(WorldEntity entity, WorldPosition position)
+    /// <param name="entity">The entity to add.</param>
+    /// <param name="position">Where to place the entity.</param>
+    /// <param name="onAdded">
+    /// Optional callback invoked on the region thread after the entity has been placed
+    /// and assigned an OID. Used by player-init to run final init packets.
+    /// </param>
+    public void EnqueueAdd(WorldEntity entity, WorldPosition position, Action<WorldEntity>? onAdded = null)
     {
-        _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position));
+        _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position, onAdded));
     }
 
     /// <summary>
@@ -234,7 +240,7 @@ public sealed class Region : IDisposable
             switch (command)
             {
                 case RegionCommand.AddEntity add:
-                    ExecuteAdd(add.Entity, add.Position);
+                    ExecuteAdd(add.Entity, add.Position, add.OnAdded);
                     break;
 
                 case RegionCommand.RemoveEntity remove:
@@ -252,7 +258,7 @@ public sealed class Region : IDisposable
         }
     }
 
-    private void ExecuteAdd(WorldEntity entity, WorldPosition position)
+    private void ExecuteAdd(WorldEntity entity, WorldPosition position, Action<WorldEntity>? onAdded = null)
     {
         if (!_allEntities.Add(entity))
         {
@@ -282,6 +288,22 @@ public sealed class Region : IDisposable
 
         entity.LastVisibilityCheckPosition = default;
         _movedEntities.Add(entity);
+
+        // Invoke the post-add callback (e.g. player init pipeline) on the region thread
+        // after OID assignment and cell placement are complete.
+        if (onAdded is not null)
+        {
+            try
+            {
+                onAdded(entity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "OnAdded callback failed for entity {Name} (OID {Oid}) in region {Region}",
+                    entity.Name, entity.ObjectId, RegionId);
+            }
+        }
     }
 
     private void ExecuteRemove(WorldEntity entity)
