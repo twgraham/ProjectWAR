@@ -188,9 +188,8 @@ public class CharacterScreenHandler : IPacketHandler
         }
 
         // Build the world position from the character's saved coordinates.
-        var position = WorldPosition.FromZoneLocal(
-            regionId, zoneId, offX, offY,
-            charValue.WorldX, charValue.WorldY,
+        var position = WorldPosition.FromRegionAbsolute(
+            regionId, (ushort)zoneId, charValue.WorldX, charValue.WorldY,
             charValue.WorldZ, (ushort)charValue.WorldO);
 
         // Capture the session reference — used by the pipeline for sending packets.

@@ -140,7 +140,7 @@ public sealed class PlayerInitPipeline
 
         _logger.LogInformation(
             "Player {Name} ({CharId}, OID {Oid}) init packets sent — awaiting placement",
-            player.Name, player.CharacterId, player.ObjectId, session.Id);
+            player.Name, player.CharacterId, player.ObjectId);
     }
 
     /// <summary>

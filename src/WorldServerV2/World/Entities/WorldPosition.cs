@@ -46,6 +46,23 @@ public readonly record struct WorldPosition(ushort RegionId, int X, int Y, int Z
     }
 
     /// <summary>
+    /// Creates a <see cref="WorldPosition"/> from region-absolute (world) coordinates.
+    /// No zone offset conversion is applied — the caller supplies coordinates that are
+    /// already region-wide.
+    /// </summary>
+    /// <param name="regionId">The region the position belongs to.</param>
+    /// <param name="zoneId">The zone identifier.</param>
+    /// <param name="worldX">Region-absolute X coordinate.</param>
+    /// <param name="worldY">Region-absolute Y coordinate.</param>
+    /// <param name="z">Height.</param>
+    /// <param name="heading">Facing direction.</param>
+    public static WorldPosition FromRegionAbsolute(
+        ushort regionId, ushort zoneId, int worldX, int worldY, int z, ushort heading)
+    {
+        return new WorldPosition(regionId, worldX, worldY, z, heading, zoneId);
+    }
+
+    /// <summary>
     /// Converts region-wide coordinates back to zone-local by subtracting the zone offset.
     /// Used when serializing position data for outbound network packets.
     /// </summary>
