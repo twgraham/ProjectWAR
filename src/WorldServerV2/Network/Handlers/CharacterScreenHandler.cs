@@ -142,7 +142,7 @@ public class CharacterScreenHandler : IPacketHandler
     }
 
     [Rpc((int)Opcodes.F_INIT_PLAYER)]
-    public async Task F_INIT_PLAYER(InitializePlayerRequest request, IConnectionContext context,
+    public Task F_INIT_PLAYER(InitializePlayerRequest request, IConnectionContext context,
         [FromServices] PlayerService playerService,
         [FromServices] PlayerInitPipeline initPipeline,
         [FromServices] RegionManager regionManager,
@@ -153,7 +153,7 @@ public class CharacterScreenHandler : IPacketHandler
         {
             _logger.LogError("No player bound to session {SessionId} in F_INIT_PLAYER", context.Session.Id);
             context.Disconnect("No player in F_INIT_PLAYER");
-            return;
+            return Task.CompletedTask;
         }
 
         var charValue = player.Character.Value;
@@ -161,7 +161,7 @@ public class CharacterScreenHandler : IPacketHandler
         {
             _logger.LogError("Character {CharId} has no CharacterValue record", player.CharacterId);
             context.Disconnect("Missing character value data");
-            return;
+            return Task.CompletedTask;
         }
 
         // Resolve the region from the character's saved position.
@@ -172,22 +172,8 @@ public class CharacterScreenHandler : IPacketHandler
         if (!region.IsRunning)
             region.Start();
 
-        // Look up zone info for coordinate offsets.
-        var zoneId = charValue.ZoneId;
-        int offX = 0, offY = 0;
-        if (gameDataStore.Zones.Infos.TryGetValue(zoneId, out var zoneInfo))
-        {
-            offX = zoneInfo.OffX;
-            offY = zoneInfo.OffY;
-        }
-        else
-        {
-            _logger.LogWarning(
-                "Zone {ZoneId} not found in game data for character {CharId} — using zero offsets",
-                zoneId, player.CharacterId);
-        }
-
         // Build the world position from the character's saved coordinates.
+        var zoneId = charValue.ZoneId;
         var position = WorldPosition.FromRegionAbsolute(
             regionId, (ushort)zoneId, charValue.WorldX, charValue.WorldY,
             charValue.WorldZ, (ushort)charValue.WorldO);
@@ -202,7 +188,7 @@ public class CharacterScreenHandler : IPacketHandler
 
         // Reserve an OID from the region's thread-safe pool. The reservation is
         // IDisposable — if init fails, the using block returns the OID to the pool.
-        // Once consumed by EnqueueAdd, disposal is a no-op.
+        // Once consumed by Region.AddAsync, disposal is a no-op.
         using var reservation = region.ReserveOid();
         try
         {
@@ -219,7 +205,7 @@ public class CharacterScreenHandler : IPacketHandler
                 "Player init failed for {Name} ({CharId}) — OID {Oid} will be released",
                 player.Name, player.CharacterId, reservation.Oid);
             context.Disconnect("Player initialization failed");
-            return;
+            return Task.CompletedTask;
             // reservation.Dispose() runs at method exit, returning the OID to the pool.
         }
 
@@ -227,6 +213,12 @@ public class CharacterScreenHandler : IPacketHandler
         // reservation — subsequent disposal at end of scope is a no-op.
         // We await placement so the entity is in a cell before the client receives
         // INIT_COMPLETE and can interact with the world.
+        return FinishInitAsync(region, player, position, reservation, session, context);
+    }
+
+    private async Task FinishInitAsync(Region region, PlayerEntity player, WorldPosition position,
+        OidReservation reservation, GameSession session, IConnectionContext context)
+    {
         await region.AddAsync(player, position, reservation);
 
         // Now that the entity is placed, send the final init signal.

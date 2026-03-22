@@ -40,6 +40,7 @@ public sealed class Region : IDisposable
 
     private Thread? _thread;
     private volatile bool _running;
+    private int _started;
 
     /// <summary>Creates a new region with the given identifier.</summary>
     public Region(ushort regionId, ILogger logger)
@@ -215,7 +216,14 @@ public sealed class Region : IDisposable
                 $"OID reservation (OID {reservation.Oid}) has already been consumed or disposed.");
 
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position, tcs));
+        var enqueued = _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position, tcs));
+
+        if (!enqueued)
+        {
+            tcs.SetException(new InvalidOperationException(
+                $"Failed to enqueue AddEntity command for region {RegionId}; the region may have been stopped."));
+        }
+
         return tcs.Task;
     }
 
@@ -250,11 +258,12 @@ public sealed class Region : IDisposable
     // ── Tick Loop ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Starts the dedicated tick thread. Call once after construction.
+    /// Starts the dedicated tick thread. Safe to call from multiple threads concurrently;
+    /// only the first call will actually start the thread.
     /// </summary>
     public void Start()
     {
-        if (_running)
+        if (Interlocked.CompareExchange(ref _started, 1, 0) != 0)
             return;
 
         _running = true;
@@ -364,6 +373,14 @@ public sealed class Region : IDisposable
 
             if (entity is PlayerEntity)
                 OnPlayerEnteredCell(cell);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Entity {Name} (OID {Oid}) has out-of-bounds position ({X}, {Y}) in region {Region}",
+                entity.Name, entity.ObjectId, position.X, position.Y, RegionId);
+            placed?.TrySetResult(false);
+            return;
         }
 
         entity.LastVisibilityCheckPosition = default;

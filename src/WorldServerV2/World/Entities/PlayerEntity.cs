@@ -28,4 +28,27 @@ public sealed class PlayerEntity : UnitEntity
 
     /// <summary>How the player disconnected (set during the logout flow).</summary>
     public DisconnectType DisconnectType { get; set; }
+
+    /// <summary>
+    /// Initializes the entity's runtime state from the persistent <see cref="Character"/>
+    /// record. Sets level, realm, faction, and restores health.
+    /// <para>
+    /// Call this once on the handler thread after OID assignment and before init steps
+    /// send packets. This keeps entity state initialization cohesive with the entity
+    /// rather than scattered across external services.
+    /// </para>
+    /// </summary>
+    public void InitializeFromCharacter()
+    {
+        var character = Character;
+        Level = character.Value.Level;
+        Realm = character.Realm;
+        // Faction mirrors realm for players (1 = Order, 2 = Destruction).
+        Faction = character.Realm;
+
+        // Health: set max then heal to full.
+        // In V1 the stats system computes max HP from Wounds + level + bonuses.
+        // For now we use the default max health the entity was constructed with.
+        Health.Resurrect(100);
+    }
 }

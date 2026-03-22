@@ -28,13 +28,21 @@ namespace WorldServerV2.Network;
     typeof(PlayerEnterRequest),
     typeof(PlayerEnterResponse),
     typeof(PlayerExitRequest),
+    typeof(PlayerHealthResponse),
+    typeof(PlayerInitCompleteResponse),
+    typeof(PlayerInittedResponse),
+    typeof(PlayerLoadedResponse),
     typeof(PlayerQuitResponse),
     typeof(PlayerStateRequest),
+    typeof(PlayerStatsResponse),
     typeof(RequestCharacterRequest),
     typeof(RequestCharacterResponse),
     typeof(RequestCharacterErrorResponse),
     typeof(RequestWorldLargeRequest),
-    typeof(WorldEnterResponse))]
+    typeof(SetTimeResponse),
+    typeof(SpeedResponse),
+    typeof(WorldEnterResponse),
+    typeof(WorldSentResponse))]
 public partial class GameServerContext
 {
 }
