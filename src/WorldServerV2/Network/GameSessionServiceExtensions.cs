@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using WorldServerV2.Services;
+using WorldServerV2.Services.PlayerInit;
 
 namespace WorldServerV2.Network;
 
@@ -23,6 +24,18 @@ public static class GameSessionServiceExtensions
     {
         services.AddSingleton<SessionRegistry>();
         services.AddSingleton<PlayerService>();
+
+        // Player initialization steps — registration order defines packet sequence.
+        // Steps 1–5 form the minimum viable init set; steps 6–7 duplicate speed/stats
+        // to match legacy server behavior.
+        services.AddSingleton<IPlayerInitStep, SpeedInitStep>();            // 1. F_MAX_VELOCITY
+        services.AddSingleton<IPlayerInitStep, PlayerInittedInitStep>();    // 2. S_PLAYER_INITTED
+        services.AddSingleton<IPlayerInitStep, StatsInitStep>();            // 3. F_PLAYER_STATS
+        services.AddSingleton<IPlayerInitStep, HealthInitStep>();           // 4. F_PLAYER_HEALTH
+        services.AddSingleton<IPlayerInitStep, PlayerLoadedInitStep>();     // 5. S_PLAYER_LOADED
+        services.AddSingleton<IPlayerInitStep, SpeedInitStep>();            // 6. F_MAX_VELOCITY (again)
+        services.AddSingleton<IPlayerInitStep, StatsInitStep>();            // 7. F_PLAYER_STATS (again)
+
         services.AddSingleton<PlayerInitPipeline>();
         services.AddHostedService<SessionLifecycleService>();
 

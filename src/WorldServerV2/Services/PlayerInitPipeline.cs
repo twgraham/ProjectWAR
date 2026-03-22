@@ -1,14 +1,23 @@
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network;
-using WorldServerV2.Network.Dtos;
+using WorldServerV2.Services.PlayerInit;
 using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.Services;
 
 /// <summary>
 /// Orchestrates the player initialization sequence that transitions a client from the
-/// character screen into the live game world. Implements Phase B (compute) and Phase C
-/// (serialize/send) of the three-phase model described in the architecture doc §8.
+/// character screen into the live game world.
+/// <para>
+/// <b>Responsibilities</b>:
+/// <list type="number">
+///   <item>Calls <see cref="PlayerEntity.InitializeFromCharacter"/> to hydrate entity
+///         state from the persistent DB record (Phase B — compute).</item>
+///   <item>Iterates through registered <see cref="IPlayerInitStep"/> implementations in
+///         order, each of which reads from the initialized entity and sends one or more
+///         packets to the client (Phase C — serialize/send).</item>
+/// </list>
+/// </para>
 /// <para>
 /// <b>Threading</b>: <see cref="Initialize"/> is invoked on the <b>handler thread</b>
 /// after the caller has reserved an OID via <c>Region.ReserveOid()</c>. This keeps
@@ -17,7 +26,7 @@ namespace WorldServerV2.Services;
 /// packets can be enqueued from any thread.
 /// </para>
 /// <para>
-/// <b>Packet sequence</b> (minimum viable set):
+/// <b>Packet sequence</b> (minimum viable set, determined by step registration order):
 /// <list type="number">
 ///   <item><c>F_MAX_VELOCITY</c> (0x1E) — movement speed</item>
 ///   <item><c>S_PLAYER_INITTED</c> (0x88) — identity, position, realm, career</item>
@@ -29,26 +38,18 @@ namespace WorldServerV2.Services;
 /// </list>
 /// <c>F_PLAYER_INIT_COMPLETE</c> (0xEF) is sent by the caller (<c>CharacterScreenHandler</c>)
 /// after the entity has been placed in the region via <c>Region.AddAsync()</c>.
-/// After the client processes init-complete, it sends <c>F_REQUEST_WORLD_LARGE</c>,
-/// which is handled separately (sends <c>F_SET_TIME</c> + <c>S_WORLD_SENT</c>).
 /// </para>
 /// Registered as a <b>singleton</b> in the DI container.
 /// </summary>
 public sealed class PlayerInitPipeline
 {
-    /// <summary>Default action points for a new player.</summary>
-    private const ushort DefaultActionPoints = 250;
-
-    /// <summary>Default max action points.</summary>
-    private const ushort DefaultMaxActionPoints = 250;
-
     private readonly ILogger<PlayerInitPipeline> _logger;
-    private readonly RealmInfo _realmInfo;
+    private readonly IReadOnlyList<IPlayerInitStep> _steps;
 
-    public PlayerInitPipeline(ILogger<PlayerInitPipeline> logger, RealmInfo realmInfo)
+    public PlayerInitPipeline(ILogger<PlayerInitPipeline> logger, IEnumerable<IPlayerInitStep> steps)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _realmInfo = realmInfo ?? throw new ArgumentNullException(nameof(realmInfo));
+        _steps = (steps ?? throw new ArgumentNullException(nameof(steps))).ToArray();
     }
 
     /// <summary>
@@ -63,77 +64,20 @@ public sealed class PlayerInitPipeline
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(session);
 
-        var character = player.Character;
-        var charValue = character.Value;
-
         // ── Phase B: Compute mutable entity state from DB record ────────
-
-        player.Level = charValue.Level;
-        player.Realm = character.Realm;
-        // Faction mirrors realm for players (1 = Order, 2 = Destruction).
-        player.Faction = character.Realm;
-
-        // Health: set max then heal to full.
-        // In V1 the stats system computes max HP from Wounds + level + bonuses.
-        // For now we use the default max health the entity was constructed with.
-        player.Health.Resurrect(100);
-
-        var speed = charValue.Speed > 0 ? (ushort)charValue.Speed : (ushort)100;
+        player.InitializeFromCharacter();
 
         _logger.LogDebug(
             "Phase B complete for {Name} (OID {Oid}): Level={Level}, Realm={Realm}, " +
-            "HP={Hp}/{MaxHp}, Speed={Speed}",
+            "HP={Hp}/{MaxHp}",
             player.Name, player.ObjectId, player.Level, player.Realm,
-            player.Health.Current, player.Health.Max, speed);
+            player.Health.Current, player.Health.Max);
 
-        // ── Phase C: Serialize and send packets ─────────────────────────
-
-        var speedPacket = new SpeedResponse
+        // ── Phase C: Execute init steps (serialize and send packets) ────
+        foreach (var step in _steps)
         {
-            Speed = speed,
-            CanMove = (byte)(speed > 0 ? 1 : 0),
-            SpeedPercent = 100,
-        };
-
-        // 1. F_MAX_VELOCITY — speed first (matches old server order)
-        session.SendSpeed(speedPacket);
-
-        // 2. S_PLAYER_INITTED — identity, position, realm, career
-        session.SendPlayerInitted(new PlayerInittedResponse
-        {
-            Oid = player.ObjectId,
-            CharacterId = character.CharacterId,
-            WorldZ = (ushort)charValue.WorldZ,
-            WorldX = (uint)charValue.WorldX,
-            WorldY = (uint)charValue.WorldY,
-            WorldO = (ushort)charValue.WorldO,
-            Realm = character.Realm,
-            RegionId = (ushort)charValue.RegionId,
-            Career = character.Career,
-            RealmName = _realmInfo.Name,
-        });
-
-        // 3. F_PLAYER_STATS — base stats (minimal: all zeros except level)
-        var statsResponse = BuildStatsResponse(player);
-        session.SendPlayerStats(statsResponse);
-
-        // 4. F_PLAYER_HEALTH — HP, AP, morale
-        session.SendPlayerHealth(new PlayerHealthResponse
-        {
-            Health = player.Health.Current,
-            MaxHealth = player.Health.Max,
-            ActionPoints = DefaultActionPoints,
-            MaxActionPoints = DefaultMaxActionPoints,
-        });
-
-        // 5. S_PLAYER_LOADED — data-complete marker
-        session.SendPlayerLoaded(new PlayerLoadedResponse());
-
-        // 6. F_MAX_VELOCITY (again, matching old server behavior)
-        session.SendSpeed(speedPacket);
-
-        // 7. F_PLAYER_STATS (again, matching old server behavior)
-        session.SendPlayerStats(statsResponse);
+            step.Execute(player, session);
+        }
 
         // F_PLAYER_INIT_COMPLETE and state transition to Playing are handled by the
         // caller (CharacterScreenHandler) after the entity has been placed in the region.
@@ -141,29 +85,5 @@ public sealed class PlayerInitPipeline
         _logger.LogInformation(
             "Player {Name} ({CharId}, OID {Oid}) init packets sent — awaiting placement",
             player.Name, player.CharacterId, player.ObjectId);
-    }
-
-    /// <summary>
-    /// Builds a minimal <see cref="PlayerStatsResponse"/> with placeholder stat values.
-    /// When System 4 (Combat) is implemented, this will delegate to a real stats service.
-    /// </summary>
-    private static PlayerStatsResponse BuildStatsResponse(PlayerEntity player)
-    {
-        var level = player.Level;
-        var response = new PlayerStatsResponse
-        {
-            BolsterLevel = level,
-            Level = level,
-            TacticSlots = level >= 10 ? (byte)(level / 10) : (byte)0,
-        };
-
-        // Write 21 stat entries with placeholder values.
-        // Stat IDs 1–21, all zeroed for now — real values come from the stats system.
-        for (byte i = 0; i < 21; i++)
-        {
-            response.SetStat(i, (byte)(i + 1), 0);
-        }
-
-        return response;
     }
 }

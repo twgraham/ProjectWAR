@@ -55,7 +55,7 @@ public class PlayerStatsResponse
     /// Helper to write a single stat entry into <see cref="StatEntries"/>.
     /// </summary>
     /// <param name="index">Zero-based index (0–20).</param>
-    /// <param name="statId">The stat identifier (1–21).</param>
+    /// <param name="statId">The stat identifier as used on the wire (0–20).</param>
     /// <param name="value">The stat value.</param>
     public void SetStat(int index, byte statId, ushort value)
     {
