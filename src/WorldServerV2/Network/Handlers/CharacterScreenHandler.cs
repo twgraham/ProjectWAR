@@ -157,12 +157,6 @@ public class CharacterScreenHandler : IPacketHandler
         }
 
         var charValue = player.Character.Value;
-        if (charValue == null)
-        {
-            _logger.LogError("Character {CharId} has no CharacterValue record", player.CharacterId);
-            context.Disconnect("Missing character value data");
-            return;
-        }
 
         // Resolve the region from the character's saved position.
         var regionId = (ushort)charValue.RegionId;
@@ -172,24 +166,9 @@ public class CharacterScreenHandler : IPacketHandler
         if (!region.IsRunning)
             region.Start();
 
-        // Look up zone info for coordinate offsets.
-        var zoneId = charValue.ZoneId;
-        int offX = 0, offY = 0;
-        if (gameDataStore.Zones.Infos.TryGetValue(zoneId, out var zoneInfo))
-        {
-            offX = zoneInfo.OffX;
-            offY = zoneInfo.OffY;
-        }
-        else
-        {
-            _logger.LogWarning(
-                "Zone {ZoneId} not found in game data for character {CharId} — using zero offsets",
-                zoneId, player.CharacterId);
-        }
-
         // Build the world position from the character's saved coordinates.
         var position = WorldPosition.FromRegionAbsolute(
-            regionId, (ushort)zoneId, charValue.WorldX, charValue.WorldY,
+            regionId, charValue.ZoneId, charValue.WorldX, charValue.WorldY,
             charValue.WorldZ, (ushort)charValue.WorldO);
 
         // Capture the session reference — used by the pipeline for sending packets.
