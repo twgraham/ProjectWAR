@@ -1,3 +1,4 @@
+using WorldServerV2.World.Combat.Buffs;
 using WorldServerV2.World.Components;
 using WorldServerV2.World.Stats;
 
@@ -19,6 +20,7 @@ public abstract class UnitEntity : WorldEntity
     {
         Health = new HealthComponent(maxHealth);
         Stats = new StatContainer();
+        Buffs = new BuffContainer(this);
         Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
     }
 
@@ -27,6 +29,9 @@ public abstract class UnitEntity : WorldEntity
 
     /// <summary>Stat modifier container — always present on units. Never null.</summary>
     public StatContainer Stats { get; }
+
+    /// <summary>Buff container — always present on units. Never null.</summary>
+    public BuffContainer Buffs { get; }
 
     /// <summary>Unit level (1–40 for players, variable for creatures).</summary>
     public byte Level { get; set; }
@@ -44,6 +49,7 @@ public abstract class UnitEntity : WorldEntity
     public override void Update(long tick)
     {
         Stats.Flush();
+        Buffs.Update(tick);
         // TODO: HP regen, combat timers (System 4 — remaining steps)
         base.Update(tick);
     }
