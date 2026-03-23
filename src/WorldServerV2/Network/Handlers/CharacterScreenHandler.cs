@@ -181,7 +181,7 @@ public class CharacterScreenHandler : IPacketHandler
 
         // Reserve an OID from the region's thread-safe pool. The reservation is
         // IDisposable — if init fails, the using block returns the OID to the pool.
-        // Once consumed by EnqueueAdd, disposal is a no-op.
+        // Once consumed by Region.AddAsync, disposal is a no-op.
         using var reservation = region.ReserveOid();
         try
         {
