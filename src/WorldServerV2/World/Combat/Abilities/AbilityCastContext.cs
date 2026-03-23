@@ -108,8 +108,8 @@ public sealed class AbilityCastContext
     public byte CastSequence { get; set; }
 
     /// <summary>
-    /// Accumulated setback from being hit while casting (0.0–1.0).
-    /// When >= 1.0 the cast is interrupted.
+    /// Accumulated setback delay in milliseconds. Added to <see cref="CastTime"/> when
+    /// determining cast completion: cast finishes at <c>CastStartTime + CastTime + SetbackAccumulator</c>.
     /// </summary>
     public float SetbackAccumulator { get; set; }
 

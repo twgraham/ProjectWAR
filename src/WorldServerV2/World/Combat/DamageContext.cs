@@ -174,13 +174,13 @@ public sealed class DamageContext
     public float AttackerTypePowerBonus;
 
     /// <summary>Type-specific power % reduction modifier.</summary>
-    public float AttackerTypePowerReduction;
+    public float AttackerTypePowerReduction = 1f;
 
     /// <summary>General outgoing damage % bonus modifier.</summary>
     public float AttackerOutDmgBonus;
 
     /// <summary>General outgoing damage % reduction modifier.</summary>
-    public float AttackerOutDmgReduction;
+    public float AttackerOutDmgReduction = 1f;
 
     /// <summary>Attacker's block strikethrough (flat %).</summary>
     public int AttackerBlockStrikethrough;
@@ -212,13 +212,13 @@ public sealed class DamageContext
     public float TargetInTypeDmgBonus;
 
     /// <summary>Type-specific incoming damage % reduction modifier.</summary>
-    public float TargetInTypeDmgReduction;
+    public float TargetInTypeDmgReduction = 1f;
 
     /// <summary>General incoming damage % bonus modifier.</summary>
     public float TargetInDmgBonus;
 
     /// <summary>General incoming damage % reduction modifier.</summary>
-    public float TargetInDmgReduction;
+    public float TargetInDmgReduction = 1f;
 
     /// <summary>Target's armor pen resistance % bonus (0.0–1.0).</summary>
     public float TargetArmorPenReduction;
