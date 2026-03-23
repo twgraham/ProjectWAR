@@ -215,7 +215,13 @@ public sealed class Region : IDisposable
                 $"OID reservation (OID {reservation.Oid}) has already been consumed or disposed.");
 
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position, tcs));
+        var enqueued = _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position, tcs));
+
+        if (!enqueued)
+        {
+            tcs.SetException(new InvalidOperationException(
+                $"Failed to enqueue AddEntity command for region {RegionId}; the region may have been stopped."));
+        }
         return tcs.Task;
     }
 

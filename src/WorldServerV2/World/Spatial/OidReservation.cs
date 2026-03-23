@@ -61,7 +61,7 @@ public sealed class OidReservation : IDisposable
     }
 
     /// <summary>
-    /// If the reservation is still active (not consumed by <c>EnqueueAdd</c>),
+    /// If the reservation is still active (not consumed by <see cref="Region.AddAsync"/>),
     /// returns the OID to the owning region's pool. Safe to call multiple times.
     /// </summary>
     public void Dispose()
