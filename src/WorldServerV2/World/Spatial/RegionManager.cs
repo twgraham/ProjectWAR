@@ -39,14 +39,18 @@ public sealed class RegionManager : IDisposable
     }
 
     /// <summary>
-    /// Gets or creates a region for the given ID. The region is created but NOT started —
-    /// call <see cref="StartAll"/> or <see cref="Region.Start"/> to begin the tick thread.
-    /// Thread-safe.
+    /// Gets or creates a region for the given ID. The region's tick thread is started
+    /// immediately on first creation. Safe to call concurrently — <see cref="Region.Start"/>
+    /// is idempotent. Thread-safe.
     /// </summary>
     public Region GetOrCreate(ushort regionId)
     {
         return _regions.GetOrAdd(regionId, id =>
-            new Region(id, _loggerFactory.CreateLogger<Region>()));
+        {
+            var region = new Region(id, _loggerFactory.CreateLogger<Region>());
+            region.Start();
+            return region;
+        });
     }
 
     /// <summary>

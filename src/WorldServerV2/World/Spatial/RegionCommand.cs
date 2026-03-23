@@ -12,10 +12,17 @@ public abstract class RegionCommand
     private RegionCommand() { }
 
     /// <summary>Add an entity to the region at the specified position.</summary>
-    public sealed class AddEntity(WorldEntity entity, WorldPosition position) : RegionCommand
+    /// <param name="entity">The entity to add.</param>
+    /// <param name="position">Where to place the entity.</param>
+    /// <param name="placed">Optional signal set after the entity is placed in its cell.</param>
+    public sealed class AddEntity(
+        WorldEntity entity,
+        WorldPosition position,
+        TaskCompletionSource<bool>? placed = null) : RegionCommand
     {
         public WorldEntity Entity { get; } = entity ?? throw new ArgumentNullException(nameof(entity));
         public WorldPosition Position { get; } = position;
+        public TaskCompletionSource<bool>? Placed { get; } = placed;
     }
 
     /// <summary>Remove an entity from the region.</summary>

@@ -30,7 +30,7 @@ public sealed class Region : IDisposable
     private readonly Cell?[,] _cells = new Cell?[MaxCellIndex, MaxCellIndex];
     private readonly ConcurrentDictionary<ushort, WorldEntity> _entitiesByOid = new();
     private readonly HashSet<WorldEntity> _allEntities = new();
-    private readonly Stack<ushort> _oidPool;
+    private readonly ConcurrentBag<ushort> _oidPool = new();
     private readonly HashSet<Cell> _activeCells = new();
     private readonly HashSet<Cell> _cellsWithEntities = new();
     private readonly HashSet<Cell> _tickCells = new();
@@ -40,6 +40,7 @@ public sealed class Region : IDisposable
 
     private Thread? _thread;
     private volatile bool _running;
+    private int _startGuard; // 0 = not started, 1 = started; CAS-protected
 
     /// <summary>Creates a new region with the given identifier.</summary>
     public Region(ushort regionId, ILogger logger)
@@ -51,10 +52,10 @@ public sealed class Region : IDisposable
             new UnboundedChannelOptions { SingleReader = true });
 
         // Pre-populate OID pool: usable range is 1..65535 (0 is reserved).
-        // Push in reverse so that low OIDs are assigned first (pop order).
-        _oidPool = new Stack<ushort>(MaxOid);
+        // ConcurrentBag does not guarantee ordering — callers must not depend on
+        // OIDs being assigned in any particular sequence.
         for (int i = MaxOid; i >= 1; i--)
-            _oidPool.Push((ushort)i);
+            _oidPool.Add((ushort)i);
     }
 
     // ── Identity ────────────────────────────────────────────────────────
@@ -113,16 +114,45 @@ public sealed class Region : IDisposable
 
     private ushort AllocateOid()
     {
-        if (_oidPool.Count == 0)
+        if (!_oidPool.TryTake(out var oid))
             throw new InvalidOperationException(
                 $"Region {RegionId} has exhausted all {MaxOid} OIDs.");
 
-        return _oidPool.Pop();
+        return oid;
     }
 
     private void ReleaseOid(ushort oid)
     {
-        _oidPool.Push(oid);
+        _oidPool.Add(oid);
+    }
+
+    /// <summary>
+    /// Reserves an OID from the pool, returning an <see cref="OidReservation"/> ticket.
+    /// Thread-safe — may be called from any thread (e.g. handler threads during player
+    /// initialization).
+    /// <para>
+    /// The returned reservation is <see cref="IDisposable"/>. If the caller does not
+    /// pass it to <see cref="AddAsync"/>,
+    /// disposing the reservation returns the OID to the pool automatically. Once
+    /// consumed by <c>AddAsync</c>, disposal is a no-op.
+    /// </para>
+    /// </summary>
+    /// <returns>A disposable reservation ticket holding the reserved OID.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the pool is exhausted.</exception>
+    public OidReservation ReserveOid()
+    {
+        var oid = AllocateOid();
+        return new OidReservation(oid, this);
+    }
+
+    /// <summary>
+    /// Returns a reserved OID to the pool. Called internally by
+    /// <see cref="OidReservation.Dispose"/> — not intended for direct use.
+    /// Thread-safe.
+    /// </summary>
+    internal void ReturnReservedOid(ushort oid)
+    {
+        ReleaseOid(oid);
     }
 
     // ── Command Channel (thread-safe) ───────────────────────────────────
@@ -130,10 +160,70 @@ public sealed class Region : IDisposable
     /// <summary>
     /// Enqueues an entity to be added to this region at the next tick.
     /// Safe to call from any thread.
+    /// <para>
+    /// This overload is for entities that do <b>not</b> have a pre-reserved OID
+    /// (e.g. NPCs, creatures). The region thread allocates an OID during processing.
+    /// For entities with a reserved OID, use
+    /// <see cref="AddAsync"/>.
+    /// </para>
     /// </summary>
+    /// <param name="entity">The entity to add.</param>
+    /// <param name="position">Where to place the entity.</param>
     public void EnqueueAdd(WorldEntity entity, WorldPosition position)
     {
         _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position));
+    }
+
+    /// <summary>
+    /// Adds a pre-initialized entity (with a reserved OID) to this region.
+    /// Consumes the <paramref name="reservation"/>, making its disposal a no-op.
+    /// The returned <see cref="Task"/> completes once the region thread has placed the
+    /// entity in its cell — callers can <c>await</c> this to guarantee placement before
+    /// sending post-init packets.
+    /// <para>
+    /// Safe to call from any thread. The entity must already have
+    /// <see cref="WorldEntity.ObjectId"/> set to <see cref="OidReservation.Oid"/>.
+    /// </para>
+    /// </summary>
+    /// <param name="entity">The entity to add (OID already assigned).</param>
+    /// <param name="position">Where to place the entity.</param>
+    /// <param name="reservation">
+    /// The OID reservation obtained from <see cref="ReserveOid"/>. Must belong to
+    /// this region and be in the active state.
+    /// </param>
+    /// <returns>A task that completes when the entity has been placed in the region.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="reservation"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The reservation belongs to a different region, has already been consumed, or has
+    /// been disposed.
+    /// </exception>
+    public Task AddAsync(WorldEntity entity, WorldPosition position, OidReservation reservation)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        if (reservation.Owner != this)
+            throw new InvalidOperationException(
+                $"OID reservation (OID {reservation.Oid}) belongs to region {reservation.Owner.RegionId}, " +
+                $"not region {RegionId}.");
+
+        if (entity.ObjectId != reservation.Oid)
+            throw new InvalidOperationException(
+                $"Entity {entity.Name} has OID {entity.ObjectId}, but reservation holds OID {reservation.Oid}.");
+
+        if (!reservation.TryConsume())
+            throw new InvalidOperationException(
+                $"OID reservation (OID {reservation.Oid}) has already been consumed or disposed.");
+
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var enqueued = _commands.Writer.TryWrite(new RegionCommand.AddEntity(entity, position, tcs));
+
+        if (!enqueued)
+        {
+            tcs.SetException(new InvalidOperationException(
+                $"Failed to enqueue AddEntity command for region {RegionId}; the region may have been stopped."));
+        }
+        return tcs.Task;
     }
 
     /// <summary>
@@ -167,11 +257,13 @@ public sealed class Region : IDisposable
     // ── Tick Loop ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Starts the dedicated tick thread. Call once after construction.
+    /// Starts the dedicated tick thread. Safe to call from multiple threads — only the
+    /// first caller starts the thread; subsequent calls are no-ops.
     /// </summary>
     public void Start()
     {
-        if (_running)
+        // CAS from 0 → 1: only one thread wins; all others return immediately.
+        if (Interlocked.CompareExchange(ref _startGuard, 1, 0) != 0)
             return;
 
         _running = true;
@@ -234,7 +326,7 @@ public sealed class Region : IDisposable
             switch (command)
             {
                 case RegionCommand.AddEntity add:
-                    ExecuteAdd(add.Entity, add.Position);
+                    ExecuteAdd(add.Entity, add.Position, add.Placed);
                     break;
 
                 case RegionCommand.RemoveEntity remove:
@@ -246,23 +338,26 @@ public sealed class Region : IDisposable
                     break;
 
                 case RegionCommand.TransferIn transfer:
-                    ExecuteAdd(transfer.Entity, transfer.Destination);
+                    ExecuteAdd(transfer.Entity, transfer.Destination, placed: null);
                     break;
             }
         }
     }
 
-    private void ExecuteAdd(WorldEntity entity, WorldPosition position)
+    private void ExecuteAdd(WorldEntity entity, WorldPosition position, TaskCompletionSource<bool>? placed = null)
     {
         if (!_allEntities.Add(entity))
         {
             _logger.LogWarning(
                 "Entity {Name} (OID {Oid}) already in region {Region} — ignoring duplicate add",
                 entity.Name, entity.ObjectId, RegionId);
+            placed?.TrySetResult(false);
             return;
         }
 
-        var oid = AllocateOid();
+        // If the entity already has a pre-assigned OID (reserved via ReserveOid()),
+        // use it directly. Otherwise allocate a fresh one on the region thread.
+        var oid = entity.ObjectId != 0 ? entity.ObjectId : AllocateOid();
         entity.AssignOid(oid);
         entity.Position = position;
         _entitiesByOid[oid] = entity;
@@ -282,6 +377,8 @@ public sealed class Region : IDisposable
 
         entity.LastVisibilityCheckPosition = default;
         _movedEntities.Add(entity);
+
+        placed?.TrySetResult(true);
     }
 
     private void ExecuteRemove(WorldEntity entity)

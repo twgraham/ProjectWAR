@@ -4,6 +4,7 @@ using WorldServerV2.Data;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Network.Handlers;
 
@@ -142,7 +143,9 @@ public class CharacterScreenHandler : IPacketHandler
 
     [Rpc((int)Opcodes.F_INIT_PLAYER)]
     public async Task F_INIT_PLAYER(InitializePlayerRequest request, IConnectionContext context,
-        [FromServices] PlayerService playerService)
+        [FromServices] PlayerService playerService,
+        [FromServices] PlayerInitPipeline initPipeline,
+        [FromServices] RegionManager regionManager)
     {
         var player = playerService.GetPlayer(context.Session);
         if (player == null)
@@ -152,6 +155,63 @@ public class CharacterScreenHandler : IPacketHandler
             return;
         }
 
-        // TODO: Initialize player state and send to client (System 5: Player Enter World)
+        var charValue = player.Character.Value;
+
+        // Resolve the region from the character's saved position.
+        var regionId = (ushort)charValue.RegionId;
+        var region = regionManager.GetOrCreate(regionId);
+
+        // Build the world position from the character's saved coordinates.
+        var position = WorldPosition.FromRegionAbsolute(
+            regionId, charValue.ZoneId, charValue.WorldX, charValue.WorldY,
+            charValue.WorldZ, (ushort)charValue.WorldO);
+
+        // Capture the session reference — used by the pipeline for sending packets.
+        var session = context.Session;
+
+        _logger.LogInformation(
+            "Initializing player {Name} ({CharId}) for region {RegionId} at ({X}, {Y}, {Z})",
+            player.Name, player.CharacterId, regionId,
+            charValue.WorldX, charValue.WorldY, charValue.WorldZ);
+
+        // Reserve an OID from the region's thread-safe pool. The reservation is
+        // IDisposable — if init fails, the using block returns the OID to the pool.
+        // Once consumed by Region.AddAsync, disposal is a no-op.
+        using var reservation = region.ReserveOid();
+        try
+        {
+            player.AssignOid(reservation.Oid);
+
+            // ── Phase B + C run here, on the handler thread ─────────────
+            // The client is on a loading screen and cannot interact.
+            // GameSession.Send is thread-safe (channel-based send queue).
+            initPipeline.Initialize(player, session);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Player init failed for {Name} ({CharId}) — OID {Oid} will be released",
+                player.Name, player.CharacterId, reservation.Oid);
+            context.Disconnect("Player initialization failed");
+            return;
+            // reservation.Dispose() runs at method exit, returning the OID to the pool.
+        }
+
+        // Add the fully-initialized player into the region. This consumes the
+        // reservation — subsequent disposal at end of scope is a no-op.
+        // We await placement so the entity is in a cell before the client receives
+        // INIT_COMPLETE and can interact with the world.
+        await region.AddAsync(player, position, reservation);
+
+        // Now that the entity is placed, send the final init signal.
+        session.SendPlayerInitComplete(new PlayerInitCompleteResponse
+        {
+            Oid = player.ObjectId,
+        });
+        session.State = ClientState.Playing;
+
+        _logger.LogInformation(
+            "Player {Name} ({CharId}, OID {Oid}) initialization complete — session {SessionId} → Playing",
+            player.Name, player.CharacterId, player.ObjectId, session.Id);
     }
 }
