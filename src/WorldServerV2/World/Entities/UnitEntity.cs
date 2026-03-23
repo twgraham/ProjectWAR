@@ -1,4 +1,5 @@
 using WorldServerV2.World.Components;
+using WorldServerV2.World.Stats;
 
 namespace WorldServerV2.World.Entities;
 
@@ -17,10 +18,15 @@ public abstract class UnitEntity : WorldEntity
         : base(objectId, type, name)
     {
         Health = new HealthComponent(maxHealth);
+        Stats = new StatContainer();
+        Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
     }
 
     /// <summary>Health pool — always present on units. Never null.</summary>
     public HealthComponent Health { get; }
+
+    /// <summary>Stat modifier container — always present on units. Never null.</summary>
+    public StatContainer Stats { get; }
 
     /// <summary>Unit level (1–40 for players, variable for creatures).</summary>
     public byte Level { get; set; }
@@ -37,7 +43,8 @@ public abstract class UnitEntity : WorldEntity
     /// </summary>
     public override void Update(long tick)
     {
-        // TODO: HP regen, combat timers (System 4)
+        Stats.Flush();
+        // TODO: HP regen, combat timers (System 4 — remaining steps)
         base.Update(tick);
     }
 }
