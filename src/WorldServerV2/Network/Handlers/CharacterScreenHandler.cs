@@ -145,8 +145,7 @@ public class CharacterScreenHandler : IPacketHandler
     public async Task F_INIT_PLAYER(InitializePlayerRequest request, IConnectionContext context,
         [FromServices] PlayerService playerService,
         [FromServices] PlayerInitPipeline initPipeline,
-        [FromServices] RegionManager regionManager,
-        [FromServices] GameDataStore gameDataStore)
+        [FromServices] RegionManager regionManager)
     {
         var player = playerService.GetPlayer(context.Session);
         if (player == null)
@@ -161,10 +160,6 @@ public class CharacterScreenHandler : IPacketHandler
         // Resolve the region from the character's saved position.
         var regionId = (ushort)charValue.RegionId;
         var region = regionManager.GetOrCreate(regionId);
-
-        // Ensure the region tick thread is running.
-        if (!region.IsRunning)
-            region.Start();
 
         // Build the world position from the character's saved coordinates.
         var position = WorldPosition.FromRegionAbsolute(

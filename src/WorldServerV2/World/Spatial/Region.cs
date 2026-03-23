@@ -40,6 +40,7 @@ public sealed class Region : IDisposable
 
     private Thread? _thread;
     private volatile bool _running;
+    private int _startGuard; // 0 = not started, 1 = started; CAS-protected
 
     /// <summary>Creates a new region with the given identifier.</summary>
     public Region(ushort regionId, ILogger logger)
@@ -250,11 +251,13 @@ public sealed class Region : IDisposable
     // ── Tick Loop ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Starts the dedicated tick thread. Call once after construction.
+    /// Starts the dedicated tick thread. Safe to call from multiple threads — only the
+    /// first caller starts the thread; subsequent calls are no-ops.
     /// </summary>
     public void Start()
     {
-        if (_running)
+        // CAS from 0 → 1: only one thread wins; all others return immediately.
+        if (Interlocked.CompareExchange(ref _startGuard, 1, 0) != 0)
             return;
 
         _running = true;

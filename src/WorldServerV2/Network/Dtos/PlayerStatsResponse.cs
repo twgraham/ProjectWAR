@@ -17,7 +17,7 @@ public class PlayerStatsResponse
     /// <summary>Base stat count constant (0x15 = 21 stats).</summary>
     public byte BaseStatCount { get; set; } = 0x15;
 
-    /// <summary>Number of unlocked tactic slots (Level / 10, 0 if level ≤ 10).</summary>
+    /// <summary>Number of unlocked tactic slots (Level / 10 if Level > 10, else 0). Level 10 yields 0 slots — first slot unlocks at level 11.</summary>
     public byte TacticSlots { get; set; }
 
     /// <summary>Unknown constant (always 0x01).</summary>

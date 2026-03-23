@@ -8,7 +8,7 @@ namespace WorldServerV2.Services;
 /// <summary>
 /// Orchestrates the player initialization sequence that transitions a client from the
 /// character screen into the live game world. Implements Phase B (compute) and Phase C
-/// (serialize/send) of the three-phase model described in the architecture doc §8.
+/// (serialize/send) of the three-phase model described in the architecture doc §10.
 /// <para>
 /// <b>Threading</b>: <see cref="Initialize"/> is invoked on the <b>handler thread</b>
 /// after the caller has reserved an OID via <c>Region.ReserveOid()</c>. This keeps
@@ -154,7 +154,7 @@ public sealed class PlayerInitPipeline
         {
             BolsterLevel = level,
             Level = level,
-            TacticSlots = level >= 10 ? (byte)(level / 10) : (byte)0,
+            TacticSlots = level > 10 ? (byte)(level / 10) : (byte)0,
         };
 
         // Write 21 stat entries with placeholder values.
