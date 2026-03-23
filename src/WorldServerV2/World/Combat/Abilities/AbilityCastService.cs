@@ -33,6 +33,12 @@ public sealed class AbilityCastService
     /// </summary>
     public Func<ModifierCondition, int, AbilityCastContext, bool>? ConditionEvaluator { get; set; }
 
+    /// <summary>
+    /// Injectable buff definition resolver for <see cref="AbilityEffectType.InvokeBuff"/>
+    /// commands. Returns the <see cref="BuffDefinition"/> for a given entry, or null.
+    /// </summary>
+    public Func<ushort, BuffDefinition?>? BuffLookup { get; set; }
+
     public AbilityCastService(Random? rng = null)
     {
         _rng = rng ?? Random.Shared;
@@ -538,7 +544,7 @@ public sealed class AbilityCastService
                 break;
 
             case AbilityEffectType.InvokeBuff:
-                // Stub: buff invocation requires BuffDefinition lookup (wired in Step 6).
+                ExecuteInvokeBuff(cmd, caster, target);
                 break;
 
             case AbilityEffectType.ModifyActionPoints:
@@ -608,6 +614,18 @@ public sealed class AbilityCastService
     private static void ExecuteModifyActionPoints(AbilityCommandDefinition cmd, UnitEntity target)
     {
         target.ActionPoints = Math.Max(0, target.ActionPoints + cmd.PrimaryValue);
+    }
+
+    private void ExecuteInvokeBuff(AbilityCommandDefinition cmd, UnitEntity caster, UnitEntity? target)
+    {
+        ushort buffEntry = (ushort)cmd.PrimaryValue;
+        if (buffEntry == 0 || BuffLookup is null) return;
+
+        var buffDef = BuffLookup(buffEntry);
+        if (buffDef is null) return;
+
+        var buffTarget = target ?? caster;
+        buffTarget.Buffs.QueueBuff(buffDef, caster);
     }
 
     // ═══════════════════════════════════════════════════════════════════
