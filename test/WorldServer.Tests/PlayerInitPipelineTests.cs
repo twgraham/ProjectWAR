@@ -244,10 +244,11 @@ public class PlayerInitPipelineTests
 
     [Theory]
     [InlineData(5, 0)]   // level 5 → 0 slots
-    [InlineData(10, 0)]  // level 10 → 0 slots
-    [InlineData(11, 1)]  // level 11 → 1 slot (first unlock)
+    [InlineData(10, 1)]  // level 10 → 1 slots (first unlock)
+    [InlineData(11, 1)]  // level 11 → 1 slot
+    [InlineData(19, 1)]  // level 19 → 1 slots
     [InlineData(20, 2)]  // level 20 → 2 slots
-    [InlineData(31, 3)]  // level 31 → 3 slots
+    [InlineData(30, 3)]  // level 31 → 3 slots
     [InlineData(40, 4)]  // level 40 → 4 slots
     public void TacticSlots_matches_expected(byte level, byte expected)
     {
