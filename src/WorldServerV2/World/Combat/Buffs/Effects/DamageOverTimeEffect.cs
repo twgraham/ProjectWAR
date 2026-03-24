@@ -40,7 +40,7 @@ public sealed class DamageOverTimeEffect : IBuffEffect
             ? Math.Max(1, (int)(def.DurationMs / def.IntervalMs))
             : 1;
 
-        // Precalculate total damage via stages 4-5 (base + stat scaling + toughness).
+        // Precalculate total damage and mitigation using the non-proc damage pipeline.
         var ctx = BuildPrecalcContext(buff, caster, target);
         DamagePipeline.Resolve(ctx);
 

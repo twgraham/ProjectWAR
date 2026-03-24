@@ -41,7 +41,7 @@ public sealed class Buff
 
     /// <summary>
     /// Active effect instances, one per <see cref="BuffDefinition.Effects"/> entry.
-    /// Populated by <see cref="BuffContainer"/> via <see cref="IBuffEffectFactory"/>
+    /// Populated by <see cref="BuffContainer"/> via <see cref="BuffEffectFactory"/>
     /// or directly when the buff is applied.
     /// </summary>
     public IBuffEffect[] Effects { get; internal set; } = [];

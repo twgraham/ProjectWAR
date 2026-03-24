@@ -90,7 +90,8 @@ public sealed class PlayerInitPipeline
         player.Stats.Flush();
 
         // Health: top off to full after stat-driven max has been applied.
-        // Use Heal (not Resurrect) because the entity starts alive at 1 HP.
+        // Use Heal (not Resurrect) because the entity is already alive and its
+        // current HP was initialized to the pre-flush max; Flush() may raise Max.
         player.Health.Heal(player.Health.Max);
 
         var speed = charValue.Speed > 0 ? (ushort)charValue.Speed : (ushort)100;

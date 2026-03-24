@@ -474,12 +474,20 @@ public sealed class BuffContainer
             if (b.Definition.Entry != def.Entry)
                 continue;
 
-            return def.StackingPolicy switch
+            switch (def.StackingPolicy)
             {
-                StackingPolicy.PerCaster => b.Caster == caster ? b : null,
-                StackingPolicy.MaxCopies => b.Caster == caster ? b : null,
-                _ => b,
-            };
+                case StackingPolicy.PerCaster:
+                case StackingPolicy.MaxCopies:
+                    // For per-caster / max-copies-by-caster, only match buffs from the same caster.
+                    if (b.Caster == caster)
+                        return b;
+                    // Otherwise keep searching for another buff with the same entry and caster.
+                    break;
+
+                default:
+                    // For all other policies, the first matching entry is sufficient.
+                    return b;
+            }
         }
 
         return null;
