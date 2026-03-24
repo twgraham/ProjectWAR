@@ -4,7 +4,7 @@ namespace WorldServerV2.World.Stats;
 /// Strongly-typed stat identifier. Values match the V1 <c>Stats</c> enum and the
 /// wire protocol — do <b>not</b> renumber.
 /// <para>
-/// The array is indexed [0..<see cref="MaxCount"/>]. Gaps (17-20, 96-99) are unused
+/// The array is indexed [0..<see cref="StatConstants.SlotCount"/>]. Gaps (17-20, 96-99) are unused
 /// but reserved to keep alignment with DB columns and the client.
 /// </para>
 /// </summary>

@@ -69,10 +69,10 @@ public static class DerivedStatFormulas
 
     /// <summary>
     /// Computes the tactic slot count for a given level.
-    /// First slot unlocks at level 11 (returns 1), second at 21, third at 31, fourth at 40.
+    /// First slot unlocks at level 10 (returns 1), second at 20, third at 30, fourth at 40.
     /// </summary>
     public static byte TacticSlots(byte level) =>
-        level > 10 ? (byte)(level / 10) : (byte)0;
+        (byte)(level / 10);
 
     private static ushort ClampToUshort(float value) =>
         (ushort)Math.Clamp((int)value, 0, ushort.MaxValue);

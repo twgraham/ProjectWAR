@@ -51,8 +51,8 @@ public abstract class UnitEntity : WorldEntity
     /// </summary>
     public override void Update(long tick)
     {
-        Stats.Flush();
         Buffs.Update(tick);
+        Stats.Flush();
         // TODO: HP regen, combat timers (System 4 — remaining steps)
         base.Update(tick);
     }
