@@ -1,4 +1,5 @@
 using WorldServerV2.World.Combat.Buffs;
+using WorldServerV2.World.Combat.Career;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Spatial;
 using WorldServerV2.World.Stats;
@@ -122,6 +123,17 @@ public sealed class AbilityCastService
         {
             failureCode = AbilityFailure.NotEnoughAp;
             return null;
+        }
+
+        // 8b. Career resource check
+        if (context.SpecialCost > 0)
+        {
+            var resource = caster.TryGet<CareerResourceComponent>()?.Resource;
+            if (resource is null || !resource.HasResource((int)context.SpecialCost))
+            {
+                failureCode = AbilityFailure.NotEnoughResource;
+                return null;
+            }
         }
 
         // 9. Target validation
@@ -338,6 +350,10 @@ public sealed class AbilityCastService
         // Consume AP
         if (context.ApCost > 0)
             caster.ActionPoints = Math.Max(0, caster.ActionPoints - (int)context.ApCost);
+
+        // Consume career resource
+        if (context.SpecialCost > 0)
+            caster.TryGet<CareerResourceComponent>()?.Resource.Consume((int)context.SpecialCost);
 
         // Apply post-cast modifiers
         if (!definition.IgnoreOwnModifiers)
@@ -565,6 +581,9 @@ public sealed class AbilityCastService
             case AbilityEffectType.Interrupt:
             case AbilityEffectType.SummonPet:
             case AbilityEffectType.ModifyCareerResource:
+                ExecuteModifyCareerResource(cmd, caster, target);
+                break;
+
             case AbilityEffectType.ModifyMorale:
             case AbilityEffectType.GroundEffect:
             case AbilityEffectType.CreateLandMine:
@@ -614,6 +633,20 @@ public sealed class AbilityCastService
     private static void ExecuteModifyActionPoints(AbilityCommandDefinition cmd, UnitEntity target)
     {
         target.ActionPoints = Math.Max(0, target.ActionPoints + cmd.PrimaryValue);
+    }
+
+    private static void ExecuteModifyCareerResource(
+        AbilityCommandDefinition cmd, UnitEntity caster, UnitEntity? target)
+    {
+        var entity = target ?? caster;
+        var resource = entity.TryGet<CareerResourceComponent>()?.Resource;
+        if (resource is null) return;
+
+        int amount = cmd.PrimaryValue;
+        if (amount > 0)
+            resource.Generate(amount);
+        else if (amount < 0)
+            resource.Consume(-amount);
     }
 
     private void ExecuteInvokeBuff(AbilityCommandDefinition cmd, UnitEntity caster, UnitEntity? target)
