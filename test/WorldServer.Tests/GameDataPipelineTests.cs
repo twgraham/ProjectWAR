@@ -181,6 +181,8 @@ public class GameDataPipelineTests
                 new ZoneData(
                     FrozenDictionary<ushort, ZoneInfo>.Empty,
                     FrozenDictionary<uint, ZoneJump>.Empty)));
+        services.AddSingleton<IDataProvider<CareerStatData>>(
+            new ConstantProvider<CareerStatData>(CareerStatData.Empty));
 
         var sp = services.BuildServiceProvider();
 
@@ -223,7 +225,8 @@ public class GameDataPipelineTests
                 FrozenDictionary<uint, CreatureSpawn>.Empty),
             new ZoneData(
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
-                FrozenDictionary<uint, ZoneJump>.Empty));
+                FrozenDictionary<uint, ZoneJump>.Empty),
+            CareerStatData.Empty);
 
     /// <summary>
     /// Simple provider that always returns a pre-built constant value.

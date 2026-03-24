@@ -937,7 +937,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_creates_region_on_first_access()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
 
         var region = manager.GetOrCreate(1);
 
@@ -949,7 +949,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_returns_same_region_on_second_access()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
 
         var first = manager.GetOrCreate(1);
         var second = manager.GetOrCreate(1);
@@ -961,14 +961,14 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_get_returns_null_for_unknown()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
         manager.Get(99).ShouldBeNull();
     }
 
     [Fact]
     public void RegionManager_get_returns_existing()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
         var region = manager.GetOrCreate(1);
 
         manager.Get(1).ShouldBeSameAs(region);
@@ -977,7 +977,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_manages_multiple_regions()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
 
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
@@ -990,7 +990,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_get_all_regions_returns_snapshot()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
 
@@ -1001,7 +1001,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_dispose_cleans_up()
     {
-        var manager = new RegionManager(NullLoggerFactory.Instance);
+        var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
 
@@ -1087,7 +1087,7 @@ public class WorldTopologyTests
 
     private static WorldService MakeWorldService()
     {
-        var regionManager = new RegionManager(NullLoggerFactory.Instance);
+        var regionManager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
         return new WorldService(regionManager, NullLoggerFactory.Instance.CreateLogger<WorldService>());
     }
 

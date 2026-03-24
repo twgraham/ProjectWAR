@@ -20,6 +20,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<CreatureSpawn> CreatureSpawns => Set<CreatureSpawn>();
     public DbSet<ZoneInfo> ZoneInfos => Set<ZoneInfo>();
     public DbSet<ZoneJump> ZoneJumps => Set<ZoneJump>();
+    public DbSet<CharacterInfoStat> CharacterInfoStats => Set<CharacterInfoStat>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
         ConfigureCreatureSpawn(modelBuilder);
         ConfigureZoneInfo(modelBuilder);
         ConfigureZoneJump(modelBuilder);
+        ConfigureCharacterInfoStat(modelBuilder);
     }
 
     private static void ConfigureClassInfo(ModelBuilder modelBuilder)
@@ -239,6 +241,20 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.Type).HasColumnName("type");
             entity.Property(e => e.Enabled).HasColumnName("enabled");
             entity.Property(e => e.InstanceId).HasColumnName("instance_id");
+        });
+    }
+
+    private static void ConfigureCharacterInfoStat(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CharacterInfoStat>(entity =>
+        {
+            entity.ToTable("characterinfo_stats");
+            entity.HasKey(e => new { e.CareerLine, e.Level, e.StatId });
+
+            entity.Property(e => e.CareerLine).HasColumnName("career_line");
+            entity.Property(e => e.Level).HasColumnName("level");
+            entity.Property(e => e.StatId).HasColumnName("stat_id");
+            entity.Property(e => e.StatValue).HasColumnName("stat_value");
         });
     }
 }

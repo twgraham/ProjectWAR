@@ -23,4 +23,7 @@ public interface IGameDataStore
 
     /// <summary>Zone definitions and travel points.</summary>
     ZoneData Zones { get; }
+
+    /// <summary>Career base stats per career-line / level combination.</summary>
+    CareerStatData CareerStats { get; }
 }

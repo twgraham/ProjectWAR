@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
+using WorldServerV2.Data;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Stats;
 
 namespace WorldServerV2.Services;
 
@@ -44,11 +46,16 @@ public sealed class PlayerInitPipeline
 
     private readonly ILogger<PlayerInitPipeline> _logger;
     private readonly RealmInfo _realmInfo;
+    private readonly IGameDataStore _gameDataStore;
 
-    public PlayerInitPipeline(ILogger<PlayerInitPipeline> logger, RealmInfo realmInfo)
+    public PlayerInitPipeline(
+        ILogger<PlayerInitPipeline> logger,
+        RealmInfo realmInfo,
+        IGameDataStore gameDataStore)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _realmInfo = realmInfo ?? throw new ArgumentNullException(nameof(realmInfo));
+        _gameDataStore = gameDataStore ?? throw new ArgumentNullException(nameof(gameDataStore));
     }
 
     /// <summary>
@@ -73,10 +80,19 @@ public sealed class PlayerInitPipeline
         // Faction mirrors realm for players (1 = Order, 2 = Destruction).
         player.Faction = character.Realm;
 
-        // Health: set max then heal to full.
-        // In V1 the stats system computes max HP from Wounds + level + bonuses.
-        // For now we use the default max health the entity was constructed with.
-        player.Health.Resurrect(100);
+        // Load career base stats into StatContainer from the game data store.
+        var baseStats = _gameDataStore.CareerStats.GetBaseStats(character.CareerLine, charValue.Level);
+        foreach (var entry in baseStats)
+            player.Stats.SetBase(entry.Stat, entry.Value);
+
+        // Flush computes derived stats (MaxHealth = Wounds × 10) and fires
+        // OnMaxHealthChanged → HealthComponent.Max is updated.
+        player.Stats.Flush();
+
+        // Health: top off to full after stat-driven max has been applied.
+        // Use Heal (not Resurrect) because the entity is already alive and its
+        // current HP was initialized to the pre-flush max; Flush() may raise Max.
+        player.Health.Heal(player.Health.Max);
 
         var speed = charValue.Speed > 0 ? (ushort)charValue.Speed : (ushort)100;
 
@@ -118,12 +134,14 @@ public sealed class PlayerInitPipeline
         session.SendPlayerStats(statsResponse);
 
         // 4. F_PLAYER_HEALTH — HP, AP, morale
+        var maxAp = DefaultMaxActionPoints;
+        player.ActionPoints = maxAp;
         session.SendPlayerHealth(new PlayerHealthResponse
         {
             Health = player.Health.Current,
             MaxHealth = player.Health.Max,
-            ActionPoints = DefaultActionPoints,
-            MaxActionPoints = DefaultMaxActionPoints,
+            ActionPoints = (ushort)player.ActionPoints,
+            MaxActionPoints = maxAp,
         });
 
         // 5. S_PLAYER_LOADED — data-complete marker
@@ -144,26 +162,60 @@ public sealed class PlayerInitPipeline
     }
 
     /// <summary>
-    /// Builds a minimal <see cref="PlayerStatsResponse"/> with placeholder stat values.
-    /// When System 4 (Combat) is implemented, this will delegate to a real stats service.
+    /// Builds a <see cref="PlayerStatsResponse"/> from the player's live
+    /// <see cref="StatContainer"/>. Reads primary stats (1–9, 14–16) via
+    /// <c>GetTotal</c>, computes derived display stats (10–13) from primary
+    /// stats and level, and sets armor from the stat system.
     /// </summary>
-    private static PlayerStatsResponse BuildStatsResponse(PlayerEntity player)
+    internal static PlayerStatsResponse BuildStatsResponse(PlayerEntity player)
     {
+        var stats = player.Stats;
         var level = player.Level;
         var response = new PlayerStatsResponse
         {
             BolsterLevel = level,
             Level = level,
-            TacticSlots = level > 10 ? (byte)(level / 10) : (byte)0,
+            TacticSlots = DerivedStatFormulas.TacticSlots(level),
+            Armor = ClampUshort(stats.GetTotal(StatId.Armor)),
         };
 
-        // Write 21 stat entries with placeholder values.
-        // Stat IDs 1–21, all zeroed for now — real values come from the stats system.
-        for (byte i = 0; i < 21; i++)
+        // Stats 1–9: primary attributes (Strength..Intelligence) — direct from stat system.
+        for (byte i = 0; i < 9; i++)
         {
-            response.SetStat(i, (byte)(i + 1), 0);
+            var statId = (StatId)(i + 1);
+            response.SetStat(i, (byte)(i + 1), ClampUshort(stats.GetTotal(statId)));
         }
+
+        // Stats 10–13: derived display skills (Block, Parry, Evade, Disrupt).
+        // Computed from primary stats and effective level using V1 formulas.
+        response.SetStat(9, (byte)StatId.BlockSkill,
+            DerivedStatFormulas.BlockSkill(0, level)); // shield armor deferred — 0 for now
+        response.SetStat(10, (byte)StatId.ParrySkill,
+            DerivedStatFormulas.ParrySkill(stats.GetTotal(StatId.WeaponSkill), level));
+        response.SetStat(11, (byte)StatId.EvadeSkill,
+            DerivedStatFormulas.EvadeSkill(stats.GetTotal(StatId.Initiative), level));
+        response.SetStat(12, (byte)StatId.DisruptSkill,
+            DerivedStatFormulas.DisruptSkill(stats.GetTotal(StatId.Willpower), level));
+
+        // Stats 14–16: resistances — direct from stat system.
+        response.SetStat(13, (byte)StatId.SpiritResistance,
+            ClampUshort(stats.GetTotal(StatId.SpiritResistance)));
+        response.SetStat(14, (byte)StatId.ElementalResistance,
+            ClampUshort(stats.GetTotal(StatId.ElementalResistance)));
+        response.SetStat(15, (byte)StatId.CorporealResistance,
+            ClampUshort(stats.GetTotal(StatId.CorporealResistance)));
+
+        // Stats 17–20: unused/reserved — zero.
+        for (byte i = 16; i < 20; i++)
+            response.SetStat(i, (byte)(i + 1), 0);
+
+        // Stat 21: hardcoded to 1 (V1 convention).
+        response.SetStat(20, 21, 1);
 
         return response;
     }
+
+    /// <summary>Clamps an int to [0, ushort.MaxValue].</summary>
+    private static ushort ClampUshort(int value) =>
+        (ushort)Math.Clamp(value, 0, ushort.MaxValue);
 }
