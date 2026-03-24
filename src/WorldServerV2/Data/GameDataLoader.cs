@@ -36,10 +36,11 @@ public sealed class GameDataLoader(
         var itemsTask = scope.ServiceProvider.GetRequiredService<IDataProvider<ItemData>>().LoadAsync();
         var creaturesTask = scope.ServiceProvider.GetRequiredService<IDataProvider<CreatureData>>().LoadAsync();
         var zonesTask = scope.ServiceProvider.GetRequiredService<IDataProvider<ZoneData>>().LoadAsync();
+        var careerStatsTask = scope.ServiceProvider.GetRequiredService<IDataProvider<CareerStatData>>().LoadAsync();
         
-        await Task.WhenAll(classesTask, itemsTask, creaturesTask, zonesTask);
+        await Task.WhenAll(classesTask, itemsTask, creaturesTask, zonesTask, careerStatsTask);
 
-        var snapshot = new GameDataStore.Snapshot(classesTask.Result, itemsTask.Result, creaturesTask.Result, zonesTask.Result);
+        var snapshot = new GameDataStore.Snapshot(classesTask.Result, itemsTask.Result, creaturesTask.Result, zonesTask.Result, careerStatsTask.Result);
         store.Initialize(snapshot);
 
         logger.LogInformation("Game data loaded in {ElapsedMs}ms", sw.ElapsedMilliseconds);

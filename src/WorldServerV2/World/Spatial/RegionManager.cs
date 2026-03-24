@@ -20,10 +20,12 @@ public sealed class RegionManager : IDisposable
 {
     private readonly ConcurrentDictionary<ushort, Region> _regions = new();
     private readonly ILoggerFactory _loggerFactory;
+    private readonly bool _autoStart;
 
-    public RegionManager(ILoggerFactory loggerFactory)
+    public RegionManager(ILoggerFactory loggerFactory, bool autoStart = true)
     {
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        _autoStart = autoStart;
     }
 
     /// <summary>Number of regions currently created.</summary>
@@ -39,16 +41,17 @@ public sealed class RegionManager : IDisposable
     }
 
     /// <summary>
-    /// Gets or creates a region for the given ID. The region's tick thread is started
-    /// immediately on first creation. Safe to call concurrently — <see cref="Region.Start"/>
-    /// is idempotent. Thread-safe.
+    /// Gets or creates a region for the given ID. When <c>autoStart</c> is <c>true</c>
+    /// (the default), the region's tick thread is started immediately on first creation.
+    /// Safe to call concurrently — <see cref="Region.Start"/> is idempotent. Thread-safe.
     /// </summary>
     public Region GetOrCreate(ushort regionId)
     {
         return _regions.GetOrAdd(regionId, id =>
         {
             var region = new Region(id, _loggerFactory.CreateLogger<Region>());
-            region.Start();
+            if (_autoStart)
+                region.Start();
             return region;
         });
     }

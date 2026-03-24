@@ -26,6 +26,9 @@ public sealed class GameDataStore : IGameDataStore
     /// <inheritdoc />
     public ZoneData Zones => Current.Zones;
 
+    /// <inheritdoc />
+    public CareerStatData CareerStats => Current.CareerStats;
+
     /// <summary>
     /// Sets the data snapshot. May only be called once (typically by <see cref="GameDataLoader"/>).
     /// </summary>
@@ -48,5 +51,6 @@ public sealed class GameDataStore : IGameDataStore
         ClassData Classes,
         ItemData Items,
         CreatureData Creatures,
-        ZoneData Zones);
+        ZoneData Zones,
+        CareerStatData CareerStats);
 }
