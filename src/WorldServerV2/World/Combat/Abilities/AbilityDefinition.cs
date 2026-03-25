@@ -18,10 +18,18 @@ public sealed class AbilityDefinition
     // ── Classification ───────────────────────────────────────────────
 
     /// <summary>Career line bitmask (which careers have this ability).</summary>
-    public uint CareerLine { get; init; }
+    public uint? CareerLine { get; init; }
 
-    /// <summary>Mastery tree (0 = core, 1/2/3 = spec paths).</summary>
-    public byte MasteryTree { get; init; }
+    /// <summary>Mastery tree (0/null = core, 1/2/3 = spec paths).</summary>
+    /// TODO: Make non-nullable (default to 0)
+    public byte? MasteryTree { get; init; }
+
+    /// <summary>
+    /// Career category / tree ID matching <c>GameData.CareerCategory</c>.
+    /// Determines which career browser tree this ability belongs to
+    /// (0 = Class Abilities, 1 = Class Tactics, 2 = Class Morale, etc.).
+    /// </summary>
+    public byte Category { get; init; }
 
     /// <summary>Melee / Ranged / Verbal / Effect.</summary>
     public AbilityType AbilityType { get; init; }

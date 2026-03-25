@@ -6,8 +6,12 @@ namespace WorldServerV2.Network;
 
 // Source-generated fast-path serializers for all binary DTOs.
 [PacketSerializerContext(
+    typeof(AbilityListResponse),
     typeof(AccountCharacterModifiedResponse),
     typeof(AccountCharacterModifyErrorResponse),
+    typeof(CareerAbilityResponse),
+    typeof(CareerCategoryResponse),
+    typeof(CareerPackageUpdateResponse),
     typeof(CharacterTemplatesRequest),
     typeof(CharacterTemplatesResponse),
     typeof(CheckNameResponse),
@@ -21,6 +25,9 @@ namespace WorldServerV2.Network;
     typeof(EncryptKeyResponse),
     typeof(InitializePlayerRequest),
     typeof(InterfaceCommandRequest),
+    typeof(MasterySkillResponse),
+    typeof(MasteryTreePointsResponse),
+    typeof(MoraleListResponse),
     typeof(OpenGameRequest),
     typeof(OpenGameResponse),
     typeof(PingRequest),
@@ -39,7 +46,9 @@ namespace WorldServerV2.Network;
     typeof(RequestCharacterErrorResponse),
     typeof(RequestWorldLargeRequest),
     typeof(SetTimeResponse),
+    typeof(SkillListResponse),
     typeof(SpeedResponse),
+    typeof(TacticsResponse),
     typeof(WorldEnterResponse),
     typeof(WorldSentResponse))]
 public partial class GameServerContext
