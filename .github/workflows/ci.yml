@@ -41,11 +41,13 @@ jobs:
         done
     
     - name: Merge Coverage Reports
+      if: always()
       run: |
         dotnet tool install --global dotnet-coverage
         dotnet-coverage merge --output coverage/merged/coverage.cobertura.xml --output-format cobertura "coverage/*/coverage.cobertura.xml"
 
     - name: Code Coverage Report
+      if: always()
       uses: irongut/CodeCoverageSummary@v1.3.0
       with:
         filename: coverage/merged/coverage.cobertura.xml
@@ -60,15 +62,25 @@ jobs:
       continue-on-error: true
     
     - name: Add Coverage PR Comment
+      if: always() && github.event_name == 'pull_request'
       uses: marocchino/sticky-pull-request-comment@v2
-      if: github.event_name == 'pull_request'
       with:
         recreate: true
         path: code-coverage-results.md
     
     - name: Write to Job Summary
+      if: always()
       run: |
         if [ -f code-coverage-results.md ]; then
           cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
         fi
+
+    - name: Send coverage to Coveralls
       if: always()
+      uses: coverallsapp/github-action@v2
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        file: coverage/merged/coverage.cobertura.xml
+        coverage-format: cobertura
+      env:
+        COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
