@@ -37,7 +37,7 @@ public sealed class AbilityInfoEntity
     public short? Category { get; set; }
     public int? Flags { get; set; }
     public short? PointCost { get; set; }
-    public long? CashCost { get; set; }
+    public ushort? CashCost { get; set; }
     public int? StealthInteraction { get; set; }
     public int? AiRange { get; set; }
     public int? IgnoreCooldownReduction { get; set; }

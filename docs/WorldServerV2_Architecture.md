@@ -1045,7 +1045,7 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 | 4 | `F_BAG_INFO` (sub 0x19) | 0x0C | `StsInterface.SendRenownStats()` | 1 | No | — | Renown stat bonuses |
 | 5 | `F_REALM_BONUS` | 0xD8 | `SendRealmBonus()` | 1 | No | — | Active realm bonuses |
 | 6 | `S_PLAYER_INITTED` | 0x88 | `SendInited()` | 1 | No | ✅ | Identity, position, realm, career |
-| 7 | `F_TACTICS` | 0x60 | `TacInterface.HandleTactics()` + `SendTactics()` | 1–2 | Partial | — | Equipped + available tactics |
+| 7 | `F_TACTICS` | 0x60 | `TacInterface.HandleTactics()` + `SendTactics()` | 1–2 | Partial | ✅ | Equipped + available tactics |
 
 #### Phase 3 — `StartInit()` Block 2
 
@@ -1055,14 +1055,14 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 | 9 | `F_BAG_INFO` (live events) | 0x0C | `LiveEventInterface.SendLiveEvents()` | 0–1 | Yes | — | Active live event data |
 | 10 | `F_EXPERIENCE_TABLE` | 0x20 | `SendXpTable()` | 1 | No | — | XP-per-level table (~2 KB) |
 | 11 | `F_GUILD_DATA` | 0x4E | `GldInterface.Guild.SendGuildInfo()` | 12+ | Yes | — | Guild roster, ranks, heraldry, tax, alliance |
-| 12 | `F_CAREER_PACKAGE_INFO` + `F_CAREER_CATEGORY` | 0x68 + 0x43 | `SEND_PACKAGES` script | N | No | — | Career ability packages (from sniff files) |
+| 12 | `F_CAREER_PACKAGE_INFO` + `F_CAREER_CATEGORY` | 0xF3 + 0xEE | `PlayerInitPipeline.SendCareerPackages()` | N | No | ✅ | Career ability packages (treeId 0 abilities + treeId 1 tactics) |
 | 13 | `F_INTRO_CINEMA` | 0x3A | (inline) | 0–1 | Yes | — | Intro cinematic (first connect only) |
 | 14 | `F_PLAYER_EXPERIENCE` | 0x4F | `SendXp()` | 1 | No | — | Current XP / rest XP |
 | 15 | `F_PLAYER_RENOWN` | 0x4C | `SendRenown()` | 1 | No | — | Current renown points |
 | 16 | `F_PLAYER_STATS` | 0x46 | `SendStats()` (1st) | 1 | No | ✅ | Full stat block |
 | 17 | `F_TOK_ENTRY_UPDATE` | 0x67 | `TokInterface.SendAllToks()` | 1 | No | — | Tome of Knowledge (1500-byte bitmask) |
 | 18 | `F_PLAYER_RANK_UPDATE` | 0x36 | `SendRankUpdate()` | 1 | No | — | Level/renown rank |
-| 19 | `F_CHARACTER_INFO` (sub 3) + `F_WAR_REPORT` | 0x07 + 0x52 | `SendSkills()` | 2 | No | — | Skills list + war report |
+| 19 | `F_CHARACTER_INFO` (sub 3) + `F_WAR_REPORT` | 0x07 + 0x52 | `SendSkills()` | 2 | No | ✅¹ | Skills list + war report |
 | 20 | `F_ACTION_COUNTER_INFO` | 0x7A | `SendBestiary()` | 1 | No | — | Kill counts (bestiary) |
 | 21 | `F_PLAY_TIME_STATS` | 0x2B | `SendPlayedTime()` | 1 | No | — | /played time |
 | 22 | `F_BAG_INFO` + N×`F_GET_ITEM` + `F_ITEM_SET_DATA` | 0x0C + 0x0E + 0x55 | `ItmInterface.SendAllItems()` | 1+N+cond | No | — | Bag layout + every item + set bonuses |
@@ -1070,11 +1070,11 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 | 24 | `F_PLAYER_HEALTH` | 0x05 | `SendHealth()` | 1 | No | ✅ | HP, AP, morale |
 | 25 | `S_PLAYER_LOADED` | 0x89 | (inline) | 1 | No | ✅ | Data-complete marker |
 | 26 | `F_MAX_VELOCITY` | 0x1E | `SendSpeed(Speed)` (2nd) | 1 | No | ✅ | Speed (re-sent, matches old server) |
-| 27 | `F_MORALE_LIST` | 0x7E | `SendMoraleAbilities()` | 1 | No | — | Equipped morale abilities |
+| 27 | `F_MORALE_LIST` | 0x7E | `SendMoraleAbilities()` | 1 | No | ✅ | Equipped morale abilities |
 | 28 | `F_PLAYER_STATS` | 0x46 | `SendStats()` (2nd) | 1 | No | ✅ | Stats (re-sent, matches old server) |
-| 29 | `F_CHARACTER_INFO` (sub 1) | 0x07 | `AbtInterface.SendAbilityLevels()` | 1 | No | — | Ability levels |
-| 30 | `F_CAREER_CATEGORY` + 24×`F_CAREER_PACKAGE_INFO` | 0x43 + 0x68 | `AbtInterface.ReloadMastery()` | 25 | No | — | Mastery tree + packages |
-| 31 | 3×`F_CAREER_PACKAGE_UPDATE` + `F_CHARACTER_INFO` (sub 1) | 0x69 + 0x07 | `AbtInterface.SendMasteryPointsUpdate()` | 4 | No | — | Mastery point allocation |
+| 29 | `F_CHARACTER_INFO` (sub 1) | 0x07 | `AbtInterface.SendAbilityLevels()` | 1 | No | ✅ | Ability levels |
+| 30 | `F_CAREER_CATEGORY` + 24×`F_CAREER_PACKAGE_INFO` | 0x43 + 0x68 | `AbtInterface.ReloadMastery()` | 25 | No | ✅ | Mastery tree + packages |
+| 31 | 3×`F_CAREER_PACKAGE_UPDATE` + `F_CHARACTER_INFO` (sub 1) | 0x69 + 0x07 | `AbtInterface.SendMasteryPointsUpdate()` | 4 | No | ✅ | Mastery point allocation |
 | 32 | `F_CLIENT_DATA` | 0x23 | `SendClientData()` | 1 | No | — | Client settings blob (1024 bytes) |
 | 33 | N×`F_OBJECT_EFFECT_STATE` | 0x8A | `OSInterface.SendObjectStates()` | 0–N | Yes | — | Active visual effects |
 | 34 | 3×`F_UPDATE_STATE` | 0xC5 | `DispatchUpdateState()` × 2 + `SendHelmCloakShowing()` | 3 | No | — | Renown title, ToK title, helm/cloak visibility |
@@ -1095,8 +1095,9 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 
 - **41 ordered steps**, producing **60–100+ individual packets** per player login
   (varies with inventory size, guild membership, career packages)
-- **V2 currently implements 10 of 41 steps** — the hard client gates plus
-  health/stats/speed
+- **V2 currently implements 17 of 41 steps** — the hard client gates plus
+  health/stats/speed, skills, abilities, morales, tactics, and mastery trees
+- ¹ `F_CHARACTER_INFO` sub 3 (skills) is implemented; `F_WAR_REPORT` is deferred
 - All remaining steps are **additive** — the client functions but shows empty UI
   panes for unimplemented systems
 - Each step is added to `PlayerInitPipeline.Initialize()` as the corresponding

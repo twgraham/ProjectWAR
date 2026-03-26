@@ -35,8 +35,8 @@ public class CareerAbilityResponse
     /// <summary>Mastery level (always 0 for core career abilities).</summary>
     public byte MasteryLevel { get; set; }
 
-    /// <summary>Career browser row index. Formula: <c>(MinimumRank + 3) / 2</c>.</summary>
-    public byte BrowserRow { get; set; }
+    /// <summary>Minimum rank required for ability.</summary>
+    public byte MinimumRank { get; set; }
 
     /// <summary>3 reserved bytes (always 0 for core career abilities).</summary>
     [FixedLength(3)]
@@ -61,12 +61,8 @@ public class CareerAbilityResponse
     public uint HeaderReserved3 { get; set; }
 
     // ── Stream data ────────────────────────────────────────────────
-
-    /// <summary>
-    /// Optional uint32 value (present because <see cref="OptionalFlags"/> bit 0 is set).
-    /// Formula: <c>25 * EntryIndex - 5</c>. Used by the client's career browser UI.
-    /// </summary>
-    public uint OptionalValue { get; set; }
+    
+    public uint CashCost { get; set; }
 
     /// <summary>Number of items in this package (always 1 for career abilities).</summary>
     public byte ItemCount { get; set; } = 1;

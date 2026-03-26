@@ -838,6 +838,185 @@ public class BinaryPacketSerializerTests
     }
 
     [Fact]
+    public void RoundTrip_SizedEntry_TypedArray()
+    {
+        // GIVEN: A packet with [SizedEntry] on an array of custom entries
+        var original = new SizedEntryArrayPacket
+        {
+            Entries = [new SizedEntryItem { Id = 0x1234, Level = 5 }, new SizedEntryItem { Id = 0x5678, Level = 10 }]
+        };
+
+        // WHEN: Serializing and deserializing
+        var result = RoundTrip<SizedEntryArrayPacket>(original);
+
+        // THEN: Values are preserved
+        result.Entries.Length.ShouldBe(2);
+        result.Entries[0].Id.ShouldBe((ushort)0x1234);
+        result.Entries[0].Level.ShouldBe((byte)5);
+        result.Entries[1].Id.ShouldBe((ushort)0x5678);
+        result.Entries[1].Level.ShouldBe((byte)10);
+
+        // AND: Wire format is [count(1)] [entry_size(2)] [entries]
+        // = 1 + 2 + 2*(2+1) = 9 bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(9);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_List()
+    {
+        // GIVEN: A packet with [SizedEntry] on a List<T>
+        var original = new SizedEntryListPacket
+        {
+            Items = [new SizedEntryItem { Id = 0x0001, Level = 99 }]
+        };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryListPacket>(original);
+
+        // THEN
+        result.Items.Count.ShouldBe(1);
+        result.Items[0].Id.ShouldBe((ushort)0x0001);
+        result.Items[0].Level.ShouldBe((byte)99);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_PrimitiveArray()
+    {
+        // GIVEN: A packet with [SizedEntry] on a primitive ushort[]
+        var original = new SizedEntryPrimitiveArrayPacket { Values = [100, 200, 300] };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryPrimitiveArrayPacket>(original);
+
+        // THEN
+        result.Values.ShouldBe(new ushort[] { 100, 200, 300 });
+
+        // AND: Wire = [count(1)] [entry_size(2)] [3 * 2] = 1 + 2 + 6 = 9
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(9);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_WithPacketLength()
+    {
+        // GIVEN: [PacketLength(2)] + [SizedEntry] — 2-byte count + 2-byte entry size
+        var original = new SizedEntryWithPacketLengthPacket
+        {
+            Entries = [new SizedEntryItem { Id = 1, Level = 2 }]
+        };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryWithPacketLengthPacket>(original);
+
+        // THEN
+        result.Entries.Length.ShouldBe(1);
+        result.Entries[0].Id.ShouldBe((ushort)1);
+        result.Entries[0].Level.ShouldBe((byte)2);
+
+        // AND: Wire = [count(2)] [entry_size(2)] [3] = 2 + 2 + 3 = 7
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(7);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_CustomWidth()
+    {
+        // GIVEN: [SizedEntry(1)] — entry size written as 1 byte
+        var original = new SizedEntryCustomWidthPacket
+        {
+            Entries = [new SizedEntryItem { Id = 0xABCD, Level = 42 }]
+        };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryCustomWidthPacket>(original);
+
+        // THEN
+        result.Entries[0].Id.ShouldBe((ushort)0xABCD);
+        result.Entries[0].Level.ShouldBe((byte)42);
+
+        // AND: Wire = [count(1)] [entry_size(1)] [3] = 1 + 1 + 3 = 5
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(5);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_Empty()
+    {
+        // GIVEN: An empty collection with [SizedEntry]
+        var original = new SizedEntryArrayPacket { Entries = [] };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryArrayPacket>(original);
+
+        // THEN
+        result.Entries.ShouldBeEmpty();
+
+        // AND: Wire = [count(1)=0] [entry_size(2)] = 1 + 2 = 3
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_WithNeighbours()
+    {
+        // GIVEN: [SizedEntry] collection flanked by scalar properties
+        var original = new SizedEntryWithNeighboursPacket
+        {
+            Before = 0xAA,
+            Entries = [new SizedEntryItem { Id = 1, Level = 2 }],
+            After = 0xBB
+        };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryWithNeighboursPacket>(original);
+
+        // THEN: All values preserved
+        result.Before.ShouldBe((byte)0xAA);
+        result.Entries.Length.ShouldBe(1);
+        result.Entries[0].Id.ShouldBe((ushort)1);
+        result.After.ShouldBe((byte)0xBB);
+
+        // AND: Wire = 1 + [count(1)] + [entry_size(2)] + [3] + 1 = 8
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(8);
+    }
+
+    [Fact]
+    public void RoundTrip_SizedEntry_LittleEndian()
+    {
+        // GIVEN: [SizedEntry(2, littleEndian: true)] — entry size field is little-endian
+        var original = new SizedEntryLittleEndianPacket
+        {
+            Entries = [new SizedEntryItem { Id = 0x1234, Level = 7 }]
+        };
+
+        // WHEN
+        var result = RoundTrip<SizedEntryLittleEndianPacket>(original);
+
+        // THEN: Values preserved
+        result.Entries.Length.ShouldBe(1);
+        result.Entries[0].Id.ShouldBe((ushort)0x1234);
+        result.Entries[0].Level.ShouldBe((byte)7);
+
+        // AND: Wire = [count(1)] + [entry_size_LE(2)] + entry(3) = 6
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(6);
+
+        // AND: Verify the entry-size bytes are little-endian (0x03, 0x00) not big-endian (0x00, 0x03)
+        var bytes = writer.WrittenSpan;
+        bytes[1].ShouldBe((byte)0x03); // low byte first
+        bytes[2].ShouldBe((byte)0x00); // high byte second
+    }
+
+    [Fact]
     public void RoundTrip_CString_FixedLength()
     {
         // GIVEN: A [CString(8)] string shorter than the field
@@ -1027,5 +1206,56 @@ public class BinaryPacketSerializerTests
         None = 0,
         Active = 1,
         Inactive = 2
+    }
+
+    public class SizedEntryItem
+    {
+        public ushort Id { get; set; }
+        public byte Level { get; set; }
+    }
+
+    public class SizedEntryArrayPacket
+    {
+        [SizedEntry]
+        public SizedEntryItem[] Entries { get; set; } = [];
+    }
+
+    public class SizedEntryListPacket
+    {
+        [SizedEntry]
+        public List<SizedEntryItem> Items { get; set; } = [];
+    }
+
+    public class SizedEntryPrimitiveArrayPacket
+    {
+        [SizedEntry]
+        public ushort[] Values { get; set; } = [];
+    }
+
+    public class SizedEntryWithPacketLengthPacket
+    {
+        [PacketLength(2)]
+        [SizedEntry]
+        public SizedEntryItem[] Entries { get; set; } = [];
+    }
+
+    public class SizedEntryCustomWidthPacket
+    {
+        [SizedEntry(1)]
+        public SizedEntryItem[] Entries { get; set; } = [];
+    }
+
+    public class SizedEntryWithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [SizedEntry]
+        public SizedEntryItem[] Entries { get; set; } = [];
+        public byte After { get; set; }
+    }
+
+    public class SizedEntryLittleEndianPacket
+    {
+        [SizedEntry(2, littleEndian: true)]
+        public SizedEntryItem[] Entries { get; set; } = [];
     }
 }

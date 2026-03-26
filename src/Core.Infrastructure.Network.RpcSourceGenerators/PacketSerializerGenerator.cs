@@ -17,7 +17,7 @@ namespace RpcSourceGenerator
         {
             public HashSet<string> DeserializeMethods { get; } = [];
             public HashSet<string> SerializeMethods { get; } = [];
-            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize, int? FixedCount)> CollectionInfo { get; } = new();
+            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize, int? FixedCount, int? SizedEntryWidth, bool SizedEntryLE)> CollectionInfo { get; } = new();
         }
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -369,7 +369,8 @@ namespace RpcSourceGenerator
             {
                 var lengthSize = GetPacketLengthSize(prop);
                 var fixedLen = GetFixedLength(prop);
-                var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen);
+                var (sizedEntryWidth, sizedEntryLE) = GetSizedEntryInfo(prop);
+                var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen, sizedEntryWidth, sizedEntryLE);
                 return $"{methodName}(ref reader)";
             }
 
@@ -477,8 +478,9 @@ namespace RpcSourceGenerator
             if (IsCollectionType(underlyingType, out var elementType))
             {
                 var fixedLen = GetFixedLength(property);
+                var (sizedEntryWidth, sizedEntryLE) = GetSizedEntryInfo(property);
                 // Call discrete collection serialize method
-                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen);
+                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen, sizedEntryWidth, sizedEntryLE);
                 sb.AppendLine($"            {methodName}(ref writer, {value});");
                 return;
             }
@@ -708,31 +710,172 @@ namespace RpcSourceGenerator
                 .Any(a => a.AttributeClass?.Name == "LittleEndianAttribute" &&
                           (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
 
-        // Register a collection deserialize method and return its name
-        private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
+        private static (int? Width, bool LittleEndian) GetSizedEntryInfo(IPropertySymbol property)
         {
+            var attr = property.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name == "SizedEntryAttribute" &&
+                                     (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+
+            if (attr == null) return (null, false);
+
+            int width = 2; // attribute default
+            bool littleEndian = false;
+
+            if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is int byteCount)
+                width = byteCount;
+            if (attr.ConstructorArguments.Length > 1 && attr.ConstructorArguments[1].Value is bool le)
+                littleEndian = le;
+
+            return (width, littleEndian);
+        }
+
+        /// <summary>
+        /// Attempts to compute the fixed wire size (in bytes) of a type.
+        /// Returns null if the type contains variable-length fields (strings, collections, etc.).
+        /// </summary>
+        private static int? TryComputeWireSize(ITypeSymbol type)
+        {
+            if (type.SpecialType == SpecialType.System_Boolean)
+                return 1;
+
+            if (type.TypeKind == TypeKind.Enum)
+                return 1;
+
+            switch (type.SpecialType)
+            {
+                case SpecialType.System_Byte:
+                case SpecialType.System_SByte:
+                    return 1;
+                case SpecialType.System_Int16:
+                case SpecialType.System_UInt16:
+                    return 2;
+                case SpecialType.System_Int32:
+                case SpecialType.System_UInt32:
+                case SpecialType.System_Single:
+                    return 4;
+                case SpecialType.System_Int64:
+                case SpecialType.System_UInt64:
+                case SpecialType.System_Double:
+                    return 8;
+            }
+
+            // Named type (class/struct) — sum of property wire sizes
+            if (type is INamedTypeSymbol namedType && type.TypeKind is TypeKind.Class or TypeKind.Struct)
+            {
+                var props = namedType.GetMembers().OfType<IPropertySymbol>()
+                    .Where(p => p.DeclaredAccessibility == Accessibility.Public && p.GetMethod != null)
+                    .ToList();
+
+                int total = 0;
+                foreach (var prop in props)
+                {
+                    var size = TryComputePropertyWireSize(prop);
+                    if (size == null) return null;
+                    total += size.Value;
+                }
+                return total;
+            }
+
+            return null;
+        }
+
+        private static int? TryComputePropertyWireSize(IPropertySymbol prop)
+        {
+            var propType = prop.Type;
+            var underlyingType = propType;
+            if (propType.NullableAnnotation == NullableAnnotation.Annotated && propType is INamedTypeSymbol namedNullable && namedNullable.IsGenericType)
+                underlyingType = namedNullable.TypeArguments[0];
+
+            // CString with fixed length
+            if (HasCStringAttribute(prop) && underlyingType.SpecialType == SpecialType.System_String)
+                return GetCStringLength(prop);
+
+            // PascalString — variable
+            if (HasPascalString(prop) && underlyingType.SpecialType == SpecialType.System_String)
+                return null;
+
+            // Enum
+            if (underlyingType.TypeKind == TypeKind.Enum)
+                return 1;
+
+            // Collection — variable
+            if (IsCollectionType(underlyingType, out _))
+                return null;
+
+            // byte[]
+            if (underlyingType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+                return GetFixedLength(prop);
+
+            // Custom type — recurse
+            if (underlyingType is INamedTypeSymbol customType && ShouldGenerateSerializerFor(underlyingType, out _))
+                return TryComputeWireSize(customType);
+
+            // Primitive / boolean
+            return TryComputeWireSize(underlyingType);
+        }
+
+        private static void GenerateEntrySizeWrite(StringBuilder sb, int value, int byteWidth, bool littleEndian)
+        {
+            switch (byteWidth)
+            {
+                case 1:
+                    sb.AppendLine($"            writer.WriteByte({value});");
+                    break;
+                case 2:
+                    sb.AppendLine(littleEndian
+                        ? $"            writer.WriteUInt16LE({value});"
+                        : $"            writer.WriteUInt16({value});");
+                    break;
+                case 4:
+                    sb.AppendLine(littleEndian
+                        ? $"            writer.WriteUInt32LE({(uint)value});"
+                        : $"            writer.WriteUInt32({(uint)value});");
+                    break;
+            }
+        }
+
+        private static string GenerateEntrySizeRead(int byteWidth, bool littleEndian)
+        {
+            return byteWidth switch
+            {
+                1 => "reader.ReadByte()",
+                2 => littleEndian ? "reader.ReadUInt16LE()" : "reader.ReadUInt16()",
+                4 => littleEndian ? "reader.ReadUInt32LE()" : "reader.ReadUInt32()",
+                _ => throw new InvalidOperationException($"Invalid sized entry width: {byteWidth}")
+            };
+        }
+
+        // Register a collection deserialize method and return its name
+        private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+        {
+            var safeName = GetSafeTypeName(collectionType);
             var methodName = fixedCount.HasValue
-                ? $"DeserializeCollection_{GetSafeTypeName(collectionType)}_fixed_{fixedCount.Value}"
-                : $"DeserializeCollection_{GetSafeTypeName(collectionType)}_{lengthSize}";
+                ? $"DeserializeCollection_{safeName}_fixed_{fixedCount.Value}"
+                : sizedEntryWidth.HasValue
+                    ? $"DeserializeCollection_{safeName}_{lengthSize}_sized_{sizedEntryWidth.Value}{(sizedEntryLE ? "_le" : "")}"
+                    : $"DeserializeCollection_{safeName}_{lengthSize}";
             
             if (tracker.DeserializeMethods.Add(methodName))
             {
-                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount);
+                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
             }
             
             return methodName;
         }
 
         // Register a collection serialize method and return its name
-        private static string RegisterCollectionSerializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
+        private static string RegisterCollectionSerializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
         {
+            var safeName = GetSafeTypeName(collectionType);
             var methodName = fixedCount.HasValue
-                ? $"SerializeCollection_{GetSafeTypeName(collectionType)}_fixed_{fixedCount.Value}"
-                : $"SerializeCollection_{GetSafeTypeName(collectionType)}_{lengthSize}";
+                ? $"SerializeCollection_{safeName}_fixed_{fixedCount.Value}"
+                : sizedEntryWidth.HasValue
+                    ? $"SerializeCollection_{safeName}_{lengthSize}_sized_{sizedEntryWidth.Value}{(sizedEntryLE ? "_le" : "")}"
+                    : $"SerializeCollection_{safeName}_{lengthSize}";
             
             if (tracker.SerializeMethods.Add(methodName))
             {
-                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount);
+                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
             }
             
             return methodName;
@@ -744,21 +887,21 @@ namespace RpcSourceGenerator
             // Generate deserialize methods
             foreach (var methodName in tracker.DeserializeMethods)
             {
-                var (collectionType, elementType, lengthSize, fixedCount) = tracker.CollectionInfo[methodName];
-                GenerateCollectionDeserializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount);
+                var (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE) = tracker.CollectionInfo[methodName];
+                GenerateCollectionDeserializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
                 sb.AppendLine();
             }
 
             // Generate serialize methods
             foreach (var methodName in tracker.SerializeMethods)
             {
-                var (collectionType, elementType, lengthSize, fixedCount) = tracker.CollectionInfo[methodName];
-                GenerateCollectionSerializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount);
+                var (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE) = tracker.CollectionInfo[methodName];
+                GenerateCollectionSerializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
                 sb.AppendLine();
             }
         }
 
-        private static void GenerateCollectionDeserializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
+        private static void GenerateCollectionDeserializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
         {
             var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -778,6 +921,13 @@ namespace RpcSourceGenerator
                 sb.AppendLine($"            var length = {GenerateLengthRead(lengthSize)};");
                 sb.AppendLine($"            if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
             }
+
+            // [SizedEntry] — read and discard the entry size field
+            if (sizedEntryWidth.HasValue)
+            {
+                sb.AppendLine($"            _ = {GenerateEntrySizeRead(sizedEntryWidth.Value, sizedEntryLE)}; // entry size");
+            }
+
             sb.AppendLine();
             
             // Create array to hold elements
@@ -810,7 +960,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("        }");
         }
 
-        private static void GenerateCollectionSerializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null)
+        private static void GenerateCollectionSerializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
         {
             var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             
@@ -833,6 +983,22 @@ namespace RpcSourceGenerator
                 sb.AppendLine($"            var count = {countExpression};");
                 GenerateLengthWrite(sb, "count", lengthSize);
             }
+
+            // [SizedEntry] — write the computed entry size
+            if (sizedEntryWidth.HasValue)
+            {
+                var wireSize = TryComputeWireSize(elementType);
+                if (wireSize.HasValue)
+                {
+                    GenerateEntrySizeWrite(sb, wireSize.Value, sizedEntryWidth.Value, sizedEntryLE);
+                }
+                else
+                {
+                    sb.AppendLine($"#warning Cannot compute fixed wire size for element type '{elementType.Name}'. [SizedEntry] entry size will be written as 0.");
+                    GenerateEntrySizeWrite(sb, 0, sizedEntryWidth.Value, sizedEntryLE);
+                }
+            }
+
             sb.AppendLine();
             
             // Loop through and write each element

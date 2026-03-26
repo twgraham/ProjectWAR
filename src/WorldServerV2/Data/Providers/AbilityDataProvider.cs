@@ -48,6 +48,7 @@ public class AbilityDataProvider(
                 CooldownEntry = (ushort)(row.CooldownEntry ?? 0),
                 ApCost = (byte)(row.ApCost ?? 0),
                 SpecialCost = row.SpecialCost ?? 0,
+                CashCost = row.CashCost ?? 0,
                 CanCastWhileMoving = (row.MoveCast ?? 0) != 0,
                 IgnoreGlobalCooldown = (row.IgnoreGlobalCooldown ?? 0) != 0,
                 IgnoreOwnModifiers = (row.IgnoreOwnModifiers ?? 0) != 0,

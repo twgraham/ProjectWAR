@@ -623,8 +623,8 @@ public class PlayerInitPipelineTests
         var first = careerAbilities.First(p => p.ReferenceId == 2756);
         first.TreeId.ShouldBe((byte)0); // abilities tree
         first.EntryIndex.ShouldBe((ushort)1);
-        first.BrowserRow.ShouldBe((byte)2); // (1+3)/2 = 2
-        first.OptionalValue.ShouldBe(18u); // 91*2*2/20 = 18 (validated against Ironbreaker sniff)
+        first.MinimumRank.ShouldBe(abilityData.CoreAbilitiesByCareer[IronbreakerCareerLine][0].MinimumRank); // (1+3)/2 = 2
+        first.CashCost.ShouldBe(abilityData.CoreAbilitiesByCareer[IronbreakerCareerLine][0].CashCost);
         first.PackageId.ShouldBe(4155u); // 2756 + 1399 (Dwarf offset)
         first.ReferenceId.ShouldBe(2756u); // raw DB entry
         first.AbilityName.ShouldBe("Core Strike");

@@ -38,31 +38,26 @@ public sealed class AbilityResolver
         var coreAbilities = _abilityData.GetCoreAbilities(careerLine);
         foreach (var def in coreAbilities)
         {
-            if (def.MinimumRank <= level)
-            {
-                // Core abilities use effective level as their mastery level
-                result.Add(new ResolvedAbility(def.Entry, level));
-            }
+            // Core abilities use effective level as their mastery level
+            result.Add(new ResolvedAbility(def.Entry, level));
         }
 
         // 2. Mastery abilities: only if the player has activated the skill slot
         var masteryAbilities = _abilityData.GetMasteryAbilities(careerLine);
         foreach (var def in masteryAbilities)
         {
-            if (def.MasteryTree is 0 or null or > MasteryState.TreeCount)
+            if (def.MasteryTree > MasteryState.TreeCount)
                 continue;
 
             // V1 formula: slot index = (PointCost - 1) / 2 - 1
+            // A slot index less than 0 means the ability is inherently available, without purchasing any slots.
             var slotIndex = (def.PointCost - 1) / 2 - 1;
-            if (slotIndex is < 0 or >= MasteryState.SlotsPerTree)
+            if (slotIndex >= MasteryState.SlotsPerTree)
                 continue;
-
-            if (mastery.IsSkillActive(def.MasteryTree.Value - 1, slotIndex))
-            {
-                // Mastery abilities use the mastery level for their tree
-                var masteryLevel = ComputeMasteryLevel(level, mastery, def.MasteryTree.Value);
-                result.Add(new ResolvedAbility(def.Entry, masteryLevel));
-            }
+            
+            // Mastery abilities use the mastery level for their tree
+            var masteryLevel = ComputeMasteryLevel(level, mastery, def.MasteryTree ?? 0);
+            result.Add(new ResolvedAbility(def.Entry, masteryLevel));
         }
 
         return result;

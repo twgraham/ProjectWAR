@@ -14,13 +14,8 @@ public class AbilityListResponse
     /// <summary>Subtype = 1 (ability levels).</summary>
     public byte SubType { get; set; } = 1;
 
-    /// <summary>Number of ability entries.</summary>
-    public byte Count { get; set; }
-
-    /// <summary>Flags (always 0x0300 in V1).</summary>
-    public ushort Flags { get; set; } = 0x0300;
-
     /// <summary>The ability entries.</summary>
+    [SizedEntry(littleEndian: true)]
     public AbilityLevelEntry[] Entries { get; set; } = [];
 }
 

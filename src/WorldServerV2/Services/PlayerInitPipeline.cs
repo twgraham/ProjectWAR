@@ -288,7 +288,6 @@ public sealed class PlayerInitPipeline
 
         session.SendAbilityList(new AbilityListResponse
         {
-            Count = (byte)Math.Min(abilities.Count, 255),
             Entries = entries,
         });
     }
@@ -395,17 +394,17 @@ public sealed class PlayerInitPipeline
         {
             var def = entries[i];
             var entryIndex = (ushort)(i + 1);
-            var browserRow = (byte)((def.MinimumRank + 3) / 2);
 
             // OptionalValue = floor(91 × BrowserRow² / 20) — a Y-position
             // mapping for the client's ability browser UI, reverse-engineered
             // from sniff data across all 22 Ironbreaker tree-0 entries.
+            var browserRow = (def.MinimumRank + 3) / 2;
             session.SendCareerAbilityInfo(new CareerAbilityResponse
             {
                 TreeId = treeId,
                 EntryIndex = entryIndex,
-                BrowserRow = browserRow,
-                OptionalValue = (uint)(91 * browserRow * browserRow / 20),
+                MinimumRank = def.MinimumRank,
+                CashCost = def.CashCost,
                 PackageId = CareerInfo.ComputePackageId(def.Entry, careerLine),
                 ReferenceId = def.Entry,
                 AbilityName = def.Name,

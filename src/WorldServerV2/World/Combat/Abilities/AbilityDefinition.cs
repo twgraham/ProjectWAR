@@ -47,6 +47,9 @@ public sealed class AbilityDefinition
 
     /// <summary>Mastery point cost to spec into.</summary>
     public byte PointCost { get; init; }
+    
+    // <summary>Cash cost to train.</summary>
+    public ushort CashCost { get; init; }
 
     /// <summary>Required weapon type (shield, 2H, ranged, etc.).</summary>
     public WeaponRequirement WeaponNeeded { get; init; }

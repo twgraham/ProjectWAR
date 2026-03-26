@@ -44,6 +44,14 @@ namespace Core.Infrastructure.Network
         public CStringAttribute() { Length = null; }
         public CStringAttribute(int length) { Length = length; }
     }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class SizedEntryAttribute : System.Attribute
+    {
+        public int ByteCount { get; }
+        public bool LittleEndian { get; }
+        public SizedEntryAttribute(int byteCount = 2, bool littleEndian = false) { ByteCount = byteCount; LittleEndian = littleEndian; }
+    }
 }";
 
     [Fact]
@@ -625,6 +633,219 @@ namespace TestNamespace
         code.ShouldContain("FixedLength(4)");  // validation message
         code.ShouldNotContain("ReadByte()");   // no 1-byte length prefix read
         code.ShouldNotContain("WriteByte(");   // no 1-byte length prefix write
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithSizedEntryOnArray()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Entry
+    {
+        public ushort Id { get; set; }
+        public byte Level { get; set; }
+    }
+
+    public class Packet
+    {
+        [SizedEntry]
+        public Entry[] Entries { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize should read and discard entry size (2-byte default)
+        code.ShouldContain("reader.ReadUInt16(); // entry size");
+
+        // Serialize should write the computed entry size (ushort=2 + byte=1 = 3)
+        code.ShouldContain("writer.WriteUInt16(3);");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithSizedEntryOnList()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+using System.Collections.Generic;
+
+namespace TestNamespace
+{
+    public class Skill
+    {
+        public int SkillId { get; set; }
+    }
+
+    public class SkillList
+    {
+        [SizedEntry]
+        public List<Skill> Skills { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(SkillList))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Entry size is 4 (one int), written as UInt16 (default 2-byte width)
+        code.ShouldContain("writer.WriteUInt16(4);");
+        code.ShouldContain("reader.ReadUInt16(); // entry size");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithSizedEntryCustomWidth()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Entry
+    {
+        public byte A { get; set; }
+        public byte B { get; set; }
+    }
+
+    public class Packet
+    {
+        [SizedEntry(1)]
+        public Entry[] Entries { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Entry size is 2 (two bytes), written as a single byte (1-byte width)
+        code.ShouldContain("writer.WriteByte(2);");
+        code.ShouldContain("reader.ReadByte(); // entry size");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithSizedEntryAndPacketLength()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Entry
+    {
+        public ushort Value { get; set; }
+    }
+
+    public class Packet
+    {
+        [PacketLength(2)]
+        [SizedEntry(2)]
+        public Entry[] Entries { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Count should use 2-byte prefix (PacketLength(2))
+        code.ShouldContain("reader.ReadUInt16()");
+        // Entry size should also be 2-byte UInt16 write with value 2 (one ushort)
+        code.ShouldContain("writer.WriteUInt16(2);");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithSizedEntryOnPrimitiveArray()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Packet
+    {
+        [SizedEntry]
+        public ushort[] Values { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Entry size = 2 (ushort), default 2-byte entry size field
+        code.ShouldContain("writer.WriteUInt16(2);");
+        code.ShouldContain("reader.ReadUInt16(); // entry size");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithSizedEntryLittleEndian()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Item
+    {
+        public ushort Id { get; set; }
+        public byte Level { get; set; }
+    }
+
+    public class Packet
+    {
+        [SizedEntry(2, littleEndian: true)]
+        public Item[] Items { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Entry size = 3 (ushort Id + byte Level), written as LE UInt16
+        code.ShouldContain("writer.WriteUInt16LE(3);");
+        code.ShouldContain("reader.ReadUInt16LE(); // entry size");
     }
 
     private GeneratorTestResult RunGenerator(string source)
