@@ -75,7 +75,7 @@ public class AbilityDataProvider(
                     continue;
 
                 var key = (byte)cl;
-                if (def.MasteryTree is 0 or null)
+                if (def is { MasteryTree: 0 or null } or { MasteryTree: not 0 or not null, PointCost: 0 })
                 {
                     if (!coreLists.TryGetValue(key, out var list))
                         coreLists[key] = list = [];
@@ -93,11 +93,7 @@ public class AbilityDataProvider(
         // Sort core abilities by MinimumRank, mastery by tree then PointCost
         var coreByCareer = coreLists.ToFrozenDictionary(
             kvp => kvp.Key,
-            kvp =>
-            {
-                kvp.Value.Sort((a, b) => a.MinimumRank.CompareTo(b.MinimumRank));
-                return kvp.Value.ToArray();
-            });
+            kvp => kvp.Value.OrderBy(x => x.MinimumRank).ToArray());
 
         var masteryByCareer = masteryLists.ToFrozenDictionary(
             kvp => kvp.Key,
