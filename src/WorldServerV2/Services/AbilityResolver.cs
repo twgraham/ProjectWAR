@@ -38,6 +38,9 @@ public sealed class AbilityResolver
         var coreAbilities = _abilityData.GetCoreAbilities(careerLine);
         foreach (var def in coreAbilities)
         {
+            if (def.MinimumRank > level)
+                continue;
+            
             // Core abilities use effective level as their mastery level
             result.Add(new ResolvedAbility(def.Entry, level));
         }
@@ -54,10 +57,13 @@ public sealed class AbilityResolver
             var slotIndex = (def.PointCost - 1) / 2 - 1;
             if (slotIndex >= MasteryState.SlotsPerTree)
                 continue;
-            
-            // Mastery abilities use the mastery level for their tree
-            var masteryLevel = ComputeMasteryLevel(level, mastery, def.MasteryTree ?? 0);
-            result.Add(new ResolvedAbility(def.Entry, masteryLevel));
+
+            if (slotIndex < 0 || mastery.IsSkillActive(def.MasteryTree.Value - 1, slotIndex))
+            {
+                // Mastery abilities use the mastery level for their tree
+                var masteryLevel = ComputeMasteryLevel(level, mastery, def.MasteryTree ?? 0);
+                result.Add(new ResolvedAbility(def.Entry, masteryLevel));
+            }
         }
 
         return result;
