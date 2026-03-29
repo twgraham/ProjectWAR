@@ -58,7 +58,7 @@ public sealed class AbilityResolver
             if (slotIndex >= MasteryState.SlotsPerTree)
                 continue;
 
-            if (slotIndex < 0 || mastery.IsSkillActive(def.MasteryTree.Value - 1, slotIndex))
+            if (slotIndex < 0 || def.MasteryTree is null or 0 || mastery.IsSkillActive(def.MasteryTree.Value - 1, slotIndex))
             {
                 // Mastery abilities use the mastery level for their tree
                 var masteryLevel = ComputeMasteryLevel(level, mastery, def.MasteryTree ?? 0);

@@ -26,7 +26,6 @@ namespace WorldServerV2.Services;
 /// <list type="number">
 ///   <item><c>F_MAX_VELOCITY</c> (0x1E) — movement speed</item>
 ///   <item><c>S_PLAYER_INITTED</c> (0x88) — identity, position, realm, career</item>
-///   <item><c>F_PLAYER_STATS</c> (0x46) — base stats</item>
 ///   <item><c>F_CHARACTER_INFO</c> (0xBE) subtype 3 — skills, career, race, rally point</item>
 ///   <item><c>F_CHARACTER_INFO</c> (0xBE) subtype 1 — ability list</item>
 ///   <item><c>F_MORALE_LIST</c> (0x8C) — morale ability slots</item>
@@ -35,6 +34,7 @@ namespace WorldServerV2.Services;
 ///   <item><c>F_CAREER_CATEGORY</c> (0xEE) — mastery tree header</item>
 ///   <item><c>F_CAREER_PACKAGE_INFO</c> (0xF3) — mastery tree points + skill entries</item>
 ///   <item><c>F_CAREER_PACKAGE_UPDATE</c> (0xF1) — mastery point summaries</item>
+///   <item><c>F_PLAYER_STATS</c> (0x46) — base stats</item>
 ///   <item><c>F_PLAYER_HEALTH</c> (0x05) — HP, AP, morale</item>
 ///   <item><c>S_PLAYER_LOADED</c> (0x89) — data-complete marker</item>
 ///   <item><c>F_MAX_VELOCITY</c> (0x1E) — speed (sent twice, matching old server)</item>

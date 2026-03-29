@@ -42,15 +42,15 @@ public class CareerCategoryResponse
     public string TreeName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Slot index entries. The serializer auto-writes a 1-byte length prefix (slot count)
-    /// followed by <c>N × (index:u8, zero:u8)</c>.
+    /// Slot index entries. The serializer auto-writes a 2-byte length prefix (slot count)
+    /// followed by <c>N × (zero:u8, index:u8)</c>.
     /// </summary>
     [PacketLength(2)]
     public CareerCategorySlotEntry[] Slots { get; set; } = [];
 
-    /// <summary>2-byte trailer.</summary>
+    /// <summary>3-byte trailer.</summary>
     [FixedLength(3)]
-    public byte[] Trailer { get; set; } = new byte[2];
+    public byte[] Trailer { get; set; } = new byte[3];
 }
 
 /// <summary>

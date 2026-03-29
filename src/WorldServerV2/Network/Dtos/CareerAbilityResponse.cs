@@ -67,18 +67,18 @@ public class CareerAbilityResponse
     /// <summary>Number of items in this package (always 1 for career abilities).</summary>
     public byte ItemCount { get; set; } = 1;
 
-    /// <summary>Ability entry ID from the <c>abilities</c> table (uint32 BE).</summary>
-    public uint PackageId { get; set; }
-
-    /// <summary>Item type: 2 = ability reference (client looks up locally).</summary>
-    public byte ItemType { get; set; } = 2;
-
     /// <summary>
     /// Client-internal ability ID for local icon/name/data lookup.
     /// Computed as <c>abilityEntry + racialPairOffset</c> where the offset
     /// is determined by the career's racial pairing (Dwarves/Greenskins: −1399,
     /// Empire/Chaos: +4251, High Elves/Dark Elves: +4351).
     /// </summary>
+    public uint PackageId { get; set; }
+
+    /// <summary>Item type: 2 = ability reference (client looks up locally).</summary>
+    public byte ItemType { get; set; } = 2;
+
+    /// <summary>Ability entry ID from the <c>abilities</c> table (uint32 BE).</summary>
     public uint ReferenceId { get; set; }
 
     /// <summary>Item flag 1 (always 0).</summary>
