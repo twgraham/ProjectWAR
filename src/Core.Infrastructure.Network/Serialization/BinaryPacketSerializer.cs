@@ -148,12 +148,11 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             if (propertyInfo != null)
             {
-                if (propertyInfo.GetCustomAttribute<PascalStringAttribute>() != null)
-                    return reader.ReadPascalString();
-
-                var cstr = propertyInfo.GetCustomAttribute<CStringAttribute>();
-                if (cstr != null)
-                    return reader.ReadCString(cstr.Length);
+                var strAttr = propertyInfo.GetCustomAttributes()
+                    .OfType<IStringSerializationAttribute>()
+                    .FirstOrDefault();
+                if (strAttr != null)
+                    return strAttr.Read(ref reader);
             }
 
             return reader.ReadString();
@@ -338,16 +337,12 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             if (propertyInfo != null)
             {
-                if (propertyInfo.GetCustomAttribute<PascalStringAttribute>() != null)
+                var strAttr = propertyInfo.GetCustomAttributes()
+                    .OfType<IStringSerializationAttribute>()
+                    .FirstOrDefault();
+                if (strAttr != null)
                 {
-                    writer.WritePascalString((string)value ?? string.Empty);
-                    return;
-                }
-
-                var cstr = propertyInfo.GetCustomAttribute<CStringAttribute>();
-                if (cstr != null)
-                {
-                    writer.WriteCString((string)value ?? string.Empty, cstr.Length);
+                    strAttr.Write(ref writer, (string)value ?? string.Empty);
                     return;
                 }
             }
@@ -565,17 +560,15 @@ public class BinaryPacketSerializer : IPacketSerializer
                 var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
 
                 // CString with fixed length
-                var cstr = prop.GetCustomAttribute<CStringAttribute>();
-                if (cstr != null && propType == typeof(string))
+                var strAttr = prop.GetCustomAttributes()
+                    .OfType<IStringSerializationAttribute>()
+                    .FirstOrDefault();
+                if (strAttr != null && propType == typeof(string))
                 {
-                    if (cstr.Length == null) return null;
-                    total += cstr.Length.Value;
+                    if (strAttr.FixedWireSize == null) return null;
+                    total += strAttr.FixedWireSize.Value;
                     continue;
                 }
-
-                // PascalString — variable
-                if (prop.GetCustomAttribute<PascalStringAttribute>() != null && propType == typeof(string))
-                    return null;
 
                 // FixedLength byte[]
                 if (propType == typeof(byte[]))

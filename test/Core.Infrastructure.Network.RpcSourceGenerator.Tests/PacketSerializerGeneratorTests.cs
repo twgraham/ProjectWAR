@@ -31,14 +31,16 @@ namespace Core.Infrastructure.Network
         public FixedLengthAttribute(int length) { Length = length; }
     }
 
+    public interface IStringSerializationAttribute { }
+
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class PascalStringAttribute : System.Attribute { }
+    public class PascalStringAttribute : System.Attribute, IStringSerializationAttribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class LittleEndianAttribute : System.Attribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class CStringAttribute : System.Attribute
+    public class CStringAttribute : System.Attribute, IStringSerializationAttribute
     {
         public int? Length { get; }
         public CStringAttribute() { Length = null; }
@@ -497,8 +499,8 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        code.ShouldContain("ReadPascalString()");
-        code.ShouldContain("WritePascalString");
+        code.ShouldContain("PascalStringAttribute().Read(ref reader)");
+        code.ShouldContain("PascalStringAttribute().Write(ref writer,");
         code.ShouldNotContain("ReadString()");  // regular length-prefixed read must not appear
         code.ShouldNotContain("WriteString("); // regular length-prefixed write must not appear
     }
@@ -563,9 +565,8 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        code.ShouldContain("ReadCString(20)");
-        code.ShouldContain("WriteCString(");
-        code.ShouldContain(", 20)");
+        code.ShouldContain("CStringAttribute(20).Read(ref reader)");
+        code.ShouldContain("CStringAttribute(20).Write(ref writer,");
         code.ShouldNotContain("ReadCStringNullTerminated");
         code.ShouldNotContain("WriteCStringNullTerminated");
     }
@@ -595,9 +596,8 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        code.ShouldContain("ReadCString(null)");
-        code.ShouldContain("WriteCString(");
-        code.ShouldContain(", null)");
+        code.ShouldContain("CStringAttribute().Read(ref reader)");
+        code.ShouldContain("CStringAttribute().Write(ref writer,");
         code.ShouldNotContain("ReadCStringNullTerminated");
         code.ShouldNotContain("WriteCStringNullTerminated");
     }

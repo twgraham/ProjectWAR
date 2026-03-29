@@ -1,7 +1,7 @@
 namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
-public sealed class CStringAttribute : Attribute
+public sealed class CStringAttribute : Attribute, IStringSerializationAttribute
 {
     public int? Length { get; }
 
@@ -18,4 +18,15 @@ public sealed class CStringAttribute : Attribute
             throw new ArgumentOutOfRangeException(nameof(length), "CString length must be positive");
         Length = length;
     }
+
+    /// <inheritdoc />
+    public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
+        => writer.WriteCString(value, Length);
+
+    /// <inheritdoc />
+    public string Read(ref BinaryPacketSerializer.SpanReader reader)
+        => reader.ReadCString(Length);
+
+    /// <inheritdoc />
+    public int? FixedWireSize => Length;
 }
