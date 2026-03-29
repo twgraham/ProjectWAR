@@ -120,6 +120,16 @@ public class BinaryPacketSerializer : IPacketSerializer
             propertyType = underlyingType;
         }
 
+        // ICustomSerializationAttribute — lets any attribute override serialization for any type
+        if (propertyInfo != null)
+        {
+            var customAttr = propertyInfo.GetCustomAttributes()
+                .OfType<ICustomSerializationAttribute>()
+                .FirstOrDefault();
+            if (customAttr != null)
+                return customAttr.Read(ref reader);
+        }
+
         if (propertyType == typeof(byte))
             return reader.ReadByte();
         if (propertyType == typeof(sbyte))
@@ -145,18 +155,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         if (propertyType.IsEnum)
             return Enum.ToObject(propertyType,reader.ReadByte());
         if (propertyType == typeof(string))
-        {
-            if (propertyInfo != null)
-            {
-                var strAttr = propertyInfo.GetCustomAttributes()
-                    .OfType<IStringSerializationAttribute>()
-                    .FirstOrDefault();
-                if (strAttr != null)
-                    return strAttr.Read(ref reader);
-            }
-
             return reader.ReadString();
-        }
         if (propertyType.IsArray)
         {
             var elementType = propertyType.GetElementType()!;
@@ -309,6 +308,19 @@ public class BinaryPacketSerializer : IPacketSerializer
             propertyType = underlyingType;
         }
 
+        // ICustomSerializationAttribute — lets any attribute override serialization for any type
+        if (propertyInfo != null)
+        {
+            var customAttr = propertyInfo.GetCustomAttributes()
+                .OfType<ICustomSerializationAttribute>()
+                .FirstOrDefault();
+            if (customAttr != null)
+            {
+                customAttr.Write(ref writer, value);
+                return;
+            }
+        }
+
         if (propertyType == typeof(byte))
             writer.WriteByte((byte)value);
         else if (propertyType == typeof(sbyte))
@@ -334,21 +346,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         else if (propertyType.IsEnum)
             writer.WriteByte(Convert.ToByte(value));
         else if (propertyType == typeof(string))
-        {
-            if (propertyInfo != null)
-            {
-                var strAttr = propertyInfo.GetCustomAttributes()
-                    .OfType<IStringSerializationAttribute>()
-                    .FirstOrDefault();
-                if (strAttr != null)
-                {
-                    strAttr.Write(ref writer, (string)value ?? string.Empty);
-                    return;
-                }
-            }
-
             writer.WriteString((string)value ?? string.Empty);
-        }
         else if (propertyType.IsArray)
         {
             var elementType = propertyType.GetElementType()!;
@@ -559,14 +557,14 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
 
-                // CString with fixed length
-                var strAttr = prop.GetCustomAttributes()
-                    .OfType<IStringSerializationAttribute>()
+                // ICustomSerializationAttribute — check first for any type
+                var customAttr = prop.GetCustomAttributes()
+                    .OfType<ICustomSerializationAttribute>()
                     .FirstOrDefault();
-                if (strAttr != null && propType == typeof(string))
+                if (customAttr != null)
                 {
-                    if (strAttr.FixedWireSize == null) return null;
-                    total += strAttr.FixedWireSize.Value;
+                    if (customAttr.FixedWireSize == null) return null;
+                    total += customAttr.FixedWireSize.Value;
                     continue;
                 }
 

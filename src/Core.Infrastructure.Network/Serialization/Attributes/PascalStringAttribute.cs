@@ -7,14 +7,14 @@ namespace Core.Infrastructure.Network.Serialization.Attributes;
 /// 255 bytes are silently truncated on write.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
-public sealed class PascalStringAttribute : Attribute, IStringSerializationAttribute
+public sealed class PascalStringAttribute : Attribute, ICustomSerializationAttribute
 {
     /// <inheritdoc />
-    public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
-        => writer.WritePascalString(value);
+    public void Write(ref BinaryPacketSerializer.SpanWriter writer, object value)
+        => writer.WritePascalString((string)value);
 
     /// <inheritdoc />
-    public string Read(ref BinaryPacketSerializer.SpanReader reader)
+    public object Read(ref BinaryPacketSerializer.SpanReader reader)
         => reader.ReadPascalString();
 
     /// <inheritdoc />

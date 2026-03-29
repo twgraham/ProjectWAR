@@ -1076,9 +1076,9 @@ public class BinaryPacketSerializerTests
     }
 
     [Fact]
-    public void RoundTrip_CustomStringSerializationAttribute_IsDiscoveredAutomatically()
+    public void RoundTrip_CustomSerializationAttribute_IsDiscoveredAutomatically()
     {
-        // GIVEN: A packet using a custom IStringSerializationAttribute (ShortPascalString)
+        // GIVEN: A packet using a custom ICustomSerializationAttribute (ShortPascalString)
         // that writes a 2-byte length prefix instead of PascalString's 1-byte prefix
         var original = new ShortPascalStringPacket { Name = "Hi" };
 
@@ -1282,28 +1282,29 @@ public class BinaryPacketSerializerTests
     }
 
     /// <summary>
-    /// Example custom IStringSerializationAttribute: a 2-byte (ushort) length-prefixed string.
-    /// Demonstrates that the reflection serializer discovers new string formats automatically.
+    /// Example custom ICustomSerializationAttribute: a 2-byte (ushort) length-prefixed string.
+    /// Demonstrates that the reflection serializer discovers new formats automatically.
     /// </summary>
     [AttributeUsage(AttributeTargets.Property)]
-    public sealed class ShortPascalStringAttribute : Attribute, IStringSerializationAttribute
+    public sealed class ShortPascalStringAttribute : Attribute, ICustomSerializationAttribute
     {
         private static readonly Encoding Iso88591 = Encoding.GetEncoding("iso-8859-1");
 
-        public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
+        public void Write(ref BinaryPacketSerializer.SpanWriter writer, object value)
         {
-            if (string.IsNullOrEmpty(value))
+            var str = (string)value;
+            if (string.IsNullOrEmpty(str))
             {
                 writer.WriteUInt16(0);
                 return;
             }
 
-            var encoded = Iso88591.GetBytes(value);
+            var encoded = Iso88591.GetBytes(str);
             writer.WriteUInt16((ushort)encoded.Length);
             foreach (var b in encoded) writer.WriteByte(b);
         }
 
-        public string Read(ref BinaryPacketSerializer.SpanReader reader)
+        public object Read(ref BinaryPacketSerializer.SpanReader reader)
         {
             var len = reader.ReadUInt16();
             if (len == 0) return string.Empty;

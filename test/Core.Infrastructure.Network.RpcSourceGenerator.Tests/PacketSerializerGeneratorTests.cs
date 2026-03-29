@@ -31,16 +31,16 @@ namespace Core.Infrastructure.Network
         public FixedLengthAttribute(int length) { Length = length; }
     }
 
-    public interface IStringSerializationAttribute { }
+    public interface ICustomSerializationAttribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class PascalStringAttribute : System.Attribute, IStringSerializationAttribute { }
+    public class PascalStringAttribute : System.Attribute, ICustomSerializationAttribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class LittleEndianAttribute : System.Attribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class CStringAttribute : System.Attribute, IStringSerializationAttribute
+    public class CStringAttribute : System.Attribute, ICustomSerializationAttribute
     {
         public int? Length { get; }
         public CStringAttribute() { Length = null; }
@@ -603,7 +603,7 @@ namespace TestNamespace
     }
 
     [Fact]
-    public void GeneratesSerializer_WithCustomStringSerializationAttribute()
+    public void GeneratesSerializer_WithCustomSerializationAttribute()
     {
         var source = @"
 using Core.Infrastructure.Network;
@@ -611,7 +611,7 @@ using Core.Infrastructure.Network;
 namespace TestNamespace
 {
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class ShortPascalStringAttribute : System.Attribute, IStringSerializationAttribute { }
+    public class ShortPascalStringAttribute : System.Attribute, ICustomSerializationAttribute { }
 
     public class ChatMessage
     {
@@ -630,7 +630,7 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        // The generator should detect the custom attribute via IStringSerializationAttribute
+        // The generator should detect the custom attribute via ICustomSerializationAttribute
         // and generate attribute instantiation + method calls (no reflection)
         code.ShouldContain("ShortPascalStringAttribute().Read(ref reader)");
         code.ShouldContain("ShortPascalStringAttribute().Write(ref writer,");

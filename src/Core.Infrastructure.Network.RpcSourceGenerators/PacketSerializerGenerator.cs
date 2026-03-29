@@ -344,12 +344,13 @@ namespace RpcSourceGenerator
 
         private static string BuildReadExpression(IPropertySymbol prop, ITypeSymbol propType, ITypeSymbol underlyingType, bool isNullable, CollectionMethodTracker tracker)
         {
-            // IStringSerializationAttribute (handles CString, PascalString, and any future custom string attributes)
-            var strSerAttr = GetStringSerializationAttribute(prop);
-            if (strSerAttr != null && underlyingType.SpecialType == SpecialType.System_String)
+            // ICustomSerializationAttribute (handles CString, PascalString, and any future custom attributes)
+            var customSerAttr = GetCustomSerializationAttribute(prop);
+            if (customSerAttr != null)
             {
-                var attrInst = BuildAttributeInstantiation(strSerAttr);
-                var inner = $"{attrInst}.Read(ref reader)";
+                var attrInst = BuildAttributeInstantiation(customSerAttr);
+                var targetTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var inner = $"({targetTypeName}){attrInst}.Read(ref reader)";
                 return isNullable ? $"reader.IsAtEnd() ? null : {inner}" : inner;
             }
 
@@ -472,6 +473,26 @@ namespace RpcSourceGenerator
 
             var value = needsCast ? $"{valueExpression}.Value" : valueExpression;
 
+            // ICustomSerializationAttribute — takes priority for any property type
+            var customSerAttr = GetCustomSerializationAttribute(property);
+            if (customSerAttr != null)
+            {
+                var attrInst = BuildAttributeInstantiation(customSerAttr);
+                var writeCall = $"{attrInst}.Write(ref writer, {value})";
+                if (needsCast)
+                {
+                    sb.AppendLine($"            if ({valueExpression} != null)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                {writeCall};");
+                    sb.AppendLine("            }");
+                }
+                else
+                {
+                    sb.AppendLine($"            {writeCall};");
+                }
+                return;
+            }
+
             // Check if it's a collection first
             if (IsCollectionType(underlyingType, out var elementType))
             {
@@ -525,26 +546,6 @@ namespace RpcSourceGenerator
                 else
                 {
                     sb.AppendLine($"            Serialize{customTypeSafeName}({value}, ref writer);");
-                }
-                return;
-            }
-
-            // Handle IStringSerializationAttribute on string properties (CString, PascalString, and custom)
-            var strSerAttr = GetStringSerializationAttribute(property);
-            if (strSerAttr != null && underlyingType.SpecialType == SpecialType.System_String)
-            {
-                var attrInst = BuildAttributeInstantiation(strSerAttr);
-                var writeCall = $"{attrInst}.Write(ref writer, {value})";
-                if (needsCast)
-                {
-                    sb.AppendLine($"            if ({valueExpression} != null)");
-                    sb.AppendLine("            {");
-                    sb.AppendLine($"                {writeCall};");
-                    sb.AppendLine("            }");
-                }
-                else
-                {
-                    sb.AppendLine($"            {writeCall};");
                 }
                 return;
             }
@@ -662,15 +663,15 @@ namespace RpcSourceGenerator
         }
 
         /// <summary>
-        /// Returns the first attribute on the property whose class implements IStringSerializationAttribute,
+        /// Returns the first attribute on the property whose class implements ICustomSerializationAttribute,
         /// or null if none is found.
         /// </summary>
-        private static AttributeData? GetStringSerializationAttribute(IPropertySymbol property)
+        private static AttributeData? GetCustomSerializationAttribute(IPropertySymbol property)
         {
             return property.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass != null &&
                                      a.AttributeClass.AllInterfaces.Any(i =>
-                                         i.Name == "IStringSerializationAttribute" &&
+                                         i.Name == "ICustomSerializationAttribute" &&
                                          (i.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false)));
         }
 
@@ -782,12 +783,12 @@ namespace RpcSourceGenerator
             if (propType.NullableAnnotation == NullableAnnotation.Annotated && propType is INamedTypeSymbol namedNullable && namedNullable.IsGenericType)
                 underlyingType = namedNullable.TypeArguments[0];
 
-            // IStringSerializationAttribute — infer fixed wire size from constructor args
-            var strSerAttr = GetStringSerializationAttribute(prop);
-            if (strSerAttr != null && underlyingType.SpecialType == SpecialType.System_String)
+            // ICustomSerializationAttribute — infer fixed wire size from constructor args
+            var customSerAttr = GetCustomSerializationAttribute(prop);
+            if (customSerAttr != null)
             {
                 // Convention: if the first constructor arg is a positive int, it's the fixed wire size
-                if (strSerAttr.ConstructorArguments.Length > 0 && strSerAttr.ConstructorArguments[0].Value is int len && len > 0)
+                if (customSerAttr.ConstructorArguments.Length > 0 && customSerAttr.ConstructorArguments[0].Value is int len && len > 0)
                     return len;
                 return null; // variable-length
             }

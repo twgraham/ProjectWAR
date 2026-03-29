@@ -1,9 +1,9 @@
 namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 /// <summary>
-/// Defines custom string serialization behaviour for a property attribute.
+/// Defines custom serialization behaviour for a property attribute.
 /// Implement this interface on an <see cref="Attribute"/> to control how a
-/// <c>string</c> property is read from and written to the wire.
+/// property is read from and written to the wire.
 /// <para>
 /// Both the reflection-based <see cref="BinaryPacketSerializer"/> and the
 /// source-generated serializer honour this interface automatically — no
@@ -27,17 +27,17 @@ namespace Core.Infrastructure.Network.Serialization.Attributes;
 /// serializer always uses the <see cref="FixedWireSize"/> property directly.
 /// </para>
 /// </remarks>
-public interface IStringSerializationAttribute
+public interface ICustomSerializationAttribute
 {
     /// <summary>
-    /// Writes <paramref name="value"/> to the wire using this string encoding.
+    /// Writes <paramref name="value"/> to the wire using this custom encoding.
     /// </summary>
-    void Write(ref BinaryPacketSerializer.SpanWriter writer, string value);
+    void Write(ref BinaryPacketSerializer.SpanWriter writer, object value);
 
     /// <summary>
-    /// Reads a string from the wire using this string encoding.
+    /// Reads a value from the wire using this custom encoding.
     /// </summary>
-    string Read(ref BinaryPacketSerializer.SpanReader reader);
+    object Read(ref BinaryPacketSerializer.SpanReader reader);
 
     /// <summary>
     /// The fixed wire size in bytes if this encoding always produces a fixed
