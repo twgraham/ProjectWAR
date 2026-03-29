@@ -1045,7 +1045,7 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 | 4 | `F_BAG_INFO` (sub 0x19) | 0x0C | `StsInterface.SendRenownStats()` | 1 | No | — | Renown stat bonuses |
 | 5 | `F_REALM_BONUS` | 0xD8 | `SendRealmBonus()` | 1 | No | — | Active realm bonuses |
 | 6 | `S_PLAYER_INITTED` | 0x88 | `SendInited()` | 1 | No | ✅ | Identity, position, realm, career |
-| 7 | `F_TACTICS` | 0x60 | `TacInterface.HandleTactics()` + `SendTactics()` | 1–2 | Partial | ✅ | Equipped + available tactics |
+| 7 | `F_TACTICS` | 0xF7 | `TacInterface.HandleTactics()` + `SendTactics()` | 1–2 | Partial | ✅ | Equipped + available tactics |
 
 #### Phase 3 — `StartInit()` Block 2
 
@@ -1070,10 +1070,10 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 | 24 | `F_PLAYER_HEALTH` | 0x05 | `SendHealth()` | 1 | No | ✅ | HP, AP, morale |
 | 25 | `S_PLAYER_LOADED` | 0x89 | (inline) | 1 | No | ✅ | Data-complete marker |
 | 26 | `F_MAX_VELOCITY` | 0x1E | `SendSpeed(Speed)` (2nd) | 1 | No | ✅ | Speed (re-sent, matches old server) |
-| 27 | `F_MORALE_LIST` | 0x7E | `SendMoraleAbilities()` | 1 | No | ✅ | Equipped morale abilities |
+| 27 | `F_MORALE_LIST` | 0x8C | `SendMoraleAbilities()` | 1 | No | ✅ | Equipped morale abilities |
 | 28 | `F_PLAYER_STATS` | 0x46 | `SendStats()` (2nd) | 1 | No | ✅ | Stats (re-sent, matches old server) |
 | 29 | `F_CHARACTER_INFO` (sub 1) | 0x07 | `AbtInterface.SendAbilityLevels()` | 1 | No | ✅ | Ability levels |
-| 30 | `F_CAREER_CATEGORY` + 24×`F_CAREER_PACKAGE_INFO` | 0x43 + 0x68 | `AbtInterface.ReloadMastery()` | 25 | No | ✅ | Mastery tree + packages |
+| 30 | `F_CAREER_CATEGORY` + 24×`F_CAREER_PACKAGE_INFO` | 0xEE + 0xF3 | `AbtInterface.ReloadMastery()` | 25 | No | ✅ | Mastery tree + packages |
 | 31 | 3×`F_CAREER_PACKAGE_UPDATE` + `F_CHARACTER_INFO` (sub 1) | 0x69 + 0x07 | `AbtInterface.SendMasteryPointsUpdate()` | 4 | No | ✅ | Mastery point allocation |
 | 32 | `F_CLIENT_DATA` | 0x23 | `SendClientData()` | 1 | No | — | Client settings blob (1024 bytes) |
 | 33 | N×`F_OBJECT_EFFECT_STATE` | 0x8A | `OSInterface.SendObjectStates()` | 0–N | Yes | — | Active visual effects |

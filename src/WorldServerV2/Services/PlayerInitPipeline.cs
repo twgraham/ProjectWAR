@@ -395,10 +395,6 @@ public sealed class PlayerInitPipeline
             var def = entries[i];
             var entryIndex = (ushort)(i + 1);
 
-            // OptionalValue = floor(91 × BrowserRow² / 20) — a Y-position
-            // mapping for the client's ability browser UI, reverse-engineered
-            // from sniff data across all 22 Ironbreaker tree-0 entries.
-            var browserRow = (def.MinimumRank + 3) / 2;
             session.SendCareerAbilityInfo(new CareerAbilityResponse
             {
                 TreeId = treeId,
