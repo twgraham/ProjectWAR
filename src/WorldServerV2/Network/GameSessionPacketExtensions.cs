@@ -43,6 +43,44 @@ public static class GameSessionPacketExtensions
     public static void SendPlayerInitComplete(this GameSession session, PlayerInitCompleteResponse response)
         => session.Send((byte)Opcodes.F_PLAYER_INIT_COMPLETE, response);
 
+    // ── Abilities / Career ──────────────────────────────────────────────
+
+    /// <summary>Sends <c>F_CHARACTER_INFO</c> (0xBE) subtype 3 — skill list, race, rally point.</summary>
+    public static void SendSkillList(this GameSession session, SkillListResponse response)
+        => session.Send((byte)Opcodes.F_CHARACTER_INFO, response);
+
+    /// <summary>Sends <c>F_CHARACTER_INFO</c> (0xBE) subtype 1 — ability list with mastery levels.</summary>
+    public static void SendAbilityList(this GameSession session, AbilityListResponse response)
+        => session.Send((byte)Opcodes.F_CHARACTER_INFO, response);
+
+    /// <summary>Sends <c>F_MORALE_LIST</c> (0x8C) — 4 morale ability slots.</summary>
+    public static void SendMoraleList(this GameSession session, MoraleListResponse response)
+        => session.Send((byte)Opcodes.F_MORALE_LIST, response);
+
+    /// <summary>Sends <c>F_TACTICS</c> (0xF7) — active tactic abilities.</summary>
+    public static void SendTactics(this GameSession session, TacticsResponse response)
+        => session.Send((byte)Opcodes.F_TACTICS, response);
+
+    /// <summary>Sends <c>F_CAREER_CATEGORY</c> (0xEE) — tree header for mastery or renown.</summary>
+    public static void SendCareerCategory(this GameSession session, CareerCategoryResponse response)
+        => session.Send((byte)Opcodes.F_CAREER_CATEGORY, response);
+
+    /// <summary>Sends <c>F_CAREER_PACKAGE_INFO</c> (0xF3) — career ability/tactic entry.</summary>
+    public static void SendCareerAbilityInfo(this GameSession session, CareerAbilityResponse response)
+        => session.Send((byte)Opcodes.F_CAREER_PACKAGE_INFO, response);
+
+    /// <summary>Sends <c>F_CAREER_PACKAGE_INFO</c> (0xF3) — mastery tree point count.</summary>
+    public static void SendCareerPackageInfo(this GameSession session, MasteryTreePointsResponse response)
+        => session.Send((byte)Opcodes.F_CAREER_PACKAGE_INFO, response);
+
+    /// <summary>Sends <c>F_CAREER_PACKAGE_INFO</c> (0xF3) — individual mastery skill entry.</summary>
+    public static void SendCareerPackageInfo(this GameSession session, MasterySkillResponse response)
+        => session.Send((byte)Opcodes.F_CAREER_PACKAGE_INFO, response);
+
+    /// <summary>Sends <c>F_CAREER_PACKAGE_UPDATE</c> (0xF1) — mastery/renown point summary per tree.</summary>
+    public static void SendCareerPackageUpdate(this GameSession session, CareerPackageUpdateResponse response)
+        => session.Send((byte)Opcodes.F_CAREER_PACKAGE_UPDATE, response);
+
     // ── World Loading ───────────────────────────────────────────────────
 
     /// <summary>Sends <c>F_SET_TIME</c> (0xD6) — in-game clock.</summary>

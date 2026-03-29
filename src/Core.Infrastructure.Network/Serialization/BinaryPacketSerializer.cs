@@ -173,7 +173,10 @@ public class BinaryPacketSerializer : IPacketSerializer
             }
             // Use generic method for arrays; [FixedLength] skips the length-prefix read
             var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
-            return ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount);
+            var sizedEntryAttr = propertyInfo?.GetCustomAttribute<SizedEntryAttribute>();
+            var sizedEntryWidth = sizedEntryAttr?.ByteCount;
+            var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
+            return ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
         }
 
         if (propertyType.IsGenericType)
@@ -188,9 +191,12 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 var elementType = propertyType.GetGenericArguments()[0];
                 var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
+                var sizedEntryAttr = propertyInfo?.GetCustomAttribute<SizedEntryAttribute>();
+                var sizedEntryWidth = sizedEntryAttr?.ByteCount;
+                var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
                     
                 // Read as array first; [FixedLength] skips the length-prefix read
-                var array = ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount);
+                var array = ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
                     
                 // Convert to appropriate collection type
                 if (genericTypeDef == typeof(List<>))
@@ -207,10 +213,29 @@ public class BinaryPacketSerializer : IPacketSerializer
             throw new NotSupportedException($"Generic type {propertyType.Name} is not supported");
         }
 
+        // Custom class/struct — recurse into properties
+        if (propertyType.IsClass || (propertyType.IsValueType && !propertyType.IsPrimitive && !propertyType.IsEnum))
+        {
+            return ReadComposite(ref reader, propertyType);
+        }
+
         throw new NotSupportedException($"Property type {propertyType.Name} is not supported");
     }
 
-    private object ReadArrayGeneric(ref SpanReader reader, Type elementType, int lengthSize, int? fixedCount = null)
+    private object ReadComposite(ref SpanReader reader, Type type)
+    {
+        var instance = Activator.CreateInstance(type)!;
+        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var property in properties)
+        {
+            if (!property.CanWrite) continue;
+            var value = ReadProperty(ref reader, property.PropertyType, property);
+            property.SetValue(instance, value);
+        }
+        return instance;
+    }
+
+    private object ReadArrayGeneric(ref SpanReader reader, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
     {
         // If [FixedLength] is present use the fixed count; otherwise read the length prefix
         uint length;
@@ -226,6 +251,18 @@ public class BinaryPacketSerializer : IPacketSerializer
                 2 => reader.ReadUInt16(),
                 4 => reader.ReadUInt32(),
                 _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
+            };
+        }
+
+        // [SizedEntry] — read and discard the entry size field
+        if (sizedEntryWidth.HasValue)
+        {
+            _ = sizedEntryWidth.Value switch
+            {
+                1 => (uint)reader.ReadByte(),
+                2 => sizedEntryLE ? (uint)reader.ReadUInt16LE() : (uint)reader.ReadUInt16(),
+                4 => sizedEntryLE ? reader.ReadUInt32LE() : reader.ReadUInt32(),
+                _ => throw new InvalidOperationException($"Invalid sized entry width: {sizedEntryWidth.Value}")
             };
         }
             
@@ -337,7 +374,10 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 // Use generic method for arrays; [FixedLength] skips writing a length prefix
                 var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
-                WriteArrayGeneric(ref writer, value, elementType, lengthSize, fixedCount);
+                var sizedEntryAttr = propertyInfo?.GetCustomAttribute<SizedEntryAttribute>();
+                var sizedEntryWidth = sizedEntryAttr?.ByteCount;
+                var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
+                WriteArrayGeneric(ref writer, value, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
             }
         }
         else if (propertyType.IsGenericType)
@@ -352,18 +392,38 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 var elementType = propertyType.GetGenericArguments()[0];
                 var fixedCount = propertyInfo?.GetCustomAttribute<FixedLengthAttribute>()?.Length;
+                var sizedEntryAttr = propertyInfo?.GetCustomAttribute<SizedEntryAttribute>();
+                var sizedEntryWidth = sizedEntryAttr?.ByteCount;
+                var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
                     
                 // Use WriteCollection; [FixedLength] skips writing a length prefix
-                WriteCollectionGeneric(ref writer, value, elementType, lengthSize, fixedCount);
+                WriteCollectionGeneric(ref writer, value, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
             }
             else
                 throw new NotSupportedException($"Generic type {propertyType.Name} is not supported");
+        }
+        else if (propertyType.IsClass || (propertyType.IsValueType && !propertyType.IsPrimitive && !propertyType.IsEnum))
+        {
+            // Custom class/struct — recurse into properties
+            WriteComposite(ref writer, propertyType, value!);
         }
         else
             throw new NotSupportedException($"Property type {propertyType.Name} is not supported");
     }
 
-    private void WriteArrayGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null)
+    private void WriteComposite(ref SpanWriter writer, Type type, object value)
+    {
+        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var property in properties)
+        {
+            if (!property.CanRead) continue;
+            var propValue = property.GetValue(value);
+            if (propValue == null) continue;
+            WriteProperty(ref writer, property.PropertyType, propValue, property);
+        }
+    }
+
+    private void WriteArrayGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
     {
         var array = (Array)value;
             
@@ -396,6 +456,10 @@ public class BinaryPacketSerializer : IPacketSerializer
                     throw new InvalidOperationException($"Invalid length size: {lengthSize}");
             }
         }
+
+        // [SizedEntry] — write the entry size
+        if (sizedEntryWidth.HasValue)
+            WriteEntrySizeField(ref writer, elementType, sizedEntryWidth.Value, sizedEntryLE);
             
         // Write each element by recursively calling WriteProperty
         for (var i = 0; i < array.Length; i++)
@@ -405,7 +469,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         }
     }
 
-    private void WriteCollectionGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null)
+    private void WriteCollectionGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
     {
         // Convert to array for counting
         var enumerable = (System.Collections.IEnumerable)value;
@@ -444,12 +508,105 @@ public class BinaryPacketSerializer : IPacketSerializer
                     throw new InvalidOperationException($"Invalid length size: {lengthSize}");
             }
         }
+
+        // [SizedEntry] — write the entry size
+        if (sizedEntryWidth.HasValue)
+            WriteEntrySizeField(ref writer, elementType, sizedEntryWidth.Value, sizedEntryLE);
             
         // Write each element by recursively calling WriteProperty
         foreach (var item in list)
         {
             WriteProperty(ref writer, elementType, item!);
         }
+    }
+
+    private static void WriteEntrySizeField(ref SpanWriter writer, Type elementType, int sizedEntryWidth, bool littleEndian = false)
+    {
+        var wireSize = ComputeWireSize(elementType)
+                       ?? throw new InvalidOperationException(
+                           $"Cannot compute fixed wire size for element type '{elementType.Name}' used with [SizedEntry]");
+        switch (sizedEntryWidth)
+        {
+            case 1:
+                writer.WriteByte((byte)wireSize);
+                break;
+            case 2:
+                if (littleEndian) writer.WriteUInt16LE((ushort)wireSize); else writer.WriteUInt16((ushort)wireSize);
+                break;
+            case 4:
+                if (littleEndian) writer.WriteUInt32LE((uint)wireSize); else writer.WriteUInt32((uint)wireSize);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Computes the fixed wire size (in bytes) of a type at runtime.
+    /// Returns null if the type contains variable-length fields.
+    /// </summary>
+    private static int? ComputeWireSize(Type type)
+    {
+        if (type == typeof(byte) || type == typeof(sbyte)) return 1;
+        if (type == typeof(bool)) return 1;
+        if (type == typeof(short) || type == typeof(ushort)) return 2;
+        if (type == typeof(int) || type == typeof(uint) || type == typeof(float)) return 4;
+        if (type == typeof(long) || type == typeof(ulong) || type == typeof(double)) return 8;
+        if (type.IsEnum) return 1;
+
+        // Composite class/struct — sum all public readable property wire sizes
+        if (type.IsClass || (type.IsValueType && !type.IsPrimitive))
+        {
+            var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanRead)
+                .ToArray();
+
+            var total = 0;
+            foreach (var prop in props)
+            {
+                var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+
+                // CString with fixed length
+                var cstr = prop.GetCustomAttribute<CStringAttribute>();
+                if (cstr != null && propType == typeof(string))
+                {
+                    if (cstr.Length == null) return null;
+                    total += cstr.Length.Value;
+                    continue;
+                }
+
+                // PascalString — variable
+                if (prop.GetCustomAttribute<PascalStringAttribute>() != null && propType == typeof(string))
+                    return null;
+
+                // FixedLength byte[]
+                if (propType == typeof(byte[]))
+                {
+                    var fixedLen = prop.GetCustomAttribute<FixedLengthAttribute>();
+                    if (fixedLen == null) return null;
+                    total += fixedLen.Length;
+                    continue;
+                }
+
+                // Collection — variable
+                if (propType.IsArray) return null;
+                if (propType.IsGenericType)
+                {
+                    var genDef = propType.GetGenericTypeDefinition();
+                    if (genDef == typeof(List<>) || genDef == typeof(IList<>) ||
+                        genDef == typeof(ICollection<>) || genDef == typeof(IEnumerable<>))
+                        return null;
+                }
+
+                // String without attribute — variable
+                if (propType == typeof(string)) return null;
+
+                var size = ComputeWireSize(propType);
+                if (size == null) return null;
+                total += size.Value;
+            }
+            return total;
+        }
+
+        return null;
     }
 
     /// <summary>

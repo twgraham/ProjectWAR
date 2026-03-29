@@ -26,4 +26,7 @@ public interface IGameDataStore
 
     /// <summary>Career base stats per career-line / level combination.</summary>
     CareerStatData CareerStats { get; }
+
+    /// <summary>Ability definitions, pre-indexed by entry and career line.</summary>
+    AbilityData Abilities { get; }
 }

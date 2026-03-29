@@ -8,6 +8,7 @@ using WorldServerV2.Data.Models;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
+using WorldServerV2.World.Combat.Abilities;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Stats;
 
@@ -73,7 +74,10 @@ public class PlayerInitPipelineTests
     private static IGameDataStore EmptyStore() =>
         MakeStoreFromData(CareerStatData.Empty);
 
-    private static IGameDataStore MakeStoreFromData(CareerStatData data)
+    private static IGameDataStore MakeStoreFromData(CareerStatData data) =>
+        MakeStoreFromData(data, AbilityData.Empty);
+
+    private static IGameDataStore MakeStoreFromData(CareerStatData data, AbilityData abilityData)
     {
         var store = new GameDataStore();
         store.Initialize(new GameDataStore.Snapshot(
@@ -87,7 +91,8 @@ public class PlayerInitPipelineTests
             new ZoneData(
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
                 FrozenDictionary<uint, ZoneJump>.Empty),
-            data));
+            data,
+            abilityData));
         return store;
     }
 
@@ -569,7 +574,7 @@ public class PlayerInitPipelineTests
     }
 
     [Fact]
-    public void Initialize_sends_seven_packets()
+    public void Initialize_sends_expected_packet_count()
     {
         var store = MakeStore(IronbreakerCareerLine, 40, Level40MeleeStats);
         var pipeline = MakePipeline(store);
@@ -578,8 +583,61 @@ public class PlayerInitPipelineTests
 
         pipeline.Initialize(player, session);
 
-        // Pipeline sends: speed, initted, stats, health, loaded, speed, stats = 7 packets
-        stub.PacketCount.ShouldBe(7);
+        // Pipeline sends: speed, initted, stats, skillList, abilityList, moraleList, tactics,
+        // careerCategory, 3× masteryTreePoints, 3× careerPackageUpdate,
+        // health, loaded, speed, stats = 18 packets
+        // (No career ability packages because AbilityData is empty)
+        stub.PacketCount.ShouldBe(18);
+    }
+
+    [Fact]
+    public void Initialize_with_career_abilities_sends_career_packages()
+    {
+        // Build ability data with 2 melee abilities, 1 tactic, 1 morale
+        var abilityData = BuildTestAbilityDataWithTactics();
+        var store = MakeStoreFromData(
+            new CareerStatData(
+                new Dictionary<(byte, byte), CareerStatEntry[]>
+                {
+                    [(IronbreakerCareerLine, 40)] = Level40MeleeStats,
+                }.ToFrozenDictionary()),
+            abilityData);
+
+        var pipeline = MakePipeline(store);
+        var player = MakePlayer(careerLine: IronbreakerCareerLine, level: 40);
+        var (session, stub) = CreateSession();
+
+        pipeline.Initialize(player, session);
+
+        // Base 18 packets + 3 F_CAREER_CATEGORY (abilities, tactics, morale) +
+        // 2 CareerAbilityResponse (abilities) + 1 CareerAbilityResponse (tactic) +
+        // 1 CareerAbilityResponse (morale) = 25
+        stub.PacketCount.ShouldBe(25);
+
+        // Verify career ability packets have correct fields
+        var careerAbilities = stub.FindPackets<CareerAbilityResponse>();
+        careerAbilities.Count.ShouldBe(4);
+
+        // First ability: treeId=0, dbEntry=2756
+        // PackageId = 2756 + 1399 (Dwarf offset) = 4155
+        var first = careerAbilities.First(p => p.ReferenceId == 2756);
+        first.TreeId.ShouldBe((byte)0); // abilities tree
+        first.EntryIndex.ShouldBe((ushort)1);
+        first.MinimumRank.ShouldBe(abilityData.CoreAbilitiesByCareer[IronbreakerCareerLine][0].MinimumRank); // (1+3)/2 = 2
+        first.CashCost.ShouldBe(abilityData.CoreAbilitiesByCareer[IronbreakerCareerLine][0].CashCost);
+        first.PackageId.ShouldBe(4155u); // 2756 + 1399 (Dwarf offset)
+        first.ReferenceId.ShouldBe(2756u); // raw DB entry
+        first.AbilityName.ShouldBe("Core Strike");
+
+        // Tactic: treeId=1
+        var tactic = careerAbilities.First(p => p.ReferenceId == 2791);
+        tactic.TreeId.ShouldBe((byte)1); // tactics tree
+        tactic.AbilityName.ShouldBe("Tactic A");
+
+        // Morale: treeId=2
+        var morale = careerAbilities.First(p => p.ReferenceId == 2780);
+        morale.TreeId.ShouldBe((byte)2); // class morale tree
+        morale.AbilityName.ShouldBe("Morale 1");
     }
 
     [Fact]
@@ -663,6 +721,59 @@ public class PlayerInitPipelineTests
         Should.Throw<ArgumentNullException>(() => pipeline.Initialize(player, null!));
     }
 
+    // ═════════════════════════════════════════════════════════════════
+    //  Career ability data builder
+    // ═════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds test ability data with abilities, tactics, and morales for career line 1.
+    /// Category values match the DB's career tree assignment for grouping.
+    /// </summary>
+    private static AbilityData BuildTestAbilityDataWithTactics()
+    {
+        const uint career1Bitmask = 1u;
+
+        // Use realistic Ironbreaker-range entry IDs (>1399 so referenceId stays positive)
+        var abilities = new AbilityDefinition[]
+        {
+            new()
+            {
+                Entry = 2756, Name = "Core Strike", CareerLine = career1Bitmask,
+                MasteryTree = 0, MinimumRank = 1, AbilityType = AbilityType.Melee,
+                Category = 0, // Class Abilities tree
+            },
+            new()
+            {
+                Entry = 2757, Name = "Core Slash", CareerLine = career1Bitmask,
+                MasteryTree = 0, MinimumRank = 10, AbilityType = AbilityType.Melee,
+                Category = 0, // Class Abilities tree
+            },
+            new()
+            {
+                Entry = 2791, Name = "Tactic A", CareerLine = career1Bitmask,
+                MasteryTree = 0, MinimumRank = 5, AbilityType = AbilityType.Effect,
+                Category = 1, // Class Tactics tree
+            },
+            new()
+            {
+                Entry = 2780, Name = "Morale 1", CareerLine = career1Bitmask,
+                MasteryTree = 0, MinimumRank = 8, Origin = AbilityOrigin.Morale,
+                Category = 2, // Class Morale tree
+            },
+        };
+
+        var byEntry = abilities.ToFrozenDictionary(a => a.Entry);
+        var coreByCareer = new Dictionary<byte, AbilityDefinition[]>
+        {
+            [1] = abilities.Where(a => a.MasteryTree == 0).OrderBy(a => a.MinimumRank).ToArray(),
+        }.ToFrozenDictionary();
+
+        return new AbilityData(
+            byEntry,
+            coreByCareer,
+            FrozenDictionary<byte, AbilityDefinition[]>.Empty);
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  Stub session for testing packet sends
     // ═══════════════════════════════════════════════════════════════════
@@ -690,6 +801,9 @@ public class PlayerInitPipelineTests
 
         public T? FindPacket<T>() where T : class =>
             _sent.FirstOrDefault(p => p.Packet is T).Packet as T;
+
+        public List<T> FindPackets<T>() where T : class =>
+            _sent.Where(p => p.Packet is T).Select(p => (T)p.Packet).ToList();
 
         public string? RemoteAddress => "127.0.0.1:12345";
 

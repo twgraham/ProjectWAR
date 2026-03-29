@@ -21,6 +21,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<ZoneInfo> ZoneInfos => Set<ZoneInfo>();
     public DbSet<ZoneJump> ZoneJumps => Set<ZoneJump>();
     public DbSet<CharacterInfoStat> CharacterInfoStats => Set<CharacterInfoStat>();
+    public DbSet<AbilityInfoEntity> AbilityInfos => Set<AbilityInfoEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
         ConfigureZoneInfo(modelBuilder);
         ConfigureZoneJump(modelBuilder);
         ConfigureCharacterInfoStat(modelBuilder);
+        ConfigureAbilityInfo(modelBuilder);
     }
 
     private static void ConfigureClassInfo(ModelBuilder modelBuilder)
@@ -255,6 +257,52 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.Level).HasColumnName("level");
             entity.Property(e => e.StatId).HasColumnName("stat_id");
             entity.Property(e => e.StatValue).HasColumnName("stat_value");
+        });
+    }
+
+    private static void ConfigureAbilityInfo(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AbilityInfoEntity>(entity =>
+        {
+            entity.ToTable("abilities");
+            entity.HasKey(e => e.Entry);
+
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.CareerLine).HasColumnName("career_line");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
+            entity.Property(e => e.MinRange).HasColumnName("min_range");
+            entity.Property(e => e.Range).HasColumnName("range");
+            entity.Property(e => e.CastTime).HasColumnName("cast_time");
+            entity.Property(e => e.Cooldown).HasColumnName("cooldown");
+            entity.Property(e => e.ApCost).HasColumnName("ap_cost");
+            entity.Property(e => e.SpecialCost).HasColumnName("special_cost");
+            entity.Property(e => e.MoveCast).HasColumnName("move_cast");
+            entity.Property(e => e.InvokeDelay).HasColumnName("invoke_delay");
+            entity.Property(e => e.EffectDelay).HasColumnName("effect_delay");
+            entity.Property(e => e.EffectId).HasColumnName("effect_id");
+            entity.Property(e => e.ChannelId).HasColumnName("channel_id");
+            entity.Property(e => e.CooldownEntry).HasColumnName("cooldown_entry");
+            entity.Property(e => e.ToggleEntry).HasColumnName("toggle_entry");
+            entity.Property(e => e.CastAngle).HasColumnName("cast_angle");
+            entity.Property(e => e.AbilityType).HasColumnName("ability_type");
+            entity.Property(e => e.MasteryTree).HasColumnName("mastery_tree");
+            entity.Property(e => e.Specline).HasColumnName("specline").HasMaxLength(255);
+            entity.Property(e => e.WeaponNeeded).HasColumnName("weapon_needed");
+            entity.Property(e => e.AffectsDead).HasColumnName("affects_dead");
+            entity.Property(e => e.IgnoreGlobalCooldown).HasColumnName("ignore_global_cooldown");
+            entity.Property(e => e.IgnoreOwnModifiers).HasColumnName("ignore_own_modifiers");
+            entity.Property(e => e.Fragile).HasColumnName("fragile");
+            entity.Property(e => e.MinimumRank).HasColumnName("minimum_rank");
+            entity.Property(e => e.MinimumRenown).HasColumnName("minimum_renown");
+            entity.Property(e => e.IconId).HasColumnName("icon_id");
+            entity.Property(e => e.Category).HasColumnName("category");
+            entity.Property(e => e.Flags).HasColumnName("flags");
+            entity.Property(e => e.PointCost).HasColumnName("point_cost");
+            entity.Property(e => e.CashCost).HasColumnName("cash_cost");
+            entity.Property(e => e.StealthInteraction).HasColumnName("stealth_interaction");
+            entity.Property(e => e.AiRange).HasColumnName("ai_range");
+            entity.Property(e => e.IgnoreCooldownReduction).HasColumnName("ignore_cooldown_reduction");
+            entity.Property(e => e.CooldownCap).HasColumnName("c_dcap");
         });
     }
 }
