@@ -1288,6 +1288,8 @@ public class BinaryPacketSerializerTests
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class ShortPascalStringAttribute : Attribute, IStringSerializationAttribute
     {
+        private static readonly Encoding Iso88591 = Encoding.GetEncoding("iso-8859-1");
+
         public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -1296,7 +1298,7 @@ public class BinaryPacketSerializerTests
                 return;
             }
 
-            var encoded = Encoding.GetEncoding("iso-8859-1").GetBytes(value);
+            var encoded = Iso88591.GetBytes(value);
             writer.WriteUInt16((ushort)encoded.Length);
             foreach (var b in encoded) writer.WriteByte(b);
         }
@@ -1306,7 +1308,7 @@ public class BinaryPacketSerializerTests
             var len = reader.ReadUInt16();
             if (len == 0) return string.Empty;
             var bytes = reader.ReadFixedByteArray(len);
-            return Encoding.GetEncoding("iso-8859-1").GetString(bytes);
+            return Iso88591.GetString(bytes);
         }
 
         public int? FixedWireSize => null;
