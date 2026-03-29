@@ -603,6 +603,42 @@ namespace TestNamespace
     }
 
     [Fact]
+    public void GeneratesSerializer_WithCustomStringSerializationAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class ShortPascalStringAttribute : System.Attribute, IStringSerializationAttribute { }
+
+    public class ChatMessage
+    {
+        [ShortPascalString]
+        public string Body { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(ChatMessage))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // The generator should detect the custom attribute via IStringSerializationAttribute
+        // and generate attribute instantiation + method calls (no reflection)
+        code.ShouldContain("ShortPascalStringAttribute().Read(ref reader)");
+        code.ShouldContain("ShortPascalStringAttribute().Write(ref writer,");
+        code.ShouldNotContain("ReadString()");  // must not fall back to default string read
+        code.ShouldNotContain("WriteString("); // must not fall back to default string write
+    }
+
+    [Fact]
     public void GeneratesSerializer_WithFixedLengthOnCollection()
     {
         var source = @"

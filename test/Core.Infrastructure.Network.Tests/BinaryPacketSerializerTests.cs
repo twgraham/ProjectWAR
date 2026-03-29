@@ -1075,6 +1075,28 @@ public class BinaryPacketSerializerTests
         writer.WrittenCount.ShouldBe(5);
     }
 
+    [Fact]
+    public void RoundTrip_CustomStringSerializationAttribute_IsDiscoveredAutomatically()
+    {
+        // GIVEN: A packet using a custom IStringSerializationAttribute (ShortPascalString)
+        // that writes a 2-byte length prefix instead of PascalString's 1-byte prefix
+        var original = new ShortPascalStringPacket { Name = "Hi" };
+
+        // WHEN: Serializing and deserializing via the reflection serializer
+        var result = RoundTrip<ShortPascalStringPacket>(original);
+
+        // THEN: The string round-trips correctly
+        result.Name.ShouldBe("Hi");
+
+        // AND: The wire format uses a 2-byte (big-endian) length prefix + encoded bytes
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        writer.WrittenCount.ShouldBe(2 + 2); // 2-byte length + 2 bytes for "Hi"
+        // First two bytes = big-endian uint16 length of 2
+        writer.WrittenSpan[0].ShouldBe((byte)0);
+        writer.WrittenSpan[1].ShouldBe((byte)2);
+    }
+
     public class BytePacket { public byte Value { get; set; } }
     public class SBytePacket { public sbyte Value { get; set; } }
     public class Int16Packet { public short Value { get; set; } }
@@ -1257,5 +1279,42 @@ public class BinaryPacketSerializerTests
     {
         [SizedEntry(2, littleEndian: true)]
         public SizedEntryItem[] Entries { get; set; } = [];
+    }
+
+    /// <summary>
+    /// Example custom IStringSerializationAttribute: a 2-byte (ushort) length-prefixed string.
+    /// Demonstrates that the reflection serializer discovers new string formats automatically.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property)]
+    public sealed class ShortPascalStringAttribute : Attribute, IStringSerializationAttribute
+    {
+        public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                writer.WriteUInt16(0);
+                return;
+            }
+
+            var encoded = Encoding.GetEncoding("iso-8859-1").GetBytes(value);
+            writer.WriteUInt16((ushort)encoded.Length);
+            foreach (var b in encoded) writer.WriteByte(b);
+        }
+
+        public string Read(ref BinaryPacketSerializer.SpanReader reader)
+        {
+            var len = reader.ReadUInt16();
+            if (len == 0) return string.Empty;
+            var bytes = reader.ReadFixedByteArray(len);
+            return Encoding.GetEncoding("iso-8859-1").GetString(bytes);
+        }
+
+        public int? FixedWireSize => null;
+    }
+
+    public class ShortPascalStringPacket
+    {
+        [ShortPascalString]
+        public string Name { get; set; } = "";
     }
 }
