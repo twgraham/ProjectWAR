@@ -1062,7 +1062,7 @@ start of Phase B, and the corresponding packets are sent during Phase C.
 | 16 | `F_PLAYER_STATS` | 0x46 | `SendStats()` (1st) | 1 | No | ✅ | Full stat block |
 | 17 | `F_TOK_ENTRY_UPDATE` | 0x67 | `TokInterface.SendAllToks()` | 1 | No | — | Tome of Knowledge (1500-byte bitmask) |
 | 18 | `F_PLAYER_RANK_UPDATE` | 0x36 | `SendRankUpdate()` | 1 | No | — | Level/renown rank |
-| 19 | `F_CHARACTER_INFO` (sub 3) + `F_WAR_REPORT` | 0x07 + 0x52 | `SendSkills()` | 2 | No | ✅¹ | Skills list + war report |
+| 19 | `F_CHARACTER_INFO` (sub 3) + `F_WAR_REPORT` | 0xBE + 0x52 | `SendSkills()` | 2 | No | ✅¹ | Skills list + war report |
 | 20 | `F_ACTION_COUNTER_INFO` | 0x7A | `SendBestiary()` | 1 | No | — | Kill counts (bestiary) |
 | 21 | `F_PLAY_TIME_STATS` | 0x2B | `SendPlayedTime()` | 1 | No | — | /played time |
 | 22 | `F_BAG_INFO` + N×`F_GET_ITEM` + `F_ITEM_SET_DATA` | 0x0C + 0x0E + 0x55 | `ItmInterface.SendAllItems()` | 1+N+cond | No | — | Bag layout + every item + set bonuses |
