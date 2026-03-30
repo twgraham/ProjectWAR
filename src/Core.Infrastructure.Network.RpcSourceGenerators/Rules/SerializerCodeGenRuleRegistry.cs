@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 
 namespace RpcSourceGenerator.Rules;
 
@@ -26,6 +25,7 @@ public static class SerializerCodeGenRuleRegistry
         new PascalStringCodeGen(),
         new CStringCodeGen(),
         new LittleEndianCodeGen(),
+        new EnumCodeGen(),
         CollectionRule,
     ];
 
@@ -39,7 +39,7 @@ public static class SerializerCodeGenRuleRegistry
     /// Emits any deferred helper methods accumulated by stateful rules during the session.
     /// Call once after all type serializers have been generated.
     /// </summary>
-    public static void EmitHelperMethods(StringBuilder sb) => CollectionRule.EmitHelperMethods(sb);
+    internal static void EmitHelperMethods(CodeWriter w) => CollectionRule.EmitHelperMethods(w);
 
     /// <summary>
     /// Returns the first <see cref="ISerializerRuleCodeGen"/> that can handle the given property,

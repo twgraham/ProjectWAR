@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using System.Text;
 using Microsoft.CodeAnalysis;
+using static RpcSourceGenerator.SerializerCodeGenUtilities;
 
 namespace RpcSourceGenerator.Rules;
 
@@ -47,7 +47,7 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
             return true;
 
         // Other arrays and generic collections (List<T>, IList<T>, ICollection<T>, IEnumerable<T>)
-        return PacketSerializerGenerator.IsCollectionType(type, out _);
+        return IsCollectionType(type, out _);
     }
 
     public string EmitReadExpression(SourceGenPropertyContext ctx)
@@ -64,7 +64,7 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
         }
 
         // Collection — register helper method and return call expression
-        PacketSerializerGenerator.IsCollectionType(type, out var elementType);
+        IsCollectionType(type, out var elementType);
         var lengthSize = GetPacketLengthSize(ctx);
         var lengthLE = GetPacketLengthLE(ctx);
         var fixedCount = GetFixedLength(ctx);
@@ -89,7 +89,7 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
         }
 
         // Collection — register helper method and return call statement
-        PacketSerializerGenerator.IsCollectionType(type, out var elementType);
+        IsCollectionType(type, out var elementType);
         var lengthSize = GetPacketLengthSize(ctx);
         var lengthLE = GetPacketLengthLE(ctx);
         var fixedCount = GetFixedLength(ctx);
@@ -119,24 +119,24 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
     /// <summary>
     /// Emits all accumulated collection helper methods into the generated source.
     /// </summary>
-    public void EmitHelperMethods(StringBuilder sb)
+    internal void EmitHelperMethods(CodeWriter w)
     {
         foreach (var methodName in _deserializeMethods)
         {
             var info = _collectionInfo[methodName];
-            EmitDeserializeMethod(sb, methodName,
+            EmitDeserializeMethod(w, methodName,
                 info.CollectionType, info.ElementType, info.LengthSize,
                 info.FixedCount, info.SizedEntryWidth, info.SizedEntryLE, info.LengthLE);
-            sb.AppendLine();
+            w.AppendLine();
         }
 
         foreach (var methodName in _serializeMethods)
         {
             var info = _collectionInfo[methodName];
-            EmitSerializeMethod(sb, methodName,
+            EmitSerializeMethod(w, methodName,
                 info.CollectionType, info.ElementType, info.LengthSize,
                 info.FixedCount, info.SizedEntryWidth, info.SizedEntryLE, info.LengthLE);
-            sb.AppendLine();
+            w.AppendLine();
         }
     }
 
@@ -148,7 +148,7 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
         ITypeSymbol collectionType, ITypeSymbol elementType,
         int lengthSize, int? fixedCount, int? sizedEntryWidth, bool sizedEntryLE, bool lengthLE)
     {
-        var safeName = PacketSerializerGenerator.GetSafeTypeName(collectionType);
+        var safeName = GetSafeTypeName(collectionType);
         var leSuffix = lengthLE ? "_lle" : "";
         var methodName = fixedCount.HasValue
             ? $"DeserializeCollection_{safeName}_fixed_{fixedCount.Value}"
@@ -166,7 +166,7 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
         ITypeSymbol collectionType, ITypeSymbol elementType,
         int lengthSize, int? fixedCount, int? sizedEntryWidth, bool sizedEntryLE, bool lengthLE)
     {
-        var safeName = PacketSerializerGenerator.GetSafeTypeName(collectionType);
+        var safeName = GetSafeTypeName(collectionType);
         var leSuffix = lengthLE ? "_lle" : "";
         var methodName = fixedCount.HasValue
             ? $"SerializeCollection_{safeName}_fixed_{fixedCount.Value}"
@@ -185,105 +185,99 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
     // ------------------------------------------------------------------
 
     private static void EmitDeserializeMethod(
-        StringBuilder sb, string methodName,
+        CodeWriter w, string methodName,
         ITypeSymbol collectionType, ITypeSymbol elementType,
         int lengthSize, int? fixedCount, int? sizedEntryWidth, bool sizedEntryLE, bool lengthLE)
     {
         var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        sb.AppendLine($"        private {collectionTypeName} {methodName}(ref BinaryPacketSerializer.SpanReader reader)");
-        sb.AppendLine("        {");
+        w.OpenBlock($"private {collectionTypeName} {methodName}(ref BinaryPacketSerializer.SpanReader reader)");
 
         if (fixedCount.HasValue)
         {
-            sb.AppendLine($"            const int length = {fixedCount.Value};");
-            sb.AppendLine($"            if (length == 0) return {PacketSerializerGenerator.GetEmptyCollectionExpression(collectionType, elementType)};");
+            w.AppendLine($"const int length = {fixedCount.Value};");
+            w.AppendLine($"if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
         }
         else
         {
-            sb.AppendLine($"            var length = {PacketSerializerGenerator.GenerateLengthRead(lengthSize, lengthLE)};");
-            sb.AppendLine($"            if (length == 0) return {PacketSerializerGenerator.GetEmptyCollectionExpression(collectionType, elementType)};");
+            w.AppendLine($"var length = {GenerateLengthRead(lengthSize, lengthLE)};");
+            w.AppendLine($"if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
         }
 
         if (sizedEntryWidth.HasValue)
-            sb.AppendLine($"            _ = {PacketSerializerGenerator.GenerateEntrySizeRead(sizedEntryWidth.Value, sizedEntryLE)}; // entry size");
+            w.AppendLine($"_ = {GenerateEntrySizeRead(sizedEntryWidth.Value, sizedEntryLE)}; // entry size");
 
-        sb.AppendLine();
-        sb.AppendLine($"            var array = new {elementTypeName}[length];");
-        sb.AppendLine("            for (int i = 0; i < length; i++)");
-        sb.AppendLine("            {");
+        w.AppendLine();
+        w.AppendLine($"var array = new {elementTypeName}[length];");
+        w.OpenBlock("for (int i = 0; i < length; i++)");
 
-        sb.Append("                array[i] = ");
-        PacketSerializerGenerator.GenerateElementRead(sb, elementType);
-        sb.AppendLine(";");
+        w.AppendLine($"array[i] = {EmitReadForType(elementType)};");
 
-        sb.AppendLine("            }");
-        sb.AppendLine();
+        w.CloseBlock(); // for
+        w.AppendLine();
 
         if (collectionType is IArrayTypeSymbol)
         {
-            sb.AppendLine("            return array;");
+            w.AppendLine("return array;");
         }
         else if (collectionType is INamedTypeSymbol { IsGenericType: true } namedType)
         {
             var genericDef = namedType.ConstructedFrom.ToDisplayString();
-            sb.AppendLine(genericDef == "System.Collections.Generic.List<T>"
-                ? $"            return new System.Collections.Generic.List<{elementTypeName}>(array);"
-                : "            return array;");
+            w.AppendLine(genericDef == "System.Collections.Generic.List<T>"
+                ? $"return new System.Collections.Generic.List<{elementTypeName}>(array);"
+                : "return array;");
         }
 
-        sb.AppendLine("        }");
+        w.CloseBlock(); // method
     }
 
     private static void EmitSerializeMethod(
-        StringBuilder sb, string methodName,
+        CodeWriter w, string methodName,
         ITypeSymbol collectionType, ITypeSymbol elementType,
         int lengthSize, int? fixedCount, int? sizedEntryWidth, bool sizedEntryLE, bool lengthLE)
     {
         var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        sb.AppendLine($"        private void {methodName}(ref BinaryPacketSerializer.SpanWriter writer, {collectionTypeName} collection)");
-        sb.AppendLine("        {");
+        w.OpenBlock($"private void {methodName}(ref BinaryPacketSerializer.SpanWriter writer, {collectionTypeName} collection)");
 
         string countExpression = collectionType is IArrayTypeSymbol ? "collection.Length" : "collection.Count";
 
         if (fixedCount.HasValue)
         {
-            sb.AppendLine($"            var count = {countExpression};");
-            sb.AppendLine($"            if (count != {fixedCount.Value})");
-            sb.AppendLine($"                throw new System.InvalidOperationException($\"Collection length {{count}} does not match [FixedLength({fixedCount.Value})]\");");
+            w.AppendLine($"var count = {countExpression};");
+            w.AppendLine($"if (count != {fixedCount.Value})");
+            w.Indent();
+            w.AppendLine($"throw new System.InvalidOperationException($\"Collection length {{count}} does not match [FixedLength({fixedCount.Value})]\");");
+            w.Outdent();
         }
         else
         {
-            sb.AppendLine($"            var count = {countExpression};");
-            PacketSerializerGenerator.GenerateLengthWrite(sb, "count", lengthSize, lengthLE);
+            w.AppendLine($"var count = {countExpression};");
+            GenerateLengthWrite(w, "count", lengthSize, lengthLE);
         }
 
         if (sizedEntryWidth.HasValue)
         {
-            var wireSize = PacketSerializerGenerator.TryComputeWireSize(elementType);
+            var wireSize = TryComputeWireSize(elementType);
             if (wireSize.HasValue)
             {
-                PacketSerializerGenerator.GenerateEntrySizeWrite(sb, wireSize.Value, sizedEntryWidth.Value, sizedEntryLE);
+                GenerateEntrySizeWrite(w, wireSize.Value, sizedEntryWidth.Value, sizedEntryLE);
             }
             else
             {
-                sb.AppendLine($"#warning Cannot compute fixed wire size for element type '{elementType.Name}'. [SizedEntry] entry size will be written as 0.");
-                PacketSerializerGenerator.GenerateEntrySizeWrite(sb, 0, sizedEntryWidth.Value, sizedEntryLE);
+                w.AppendLine($"#warning Cannot compute fixed wire size for element type '{elementType.Name}'. [SizedEntry] entry size will be written as 0.");
+                GenerateEntrySizeWrite(w, 0, sizedEntryWidth.Value, sizedEntryLE);
             }
         }
 
-        sb.AppendLine();
-        sb.AppendLine("            foreach (var item in collection)");
-        sb.AppendLine("            {");
+        w.AppendLine();
+        w.OpenBlock("foreach (var item in collection)");
 
-        sb.Append("                ");
-        PacketSerializerGenerator.GenerateElementWrite(sb, elementType, "item");
-        sb.AppendLine(";");
+        w.AppendLine($"{EmitWriteForType(elementType, "item")};");
 
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
+        w.CloseBlock(); // foreach
+        w.CloseBlock(); // method
     }
 
     // ------------------------------------------------------------------
