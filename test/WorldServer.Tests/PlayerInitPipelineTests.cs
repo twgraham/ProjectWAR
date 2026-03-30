@@ -10,7 +10,9 @@ using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
 using WorldServerV2.World.Combat.Abilities;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Items;
 using WorldServerV2.World.Stats;
+using ItemData = WorldServerV2.Data.Domain.ItemData;
 
 namespace WorldServer.Tests;
 
@@ -84,7 +86,9 @@ public class PlayerInitPipelineTests
             new ClassData(
                 FrozenDictionary<Class, ClassInfo>.Empty,
                 FrozenDictionary<Class, List<ClassInfoItem>>.Empty),
-            new ItemData(FrozenDictionary<uint, ItemInfo>.Empty),
+            new ItemData(
+                FrozenDictionary<uint, ItemDefinition>.Empty,
+                FrozenDictionary<uint, ItemSetDefinition>.Empty),
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
                 FrozenDictionary<uint, CreatureSpawn>.Empty),
@@ -585,9 +589,10 @@ public class PlayerInitPipelineTests
 
         // Pipeline sends: speed, initted, stats, skillList, abilityList, moraleList, tactics,
         // careerCategory, 3× masteryTreePoints, 3× careerPackageUpdate,
-        // health, loaded, speed, stats = 18 packets
-        // (No career ability packages because AbilityData is empty)
-        stub.PacketCount.ShouldBe(18);
+        // health, bagInfo, loaded, speed, stats = 19 packets
+        // (No career ability packages because AbilityData is empty;
+        //  no F_GET_ITEM because inventory is empty)
+        stub.PacketCount.ShouldBe(19);
     }
 
     [Fact]
@@ -609,10 +614,10 @@ public class PlayerInitPipelineTests
 
         pipeline.Initialize(player, session);
 
-        // Base 18 packets + 3 F_CAREER_CATEGORY (abilities, tactics, morale) +
+        // Base 19 packets + 3 F_CAREER_CATEGORY (abilities, tactics, morale) +
         // 2 CareerAbilityResponse (abilities) + 1 CareerAbilityResponse (tactic) +
-        // 1 CareerAbilityResponse (morale) = 25
-        stub.PacketCount.ShouldBe(25);
+        // 1 CareerAbilityResponse (morale) = 26
+        stub.PacketCount.ShouldBe(26);
 
         // Verify career ability packets have correct fields
         var careerAbilities = stub.FindPackets<CareerAbilityResponse>();

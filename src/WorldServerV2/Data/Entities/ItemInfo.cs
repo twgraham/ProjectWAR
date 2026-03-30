@@ -6,6 +6,11 @@ namespace WorldServerV2.Data.Entities;
 /// </summary>
 public sealed class ItemInfo
 {
+    private static readonly byte[] Unk27Default =
+    [
+        0, 0, 0, 0, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ];
+    
     public uint Entry { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -53,7 +58,13 @@ public sealed class ItemInfo
 
     public byte TalismanSlots { get; set; }
     public ushort MaxStack { get; set; }
-    public byte[]? Unk27 { get; set; } = new byte[27];
+
+    public byte[]? Unk27
+    {
+        get => field == null || field.Length < 27 ? Unk27Default : field;
+        set;
+    }
+    
     public string ScriptName { get; set; } = string.Empty;
     public ushort TwoHanded { get; set; }
     public string? CraftResult { get; set; }

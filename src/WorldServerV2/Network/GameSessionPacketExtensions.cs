@@ -23,6 +23,14 @@ public static class GameSessionPacketExtensions
     public static void SendPlayerInitted(this GameSession session, PlayerInittedResponse response)
         => session.Send((byte)Opcodes.S_PLAYER_INITTED, response);
 
+    /// <summary>Sends <c>F_BAG_INFO</c> (0x95) — inventory/bank capacity and expansion costs.</summary>
+    public static void SendBagInfo(this GameSession session, BagInfoResponse response)
+        => session.Send((byte)Opcodes.F_BAG_INFO, response);
+
+    /// <summary>Sends <c>F_GET_ITEM</c> (0xAA) — a batch of inventory items (max 255 per packet).</summary>
+    public static void SendGetItem(this GameSession session, GetItemResponse response)
+        => session.Send((byte)Opcodes.F_GET_ITEM, response);
+
     /// <summary>Sends <c>F_PLAYER_STATS</c> (0x46) — base stats and level.</summary>
     public static void SendPlayerStats(this GameSession session, PlayerStatsResponse response)
         => session.Send((byte)Opcodes.F_PLAYER_STATS, response);

@@ -9,6 +9,7 @@ using WorldServerV2.Data.Domain;
 using WorldServerV2.Data.Entities;
 using WorldServerV2.Data.Models;
 using WorldServerV2.Data.Providers;
+using WorldServerV2.World.Items;
 
 namespace WorldServer.Tests;
 
@@ -39,7 +40,7 @@ public class GameDataPipelineTests
 
         store.Initialize(snapshot);
 
-        store.Items.Infos.ShouldBeEmpty();
+        store.Items.Definitions.ShouldBeEmpty();
         store.Creatures.Protos.ShouldBeEmpty();
         store.Zones.Infos.ShouldBeEmpty();
     }
@@ -80,10 +81,10 @@ public class GameDataPipelineTests
         var provider = new ItemDataProvider(new TestDbContextFactory(db), NullLogger<ItemDataProvider>.Instance);
         var data = await provider.LoadAsync();
 
-        data.Infos.Count.ShouldBe(3);
-        data.Infos[100].Name.ShouldBe("Sword");
-        data.Infos[200].Name.ShouldBe("Shield");
-        data.Infos[300].Name.ShouldBe("Helm");
+        data.Definitions.Count.ShouldBe(3);
+        data.Definitions[100].Name.ShouldBe("Sword");
+        data.Definitions[200].Name.ShouldBe("Shield");
+        data.Definitions[300].Name.ShouldBe("Helm");
     }
 
     [Fact]
@@ -94,7 +95,7 @@ public class GameDataPipelineTests
 
         var data = await provider.LoadAsync();
 
-        data.Infos.ShouldBeEmpty();
+        data.Definitions.ShouldBeEmpty();
     }
 
     // ── CreatureDataProvider ───────────────────────────────────────────
@@ -170,7 +171,9 @@ public class GameDataPipelineTests
                     FrozenDictionary<Class, List<ClassInfoItem>>.Empty)));
         services.AddSingleton<IDataProvider<ItemData>>(
             new ConstantProvider<ItemData>(
-                new ItemData(FrozenDictionary<uint, ItemInfo>.Empty)));
+                new ItemData(
+                    FrozenDictionary<uint, ItemDefinition>.Empty,
+                    FrozenDictionary<uint, ItemSetDefinition>.Empty)));
         services.AddSingleton<IDataProvider<CreatureData>>(
             new ConstantProvider<CreatureData>(
                 new CreatureData(
@@ -196,7 +199,7 @@ public class GameDataPipelineTests
         await loader.StartAsync(CancellationToken.None);
 
         // Should not throw — store is now initialized
-        store.Items.Infos.ShouldBeEmpty();
+        store.Items.Definitions.ShouldBeEmpty();
         store.Creatures.Protos.ShouldBeEmpty();
         store.Zones.Infos.ShouldBeEmpty();
     }
@@ -221,7 +224,9 @@ public class GameDataPipelineTests
             new ClassData(
                 FrozenDictionary<Class, ClassInfo>.Empty,
                 FrozenDictionary<Class, List<ClassInfoItem>>.Empty),
-            new ItemData(FrozenDictionary<uint, ItemInfo>.Empty),
+            new ItemData(
+                FrozenDictionary<uint, ItemDefinition>.Empty,
+                FrozenDictionary<uint, ItemSetDefinition>.Empty),
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
                 FrozenDictionary<uint, CreatureSpawn>.Empty),

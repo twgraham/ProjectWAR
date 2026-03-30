@@ -51,6 +51,15 @@ public class BinaryPacketSerializer : IPacketSerializer
         {
             if (!property.CanWrite)
                 continue;
+
+            // [ConditionalOn] — skip if the referenced sibling property doesn't match
+            var conditionalAttr = property.GetCustomAttribute<ConditionalOnAttribute>();
+            if (conditionalAttr != null)
+            {
+                var siblingValue = type.GetProperty(conditionalAttr.PropertyName)?.GetValue(instance);
+                if (!conditionalAttr.Values.Any(v => Equals(Convert.ToInt64(v), Convert.ToInt64(siblingValue))))
+                    continue;
+            }
                 
             if (ctx.Create(property).WriteState is NullabilityState.Nullable && reader.IsAtEnd())
             {
@@ -89,14 +98,23 @@ public class BinaryPacketSerializer : IPacketSerializer
             if (!property.CanRead)
                 continue;
 
+            // [ConditionalOn] — skip if the referenced sibling property doesn't match
+            var conditionalAttr = property.GetCustomAttribute<ConditionalOnAttribute>();
+            if (conditionalAttr != null)
+            {
+                var siblingValue = type.GetProperty(conditionalAttr.PropertyName)?.GetValue(message);
+                if (!conditionalAttr.Values.Any(v => Equals(Convert.ToInt64(v), Convert.ToInt64(siblingValue))))
+                    continue;
+            }
+
             var value = property.GetValue(message);
                 
-            // Skip nullable properties that are null
+            // Skip nullable properties that are null (unless [NullPrefixed] needs to write a flag byte)
             var isNullable = Nullable.GetUnderlyingType(property.PropertyType) != null || !property.PropertyType.IsValueType;
-            if (isNullable && value == null)
+            if (isNullable && value == null && property.GetCustomAttribute<NullPrefixedAttribute>() == null)
                 continue;
 
-            WriteProperty(ref spanWriter, property.PropertyType, value, property);
+            WriteProperty(ref spanWriter, property.PropertyType, value!, property);
         }
     }
 
@@ -104,12 +122,16 @@ public class BinaryPacketSerializer : IPacketSerializer
     {
         // Get the length size from PacketLength attribute (default to 1 byte)
         var lengthSize = 1;
+        var lengthLE = false;
         var littleEndian = false;
         if (propertyInfo != null)
         {
             var packetLengthAttr = propertyInfo.GetCustomAttribute<PacketLengthAttribute>();
             if (packetLengthAttr != null)
+            {
                 lengthSize = packetLengthAttr.ByteCount;
+                lengthLE = packetLengthAttr.LittleEndian;
+            }
             littleEndian = propertyInfo.GetCustomAttribute<LittleEndianAttribute>() != null;
         }
 
@@ -176,7 +198,7 @@ public class BinaryPacketSerializer : IPacketSerializer
             var sizedEntryAttr = propertyInfo?.GetCustomAttribute<SizedEntryAttribute>();
             var sizedEntryWidth = sizedEntryAttr?.ByteCount;
             var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
-            return ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+            return ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
         }
 
         if (propertyType.IsGenericType)
@@ -196,7 +218,7 @@ public class BinaryPacketSerializer : IPacketSerializer
                 var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
                     
                 // Read as array first; [FixedLength] skips the length-prefix read
-                var array = ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                var array = ReadArrayGeneric(ref reader, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
                     
                 // Convert to appropriate collection type
                 if (genericTypeDef == typeof(List<>))
@@ -216,6 +238,14 @@ public class BinaryPacketSerializer : IPacketSerializer
         // Custom class/struct — recurse into properties
         if (propertyType.IsClass || (propertyType.IsValueType && !propertyType.IsPrimitive && !propertyType.IsEnum))
         {
+            // [NullPrefixed] — read a flag byte; 0 = null, nonzero = read object
+            if (propertyInfo?.GetCustomAttribute<NullPrefixedAttribute>() != null)
+            {
+                var flag = reader.ReadByte();
+                if (flag == 0)
+                    return null!;
+            }
+
             return ReadComposite(ref reader, propertyType);
         }
 
@@ -229,13 +259,23 @@ public class BinaryPacketSerializer : IPacketSerializer
         foreach (var property in properties)
         {
             if (!property.CanWrite) continue;
+
+            // [ConditionalOn] — skip if the referenced sibling property doesn't match
+            var conditionalAttr = property.GetCustomAttribute<ConditionalOnAttribute>();
+            if (conditionalAttr != null)
+            {
+                var siblingValue = type.GetProperty(conditionalAttr.PropertyName)?.GetValue(instance);
+                if (!conditionalAttr.Values.Any(v => Equals(Convert.ToInt64(v), Convert.ToInt64(siblingValue))))
+                    continue;
+            }
+
             var value = ReadProperty(ref reader, property.PropertyType, property);
             property.SetValue(instance, value);
         }
         return instance;
     }
 
-    private object ReadArrayGeneric(ref SpanReader reader, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+    private object ReadArrayGeneric(ref SpanReader reader, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
     {
         // If [FixedLength] is present use the fixed count; otherwise read the length prefix
         uint length;
@@ -248,8 +288,8 @@ public class BinaryPacketSerializer : IPacketSerializer
             length = lengthSize switch
             {
                 1 => reader.ReadByte(),
-                2 => reader.ReadUInt16(),
-                4 => reader.ReadUInt32(),
+                2 => lengthLE ? reader.ReadUInt16LE() : reader.ReadUInt16(),
+                4 => lengthLE ? reader.ReadUInt32LE() : reader.ReadUInt32(),
                 _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
             };
         }
@@ -289,12 +329,16 @@ public class BinaryPacketSerializer : IPacketSerializer
     {
         // Get the length size from PacketLength attribute (default to 1 byte)
         var lengthSize = 1;
+        var lengthLE = false;
         var littleEndian = false;
         if (propertyInfo != null)
         {
             var packetLengthAttr = propertyInfo.GetCustomAttribute<PacketLengthAttribute>();
             if (packetLengthAttr != null)
+            {
                 lengthSize = packetLengthAttr.ByteCount;
+                lengthLE = packetLengthAttr.LittleEndian;
+            }
             littleEndian = propertyInfo.GetCustomAttribute<LittleEndianAttribute>() != null;
         }
 
@@ -377,7 +421,7 @@ public class BinaryPacketSerializer : IPacketSerializer
                 var sizedEntryAttr = propertyInfo?.GetCustomAttribute<SizedEntryAttribute>();
                 var sizedEntryWidth = sizedEntryAttr?.ByteCount;
                 var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
-                WriteArrayGeneric(ref writer, value, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                WriteArrayGeneric(ref writer, value, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
             }
         }
         else if (propertyType.IsGenericType)
@@ -397,13 +441,24 @@ public class BinaryPacketSerializer : IPacketSerializer
                 var sizedEntryLE = sizedEntryAttr?.LittleEndian ?? false;
                     
                 // Use WriteCollection; [FixedLength] skips writing a length prefix
-                WriteCollectionGeneric(ref writer, value, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                WriteCollectionGeneric(ref writer, value, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
             }
             else
                 throw new NotSupportedException($"Generic type {propertyType.Name} is not supported");
         }
         else if (propertyType.IsClass || (propertyType.IsValueType && !propertyType.IsPrimitive && !propertyType.IsEnum))
         {
+            // [NullPrefixed] — write a flag byte; 0 = null, 1 = object follows
+            if (propertyInfo?.GetCustomAttribute<NullPrefixedAttribute>() != null)
+            {
+                if (value == null)
+                {
+                    writer.WriteByte(0);
+                    return;
+                }
+                writer.WriteByte(1);
+            }
+
             // Custom class/struct — recurse into properties
             WriteComposite(ref writer, propertyType, value!);
         }
@@ -417,13 +472,23 @@ public class BinaryPacketSerializer : IPacketSerializer
         foreach (var property in properties)
         {
             if (!property.CanRead) continue;
+
+            // [ConditionalOn] — skip if the referenced sibling property doesn't match
+            var conditionalAttr = property.GetCustomAttribute<ConditionalOnAttribute>();
+            if (conditionalAttr != null)
+            {
+                var siblingValue = type.GetProperty(conditionalAttr.PropertyName)?.GetValue(value);
+                if (!conditionalAttr.Values.Any(v => Equals(Convert.ToInt64(v), Convert.ToInt64(siblingValue))))
+                    continue;
+            }
+
             var propValue = property.GetValue(value);
-            if (propValue == null) continue;
-            WriteProperty(ref writer, property.PropertyType, propValue, property);
+            if (propValue == null && property.GetCustomAttribute<NullPrefixedAttribute>() == null) continue;
+            WriteProperty(ref writer, property.PropertyType, propValue!, property);
         }
     }
 
-    private void WriteArrayGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+    private void WriteArrayGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
     {
         var array = (Array)value;
             
@@ -436,25 +501,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         }
         else
         {
-            // Write length prefix based on lengthSize
-            switch (lengthSize)
-            {
-                case 1:
-                    if (array.Length > byte.MaxValue)
-                        throw new InvalidOperationException($"Array length {array.Length} exceeds maximum for 1-byte length ({byte.MaxValue})");
-                    writer.WriteByte((byte)array.Length);
-                    break;
-                case 2:
-                    if (array.Length > ushort.MaxValue)
-                        throw new InvalidOperationException($"Array length {array.Length} exceeds maximum for 2-byte length ({ushort.MaxValue})");
-                    writer.WriteUInt16((ushort)array.Length);
-                    break;
-                case 4:
-                    writer.WriteUInt32((uint)array.Length);
-                    break;
-                default:
-                    throw new InvalidOperationException($"Invalid length size: {lengthSize}");
-            }
+            WriteLengthPrefix(ref writer, array.Length, lengthSize, lengthLE);
         }
 
         // [SizedEntry] — write the entry size
@@ -469,7 +516,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         }
     }
 
-    private void WriteCollectionGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+    private void WriteCollectionGeneric(ref SpanWriter writer, object value, Type elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
     {
         // Convert to array for counting
         var enumerable = (System.Collections.IEnumerable)value;
@@ -488,25 +535,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         }
         else
         {
-            // Write length prefix based on lengthSize
-            switch (lengthSize)
-            {
-                case 1:
-                    if (list.Count > byte.MaxValue)
-                        throw new InvalidOperationException($"Collection length {list.Count} exceeds maximum for 1-byte length ({byte.MaxValue})");
-                    writer.WriteByte((byte)list.Count);
-                    break;
-                case 2:
-                    if (list.Count > ushort.MaxValue)
-                        throw new InvalidOperationException($"Collection length {list.Count} exceeds maximum for 2-byte length ({ushort.MaxValue})");
-                    writer.WriteUInt16((ushort)list.Count);
-                    break;
-                case 4:
-                    writer.WriteUInt32((uint)list.Count);
-                    break;
-                default:
-                    throw new InvalidOperationException($"Invalid length size: {lengthSize}");
-            }
+            WriteLengthPrefix(ref writer, list.Count, lengthSize, lengthLE);
         }
 
         // [SizedEntry] — write the entry size
@@ -536,6 +565,28 @@ public class BinaryPacketSerializer : IPacketSerializer
             case 4:
                 if (littleEndian) writer.WriteUInt32LE((uint)wireSize); else writer.WriteUInt32((uint)wireSize);
                 break;
+        }
+    }
+
+    private static void WriteLengthPrefix(ref SpanWriter writer, int count, int lengthSize, bool littleEndian)
+    {
+        switch (lengthSize)
+        {
+            case 1:
+                if (count > byte.MaxValue)
+                    throw new InvalidOperationException($"Collection length {count} exceeds maximum for 1-byte length ({byte.MaxValue})");
+                writer.WriteByte((byte)count);
+                break;
+            case 2:
+                if (count > ushort.MaxValue)
+                    throw new InvalidOperationException($"Collection length {count} exceeds maximum for 2-byte length ({ushort.MaxValue})");
+                if (littleEndian) writer.WriteUInt16LE((ushort)count); else writer.WriteUInt16((ushort)count);
+                break;
+            case 4:
+                if (littleEndian) writer.WriteUInt32LE((uint)count); else writer.WriteUInt32((uint)count);
+                break;
+            default:
+                throw new InvalidOperationException($"Invalid length size: {lengthSize}");
         }
     }
 
