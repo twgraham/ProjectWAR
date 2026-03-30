@@ -1095,6 +1095,8 @@ public class BinaryPacketSerializerTests
         // First two bytes = big-endian uint16 length of 2
         writer.WrittenSpan[0].ShouldBe((byte)0);
         writer.WrittenSpan[1].ShouldBe((byte)2);
+    }
+    
     // ── ConditionalOn ───────────────────────────────────────────────────
 
     [Fact]
