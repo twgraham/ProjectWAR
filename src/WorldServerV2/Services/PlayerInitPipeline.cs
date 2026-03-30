@@ -6,6 +6,7 @@ using WorldServerV2.Network.Dtos;
 using WorldServerV2.World.Abilities;
 using WorldServerV2.World.Combat.Abilities;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Items;
 using WorldServerV2.World.Stats;
 
 namespace WorldServerV2.Services;
@@ -107,6 +108,9 @@ public sealed class PlayerInitPipeline
         // current HP was initialized to the pre-flush max; Flush() may raise Max.
         player.Health.Heal(player.Health.Max);
 
+        // Populate inventory from DB character items.
+        PopulateInventory(player);
+
         var speed = charValue.Speed > 0 ? (ushort)charValue.Speed : (ushort)100;
 
         _logger.LogDebug(
@@ -171,7 +175,7 @@ public sealed class PlayerInitPipeline
         // 5a. F_CHARACTER_INFO subtype 1 — ability list with mastery levels
         var resolvedAbilities = _abilityResolver.Resolve(character.CareerLine, charValue.Level, mastery);
         SendAbilityList(session, resolvedAbilities);
-
+        
         // 5b. F_MORALE_LIST — 4 morale slots
         session.SendMoraleList(new MoraleListResponse
         {
@@ -191,6 +195,9 @@ public sealed class PlayerInitPipeline
             ActionPoints = (ushort)player.ActionPoints,
             MaxActionPoints = maxAp,
         });
+
+        // 6a. F_BAG_INFO + F_GET_ITEM — inventory capacity and item data
+        SendInventory(session, player);
 
         // 7. S_PLAYER_LOADED — data-complete marker
         session.SendPlayerLoaded(new PlayerLoadedResponse());
@@ -498,4 +505,128 @@ public sealed class PlayerInitPipeline
     /// </summary>
     internal static int ComputeTotalMasteryPoints(byte level) =>
         level <= 10 ? 0 : level - 10;
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Inventory helpers
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>Maximum number of items per <c>F_GET_ITEM</c> packet (matching V1).</summary>
+    private const int MaxItemsPerPacket = 8;
+
+    /// <summary>
+    /// Populates the player's <see cref="Inventory"/> from the character's DB items.
+    /// Sets expansion tiers and resolves each <see cref="Data.Entities.CharacterItem"/>
+    /// against the <see cref="IGameDataStore"/> to create live <see cref="Item"/> instances.
+    /// </summary>
+    private void PopulateInventory(PlayerEntity player)
+    {
+        var inventory = player.Inventory;
+        var charValue = player.Character.Value;
+
+        inventory.BackpackExpansions = charValue.BagBuy;
+        inventory.BankExpansions = charValue.BankBuy;
+
+        var itemDefs = _gameDataStore.Items.Definitions;
+
+        foreach (var dbItem in player.Character.Items)
+        {
+            if (!itemDefs.TryGetValue(dbItem.Entry, out var info))
+            {
+                _logger.LogWarning(
+                    "Item entry {Entry} in slot {Slot} for character {CharId} not found in game data — skipped",
+                    dbItem.Entry, dbItem.SlotId, player.CharacterId);
+                continue;
+            }
+
+            var item = new Item
+            {
+                Entry = dbItem.Entry,
+                Info = info,
+                SlotId = dbItem.SlotId,
+                ModelId = dbItem.ModelId,
+                Count = dbItem.Counts > 0 ? dbItem.Counts : (ushort)1,
+                PrimaryDye = dbItem.PrimaryDye,
+                SecondaryDye = dbItem.SecondaryDye,
+                BoundToPlayer = dbItem.BoundtoPlayer,
+                AlternateAppearanceEntry = dbItem.AlternateAppereanceEntry,
+                Talismans = ParseTalismans(dbItem.Talismans, itemDefs),
+            };
+
+            inventory.SetItem(dbItem.SlotId, item);
+        }
+    }
+
+    /// <summary>
+    /// Parses the semicolon-delimited talisman string (e.g. <c>"12345;0;67890"</c>)
+    /// into an array of <see cref="Talisman"/> instances, resolving each against the
+    /// item definition store.
+    /// </summary>
+    private static Talisman?[] ParseTalismans(
+        string? talismansStr,
+        System.Collections.Frozen.FrozenDictionary<uint, ItemDefinition> itemDefs)
+    {
+        if (string.IsNullOrWhiteSpace(talismansStr))
+            return [];
+
+        var parts = talismansStr.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var result = new Talisman?[parts.Length];
+
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!uint.TryParse(parts[i], out var entry) || entry == 0)
+            {
+                result[i] = null;
+                continue;
+            }
+
+            itemDefs.TryGetValue(entry, out var talisInfo);
+            result[i] = new Talisman { Entry = entry, Info = talisInfo };
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Sends <c>F_BAG_INFO</c> followed by <c>F_GET_ITEM</c> batches for all
+    /// items in the player's inventory.
+    /// </summary>
+    private void SendInventory(GameSession session, PlayerEntity player)
+    {
+        var inventory = player.Inventory;
+
+        // F_BAG_INFO — inventory/bank capacity
+        session.SendBagInfo(BuildBagInfo(inventory));
+
+        // F_GET_ITEM — batched item packets (max 8 items per packet, matching V1)
+        var itemDefs = _gameDataStore.Items.Definitions;
+        var abilityDefs = _gameDataStore.Abilities.ByEntry;
+        var batch = new List<ItemEntry>(MaxItemsPerPacket);
+
+        foreach (var item in inventory.GetAllItems())
+        {
+            batch.Add(ItemEntry.FromItem(item, itemDefs, abilityDefs));
+
+            if (batch.Count >= MaxItemsPerPacket)
+            {
+                session.SendGetItem(new GetItemResponse { Items = batch });
+                batch = new List<ItemEntry>(MaxItemsPerPacket);
+            }
+        }
+
+        if (batch.Count > 0)
+            session.SendGetItem(new GetItemResponse { Items = batch });
+    }
+
+    /// <summary>
+    /// Builds a <see cref="BagInfoResponse"/> from the player's inventory state.
+    /// </summary>
+    internal static BagInfoResponse BuildBagInfo(Inventory inventory) => new()
+    {
+        BackpackSlots = (ushort)inventory.MaxBackpackSlots,
+        BackpackExpansionSlots = Inventory.SlotsPerBackpackExpansion,
+        BackpackExpansionCost = inventory.NextBackpackExpansionCost,
+        BankSlots = (ushort)inventory.MaxBankSlots,
+        BankExpansionSlots = Inventory.SlotsPerBankExpansion,
+        BankExpansionCost = inventory.NextBankExpansionCost,
+    };
 }

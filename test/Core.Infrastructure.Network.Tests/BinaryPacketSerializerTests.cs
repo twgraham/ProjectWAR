@@ -1095,6 +1095,425 @@ public class BinaryPacketSerializerTests
         // First two bytes = big-endian uint16 length of 2
         writer.WrittenSpan[0].ShouldBe((byte)0);
         writer.WrittenSpan[1].ShouldBe((byte)2);
+    // ── ConditionalOn ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ConditionalOn_ConditionNotMet_FieldSkipped()
+    {
+        // Type == 1 — does NOT match 23 or 24, so Extra should be absent from wire
+        var original = new ConditionalOnPacket { Type = 1, Extra = 0xDEAD, After = 0xBB };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // Type(1) + After(1) = 2 bytes. No Extra on the wire.
+        bytes.Length.ShouldBe(2);
+        bytes[0].ShouldBe((byte)1);    // Type
+        bytes[1].ShouldBe((byte)0xBB); // After
+    }
+
+    [Fact]
+    public void ConditionalOn_ConditionMet_FieldWritten()
+    {
+        // Type == 23 matches, so Extra should appear on the wire
+        var original = new ConditionalOnPacket { Type = 23, Extra = 0x1234, After = 0xAA };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // Type(1) + Extra(2) + After(1) = 4 bytes
+        bytes.Length.ShouldBe(4);
+        bytes[0].ShouldBe((byte)23);
+        BinaryPrimitives.ReadUInt16BigEndian(bytes[1..]).ShouldBe((ushort)0x1234);
+        bytes[3].ShouldBe((byte)0xAA);
+    }
+
+    [Fact]
+    public void ConditionalOn_SecondMatchValue_FieldWritten()
+    {
+        // Type == 24 also matches (second value in the attribute)
+        var original = new ConditionalOnPacket { Type = 24, Extra = 500, After = 9 };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // Type(1) + Extra(2) + After(1) = 4 bytes
+        bytes.Length.ShouldBe(4);
+        bytes[0].ShouldBe((byte)24);
+        BinaryPrimitives.ReadUInt16BigEndian(bytes[1..]).ShouldBe((ushort)500);
+    }
+
+    [Fact]
+    public void ConditionalOn_RoundTrip_ConditionMet()
+    {
+        var original = new ConditionalOnPacket { Type = 23, Extra = 9999, After = 42 };
+        var result = RoundTrip(original);
+        result.Type.ShouldBe((byte)23);
+        result.Extra.ShouldBe((ushort)9999);
+        result.After.ShouldBe((byte)42);
+    }
+
+    [Fact]
+    public void ConditionalOn_RoundTrip_ConditionNotMet()
+    {
+        var original = new ConditionalOnPacket { Type = 5, Extra = 0xFFFF, After = 77 };
+        var result = RoundTrip(original);
+        result.Type.ShouldBe((byte)5);
+        result.Extra.ShouldBe((ushort)0); // not on wire -> stays default
+        result.After.ShouldBe((byte)77);
+    }
+
+    [Fact]
+    public void ConditionalOn_MultipleConditionalFields()
+    {
+        // Type == 24: both Bitmask (23||24) and TrophyByte (24 only) should appear
+        var original = new TrophyLikePacket { Type = 24, Bitmask = 0xABCD1234, TrophyByte = 0x55, After = 0xEE };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // Type(1) + Bitmask(4) + TrophyByte(1) + After(1) = 7 bytes
+        bytes.Length.ShouldBe(7);
+        bytes[0].ShouldBe((byte)24);
+        BinaryPrimitives.ReadUInt32BigEndian(bytes[1..]).ShouldBe(0xABCD1234u);
+        bytes[5].ShouldBe((byte)0x55);
+        bytes[6].ShouldBe((byte)0xEE);
+    }
+
+    [Fact]
+    public void ConditionalOn_PartialMatch_OnlyMatchingFieldsWritten()
+    {
+        // Type == 23: Bitmask (23||24) present, but TrophyByte (24 only) absent
+        var original = new TrophyLikePacket { Type = 23, Bitmask = 0x11223344, TrophyByte = 0xFF, After = 0xDD };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // Type(1) + Bitmask(4) + After(1) = 6 bytes. No TrophyByte.
+        bytes.Length.ShouldBe(6);
+        bytes[0].ShouldBe((byte)23);
+        BinaryPrimitives.ReadUInt32BigEndian(bytes[1..]).ShouldBe(0x11223344u);
+        bytes[5].ShouldBe((byte)0xDD);
+    }
+
+    [Fact]
+    public void ConditionalOn_RoundTrip_TrophyLike_FullMatch()
+    {
+        var original = new TrophyLikePacket { Type = 24, Bitmask = 0xDEADBEEF, TrophyByte = 0x42, After = 0x01 };
+        var result = RoundTrip(original);
+        result.Type.ShouldBe((byte)24);
+        result.Bitmask.ShouldBe(0xDEADBEEFu);
+        result.TrophyByte.ShouldBe((byte)0x42);
+        result.After.ShouldBe((byte)0x01);
+    }
+
+    [Fact]
+    public void ConditionalOn_RoundTrip_TrophyLike_PartialMatch()
+    {
+        var original = new TrophyLikePacket { Type = 23, Bitmask = 0x12345678, TrophyByte = 0xFF, After = 0x02 };
+        var result = RoundTrip(original);
+        result.Type.ShouldBe((byte)23);
+        result.Bitmask.ShouldBe(0x12345678u);
+        result.TrophyByte.ShouldBe((byte)0); // not on wire -> default
+        result.After.ShouldBe((byte)0x02);
+    }
+
+    [Fact]
+    public void ConditionalOn_RoundTrip_TrophyLike_NoMatch()
+    {
+        var original = new TrophyLikePacket { Type = 1, Bitmask = 0xFFFFFFFF, TrophyByte = 0xAA, After = 0x03 };
+        var result = RoundTrip(original);
+        result.Type.ShouldBe((byte)1);
+        result.Bitmask.ShouldBe(0u); // not on wire
+        result.TrophyByte.ShouldBe((byte)0); // not on wire
+        result.After.ShouldBe((byte)0x03);
+    }
+
+    // ── PacketLength LittleEndian ───────────────────────────────────────
+
+    [Fact]
+    public void PacketLengthLE_UInt32_RoundTrip_Array()
+    {
+        // GIVEN: A packet with array using 4-byte LE length prefix
+        var original = new PacketLengthLE_UInt32Packet
+        {
+            Items =
+            [
+                new() { Id = 1, Value = 100 },
+                new() { Id = 2, Value = 200 }
+            ]
+        };
+
+        // WHEN: Round-tripping
+        var result = RoundTrip(original);
+
+        // THEN: Elements are preserved
+        result.Items.Length.ShouldBe(2);
+        result.Items[0].Id.ShouldBe((byte)1);
+        result.Items[0].Value.ShouldBe((ushort)100);
+        result.Items[1].Id.ShouldBe((byte)2);
+        result.Items[1].Value.ShouldBe((ushort)200);
+    }
+
+    [Fact]
+    public void PacketLengthLE_UInt32_WritesLengthInLittleEndian()
+    {
+        // GIVEN: A packet with 2 elements and 4-byte LE length prefix
+        var original = new PacketLengthLE_UInt32Packet
+        {
+            Items =
+            [
+                new() { Id = 0xAA, Value = 0x1234 },
+                new() { Id = 0xBB, Value = 0x5678 }
+            ]
+        };
+
+        // WHEN: Serializing
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // THEN: First 4 bytes are count=2 in LE: 02 00 00 00
+        bytes[0].ShouldBe((byte)0x02);
+        bytes[1].ShouldBe((byte)0x00);
+        bytes[2].ShouldBe((byte)0x00);
+        bytes[3].ShouldBe((byte)0x00);
+        // Element 0: Id(AA) + Value(12 34) BE
+        bytes[4].ShouldBe((byte)0xAA);
+        bytes[5].ShouldBe((byte)0x12);
+        bytes[6].ShouldBe((byte)0x34);
+        // Element 1: Id(BB) + Value(56 78) BE
+        bytes[7].ShouldBe((byte)0xBB);
+        bytes[8].ShouldBe((byte)0x56);
+        bytes[9].ShouldBe((byte)0x78);
+        bytes.Length.ShouldBe(10);
+    }
+
+    [Fact]
+    public void PacketLengthLE_UInt16_WritesLengthInLittleEndian()
+    {
+        // GIVEN: A packet with 3 ushort values and 2-byte LE length prefix
+        var original = new PacketLengthLE_UInt16Packet { Values = [0x1122, 0x3344, 0x5566] };
+
+        // WHEN: Serializing
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // THEN: First 2 bytes are count=3 in LE: 03 00
+        bytes[0].ShouldBe((byte)0x03);
+        bytes[1].ShouldBe((byte)0x00);
+        // Values in BE (default wire encoding)
+        bytes[2].ShouldBe((byte)0x11);
+        bytes[3].ShouldBe((byte)0x22);
+        bytes[4].ShouldBe((byte)0x33);
+        bytes[5].ShouldBe((byte)0x44);
+        bytes[6].ShouldBe((byte)0x55);
+        bytes[7].ShouldBe((byte)0x66);
+        bytes.Length.ShouldBe(8);
+    }
+
+    [Fact]
+    public void PacketLengthLE_UInt16_RoundTrip()
+    {
+        var original = new PacketLengthLE_UInt16Packet { Values = [100, 200, 300] };
+        var result = RoundTrip(original);
+        result.Values.ShouldBe(new ushort[] { 100, 200, 300 });
+    }
+
+    [Fact]
+    public void PacketLengthLE_List_RoundTrip()
+    {
+        // GIVEN: A List<T> variant with 4-byte LE length
+        var original = new PacketLengthLE_ListPacket
+        {
+            Items =
+            [
+                new() { Id = 10, Value = 1000 },
+                new() { Id = 20, Value = 2000 },
+                new() { Id = 30, Value = 3000 }
+            ]
+        };
+
+        // WHEN: Round-tripping
+        var result = RoundTrip(original);
+
+        // THEN
+        result.Items.Count.ShouldBe(3);
+        result.Items[0].Id.ShouldBe((byte)10);
+        result.Items[0].Value.ShouldBe((ushort)1000);
+        result.Items[2].Id.ShouldBe((byte)30);
+        result.Items[2].Value.ShouldBe((ushort)3000);
+    }
+
+    [Fact]
+    public void PacketLengthLE_Empty_WritesZeroLength()
+    {
+        // GIVEN: Empty collection
+        var original = new PacketLengthLE_UInt32Packet { Items = [] };
+
+        // WHEN: Serializing
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // THEN: 4 zero bytes for LE uint32 count=0
+        bytes.Length.ShouldBe(4);
+        bytes[0].ShouldBe((byte)0x00);
+        bytes[1].ShouldBe((byte)0x00);
+        bytes[2].ShouldBe((byte)0x00);
+        bytes[3].ShouldBe((byte)0x00);
+    }
+
+    [Fact]
+    public void PacketLengthLE_DeserializeFromKnownBytes()
+    {
+        // GIVEN: Known LE-prefixed bytes: count=2 (LE uint32), then 2 elements
+        var data = new byte[]
+        {
+            0x02, 0x00, 0x00, 0x00, // count=2 LE
+            0x01, 0x00, 0x0A,        // elem0: Id=1, Value=10 (BE)
+            0x02, 0x00, 0x14         // elem1: Id=2, Value=20 (BE)
+        };
+
+        // WHEN: Deserializing
+        var result = _serializer.Deserialize<PacketLengthLE_UInt32Packet>(data);
+
+        // THEN
+        result.Items.Length.ShouldBe(2);
+        result.Items[0].Id.ShouldBe((byte)1);
+        result.Items[0].Value.ShouldBe((ushort)10);
+        result.Items[1].Id.ShouldBe((byte)2);
+        result.Items[1].Value.ShouldBe((ushort)20);
+    }
+
+    [Fact]
+    public void PacketLengthLE_WithNeighbours_RoundTrip()
+    {
+        // GIVEN: Packet with fields before and after the LE collection
+        var original = new PacketLengthLE_WithNeighboursPacket
+        {
+            Before = 0xAA,
+            Items =
+            [
+                new() { Id = 5, Value = 500 }
+            ],
+            After = 0xBB
+        };
+
+        // WHEN: Round-tripping
+        var result = RoundTrip(original);
+
+        // THEN
+        result.Before.ShouldBe((byte)0xAA);
+        result.Items.Length.ShouldBe(1);
+        result.Items[0].Id.ShouldBe((byte)5);
+        result.Items[0].Value.ShouldBe((ushort)500);
+        result.After.ShouldBe((byte)0xBB);
+    }
+
+    [Fact]
+    public void PacketLengthLE_WithNeighbours_ByteLayout()
+    {
+        var original = new PacketLengthLE_WithNeighboursPacket
+        {
+            Before = 0xFF,
+            Items = [new() { Id = 1, Value = 2 }],
+            After = 0xEE
+        };
+
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // Before(1) + count_LE(4) + elem(3) + After(1) = 9
+        bytes.Length.ShouldBe(9);
+        bytes[0].ShouldBe((byte)0xFF);    // Before
+        bytes[1].ShouldBe((byte)0x01);    // count LE low byte
+        bytes[2].ShouldBe((byte)0x00);
+        bytes[3].ShouldBe((byte)0x00);
+        bytes[4].ShouldBe((byte)0x00);    // count LE high byte
+        bytes[5].ShouldBe((byte)0x01);    // Id
+        bytes[6].ShouldBe((byte)0x00);    // Value BE high
+        bytes[7].ShouldBe((byte)0x02);    // Value BE low
+        bytes[8].ShouldBe((byte)0xEE);    // After
+    }
+
+    // ── NullPrefixed ────────────────────────────────────────────────────
+
+    [Fact]
+    public void NullPrefixed_Null_WritesZeroByte()
+    {
+        // GIVEN: nested is null
+        var original = new NullPrefixedPacket { Id = 0x42, Nested = null, After = 0xFF };
+
+        // WHEN
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // THEN: Id(1) + flag(0)(1) + After(1) = 3 bytes
+        bytes.Length.ShouldBe(3);
+        bytes[0].ShouldBe((byte)0x42); // Id
+        bytes[1].ShouldBe((byte)0x00); // NullPrefixed flag = absent
+        bytes[2].ShouldBe((byte)0xFF); // After
+    }
+
+    [Fact]
+    public void NullPrefixed_NonNull_WritesFlagThenData()
+    {
+        // GIVEN: nested is populated
+        var original = new NullPrefixedPacket
+        {
+            Id = 0x01,
+            Nested = new NullPrefixedNestedData { X = 100, Y = 200 },
+            After = 0xAA
+        };
+
+        // WHEN
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(writer, original);
+        var bytes = writer.WrittenSpan;
+
+        // THEN: Id(1) + flag(1)(1) + X(2) + Y(2) + After(1) = 7 bytes
+        bytes.Length.ShouldBe(7);
+        bytes[0].ShouldBe((byte)0x01); // Id
+        bytes[1].ShouldBe((byte)0x01); // NullPrefixed flag = present
+        BinaryPrimitives.ReadUInt16BigEndian(bytes[2..]).ShouldBe((ushort)100); // X
+        BinaryPrimitives.ReadUInt16BigEndian(bytes[4..]).ShouldBe((ushort)200); // Y
+        bytes[6].ShouldBe((byte)0xAA); // After
+    }
+
+    [Fact]
+    public void NullPrefixed_RoundTrip_Null()
+    {
+        var original = new NullPrefixedPacket { Id = 5, Nested = null, After = 9 };
+        var result = RoundTrip(original);
+        result.Id.ShouldBe((byte)5);
+        result.Nested.ShouldBeNull();
+        result.After.ShouldBe((byte)9);
+    }
+
+    [Fact]
+    public void NullPrefixed_RoundTrip_NonNull()
+    {
+        var original = new NullPrefixedPacket
+        {
+            Id = 7,
+            Nested = new NullPrefixedNestedData { X = 1234, Y = 5678 },
+            After = 3
+        };
+        var result = RoundTrip(original);
+        result.Id.ShouldBe((byte)7);
+        result.Nested.ShouldNotBeNull();
+        result.Nested!.X.ShouldBe((ushort)1234);
+        result.Nested.Y.ShouldBe((ushort)5678);
+        result.After.ShouldBe((byte)3);
     }
 
     public class BytePacket { public byte Value { get; set; } }
@@ -1150,7 +1569,7 @@ public class BinaryPacketSerializerTests
         [PascalString]
         public string Name { get; set; } = "";
     }
-
+  
     public class PascalStringWithNeighboursPacket
     {
         public byte Before { get; set; }
@@ -1319,5 +1738,69 @@ public class BinaryPacketSerializerTests
     {
         [ShortPascalString]
         public string Name { get; set; } = "";
+    }
+  
+    public class NullPrefixedNestedData
+    {
+        public ushort X { get; set; }
+        public ushort Y { get; set; }
+    }
+
+    public class NullPrefixedPacket
+    {
+        public byte Id { get; set; }
+        [NullPrefixed]
+        public NullPrefixedNestedData? Nested { get; set; }
+        public byte After { get; set; }
+    }
+
+    public class ConditionalOnPacket
+    {
+        public byte Type { get; set; }
+        [ConditionalOn(nameof(Type), 23, 24)]
+        public ushort Extra { get; set; }
+        public byte After { get; set; }
+    }
+
+    public class TrophyLikePacket
+    {
+        public byte Type { get; set; }
+        [ConditionalOn(nameof(Type), 23, 24)]
+        public uint Bitmask { get; set; }
+        [ConditionalOn(nameof(Type), 24)]
+        public byte TrophyByte { get; set; }
+        public byte After { get; set; }
+    }
+
+    public class LittleEndianLengthElement
+    {
+        public byte Id { get; set; }
+        public ushort Value { get; set; }
+    }
+
+    public class PacketLengthLE_UInt32Packet
+    {
+        [PacketLength(4, LittleEndian = true)]
+        public LittleEndianLengthElement[] Items { get; set; } = [];
+    }
+
+    public class PacketLengthLE_UInt16Packet
+    {
+        [PacketLength(2, LittleEndian = true)]
+        public ushort[] Values { get; set; } = [];
+    }
+
+    public class PacketLengthLE_ListPacket
+    {
+        [PacketLength(4, LittleEndian = true)]
+        public List<LittleEndianLengthElement> Items { get; set; } = [];
+    }
+
+    public class PacketLengthLE_WithNeighboursPacket
+    {
+        public byte Before { get; set; }
+        [PacketLength(4, LittleEndian = true)]
+        public LittleEndianLengthElement[] Items { get; set; } = [];
+        public byte After { get; set; }
     }
 }

@@ -14,6 +14,12 @@ public sealed class PacketLengthAttribute : Attribute
     public int ByteCount { get; }
 
     /// <summary>
+    /// When true, the length prefix is written/read in little-endian byte order.
+    /// Default is false (big-endian).
+    /// </summary>
+    public bool LittleEndian { get; set; }
+
+    /// <summary>
     /// Creates a new PacketLengthAttribute.
     /// </summary>
     /// <param name="byteCount">Number of bytes for the length field (1, 2, or 4).</param>
