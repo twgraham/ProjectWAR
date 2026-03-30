@@ -142,6 +142,16 @@ public class BinaryPacketSerializer : IPacketSerializer
             propertyType = underlyingType;
         }
 
+        // ICustomSerializationAttribute — lets any attribute override serialization for any type
+        if (propertyInfo != null)
+        {
+            var customAttr = propertyInfo.GetCustomAttributes()
+                .OfType<ICustomSerializationAttribute>()
+                .FirstOrDefault();
+            if (customAttr != null)
+                return customAttr.Read(ref reader);
+        }
+
         if (propertyType == typeof(byte))
             return reader.ReadByte();
         if (propertyType == typeof(sbyte))
@@ -167,19 +177,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         if (propertyType.IsEnum)
             return Enum.ToObject(propertyType,reader.ReadByte());
         if (propertyType == typeof(string))
-        {
-            if (propertyInfo != null)
-            {
-                if (propertyInfo.GetCustomAttribute<PascalStringAttribute>() != null)
-                    return reader.ReadPascalString();
-
-                var cstr = propertyInfo.GetCustomAttribute<CStringAttribute>();
-                if (cstr != null)
-                    return reader.ReadCString(cstr.Length);
-            }
-
             return reader.ReadString();
-        }
         if (propertyType.IsArray)
         {
             var elementType = propertyType.GetElementType()!;
@@ -354,6 +352,19 @@ public class BinaryPacketSerializer : IPacketSerializer
             propertyType = underlyingType;
         }
 
+        // ICustomSerializationAttribute — lets any attribute override serialization for any type
+        if (propertyInfo != null)
+        {
+            var customAttr = propertyInfo.GetCustomAttributes()
+                .OfType<ICustomSerializationAttribute>()
+                .FirstOrDefault();
+            if (customAttr != null)
+            {
+                customAttr.Write(ref writer, value);
+                return;
+            }
+        }
+
         if (propertyType == typeof(byte))
             writer.WriteByte((byte)value);
         else if (propertyType == typeof(sbyte))
@@ -379,25 +390,7 @@ public class BinaryPacketSerializer : IPacketSerializer
         else if (propertyType.IsEnum)
             writer.WriteByte(Convert.ToByte(value));
         else if (propertyType == typeof(string))
-        {
-            if (propertyInfo != null)
-            {
-                if (propertyInfo.GetCustomAttribute<PascalStringAttribute>() != null)
-                {
-                    writer.WritePascalString((string)value ?? string.Empty);
-                    return;
-                }
-
-                var cstr = propertyInfo.GetCustomAttribute<CStringAttribute>();
-                if (cstr != null)
-                {
-                    writer.WriteCString((string)value ?? string.Empty, cstr.Length);
-                    return;
-                }
-            }
-
             writer.WriteString((string)value ?? string.Empty);
-        }
         else if (propertyType.IsArray)
         {
             var elementType = propertyType.GetElementType()!;
@@ -615,18 +608,16 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
 
-                // CString with fixed length
-                var cstr = prop.GetCustomAttribute<CStringAttribute>();
-                if (cstr != null && propType == typeof(string))
+                // ICustomSerializationAttribute — check first for any type
+                var customAttr = prop.GetCustomAttributes()
+                    .OfType<ICustomSerializationAttribute>()
+                    .FirstOrDefault();
+                if (customAttr != null)
                 {
-                    if (cstr.Length == null) return null;
-                    total += cstr.Length.Value;
+                    if (customAttr.FixedWireSize == null) return null;
+                    total += customAttr.FixedWireSize.Value;
                     continue;
                 }
-
-                // PascalString — variable
-                if (prop.GetCustomAttribute<PascalStringAttribute>() != null && propType == typeof(string))
-                    return null;
 
                 // FixedLength byte[]
                 if (propType == typeof(byte[]))

@@ -209,6 +209,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("using System.Buffers;");
             sb.AppendLine("using Core.Infrastructure.Network;");
             sb.AppendLine("using Core.Infrastructure.Network.Serialization;");
+            sb.AppendLine("using Core.Infrastructure.Network.Serialization.Attributes;");
             sb.AppendLine();
 
             if (!string.IsNullOrEmpty(namespaceName))
@@ -364,17 +365,20 @@ namespace RpcSourceGenerator
 
         private static string BuildReadExpression(IPropertySymbol prop, ITypeSymbol propType, ITypeSymbol underlyingType, bool isNullable, CollectionMethodTracker tracker)
         {
-            // CString
-            if (HasCStringAttribute(prop) && underlyingType.SpecialType == SpecialType.System_String)
+            // ICustomSerializationAttribute / ICustomSerializationAttribute<T>
+            var customSerAttr = GetCustomSerializationAttribute(prop);
+            if (customSerAttr != null)
             {
-                var cstringLen = GetCStringLength(prop);
-                var inner = cstringLen.HasValue ? $"reader.ReadCString({cstringLen.Value})" : "reader.ReadCString(null)";
+                var attrInst = BuildAttributeInstantiation(customSerAttr);
+                var targetTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                // When the attribute implements the generic ICustomSerializationAttribute<T>,
+                // Read() already returns T — no cast needed.
+                var needsCast = !ImplementsGenericCustomSerializationFor(customSerAttr.AttributeClass!, underlyingType);
+                var inner = needsCast
+                    ? $"({targetTypeName}){attrInst}.Read(ref reader)"
+                    : $"{attrInst}.Read(ref reader)";
                 return isNullable ? $"reader.IsAtEnd() ? null : {inner}" : inner;
             }
-
-            // PascalString
-            if (HasPascalString(prop) && underlyingType.SpecialType == SpecialType.System_String)
-                return isNullable ? "reader.IsAtEnd() ? null : reader.ReadPascalString()" : "reader.ReadPascalString()";
 
             // Enum
             if (underlyingType.TypeKind == TypeKind.Enum)
@@ -519,6 +523,26 @@ namespace RpcSourceGenerator
 
             var value = needsCast ? $"{valueExpression}.Value" : valueExpression;
 
+            // ICustomSerializationAttribute — takes priority for any property type
+            var customSerAttr = GetCustomSerializationAttribute(property);
+            if (customSerAttr != null)
+            {
+                var attrInst = BuildAttributeInstantiation(customSerAttr);
+                var writeCall = $"{attrInst}.Write(ref writer, {value})";
+                if (needsCast)
+                {
+                    sb.AppendLine($"            if ({valueExpression} != null)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                {writeCall};");
+                    sb.AppendLine("            }");
+                }
+                else
+                {
+                    sb.AppendLine($"            {writeCall};");
+                }
+                return;
+            }
+
             // Check if it's a collection first
             if (IsCollectionType(underlyingType, out var elementType))
             {
@@ -583,44 +607,6 @@ namespace RpcSourceGenerator
                 else
                 {
                     sb.AppendLine($"            Serialize{customTypeSafeName}({value}, ref writer);");
-                }
-                return;
-            }
-
-            // Handle PascalString attribute on string properties
-            if (HasPascalString(property) && underlyingType.SpecialType == SpecialType.System_String)
-            {
-                if (needsCast)
-                {
-                    sb.AppendLine($"            if ({valueExpression} != null)");
-                    sb.AppendLine("            {");
-                    sb.AppendLine($"                writer.WritePascalString({value});");
-                    sb.AppendLine("            }");
-                }
-                else
-                {
-                    sb.AppendLine($"            writer.WritePascalString({value});");
-                }
-                return;
-            }
-
-            // Handle CString attribute on string properties
-            if (HasCStringAttribute(property) && underlyingType.SpecialType == SpecialType.System_String)
-            {
-                var cstrLen = GetCStringLength(property);
-                var writeCall = cstrLen.HasValue
-                    ? $"writer.WriteCString({value}, {cstrLen.Value})"
-                    : $"writer.WriteCString({value}, null)";
-                if (needsCast)
-                {
-                    sb.AppendLine($"            if ({valueExpression} != null)");
-                    sb.AppendLine("            {");
-                    sb.AppendLine($"                {writeCall};");
-                    sb.AppendLine("            }");
-                }
-                else
-                {
-                    sb.AppendLine($"            {writeCall};");
                 }
                 return;
             }
@@ -736,21 +722,6 @@ namespace RpcSourceGenerator
             return false;
         }
 
-        private static int? GetCStringLength(IPropertySymbol property)
-        {
-            var cstrAttr = property.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.Name == "CStringAttribute" &&
-                                     (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
-
-            if (cstrAttr is { ConstructorArguments.Length: > 0 })
-            {
-                if (cstrAttr.ConstructorArguments[0].Value is int len)
-                    return len;
-            }
-
-            return null;
-        }
-
         private static int? GetFixedLength(IPropertySymbol property)
         {
             var fixedLenAttr = property.GetAttributes()
@@ -766,15 +737,61 @@ namespace RpcSourceGenerator
             return null;
         }
 
-        private static bool HasPascalString(IPropertySymbol property) =>
-            property.GetAttributes()
-                .Any(a => a.AttributeClass?.Name == "PascalStringAttribute" &&
-                          (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+        /// <summary>
+        /// Returns the first attribute on the property whose class implements ICustomSerializationAttribute,
+        /// or null if none is found.  Matches both the non-generic and generic forms.
+        /// </summary>
+        private static AttributeData? GetCustomSerializationAttribute(IPropertySymbol property)
+        {
+            return property.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass != null &&
+                                     a.AttributeClass.AllInterfaces.Any(i =>
+                                         i.Name == "ICustomSerializationAttribute" &&
+                                         (i.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false)));
+        }
 
-        private static bool HasCStringAttribute(IPropertySymbol property) =>
-            property.GetAttributes()
-                .Any(a => a.AttributeClass?.Name == "CStringAttribute" &&
-                          (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+        /// <summary>
+        /// Returns <c>true</c> when <paramref name="attrClass"/> implements
+        /// <c>ICustomSerializationAttribute&lt;T&gt;</c> where <c>T</c> matches
+        /// <paramref name="propertyType"/>.  In that case the concrete <c>Read</c>
+        /// method already returns the correct type and no cast is needed.
+        /// </summary>
+        private static bool ImplementsGenericCustomSerializationFor(INamedTypeSymbol attrClass, ITypeSymbol propertyType)
+        {
+            return attrClass.AllInterfaces.Any(i =>
+                i.Name == "ICustomSerializationAttribute" &&
+                i.IsGenericType &&
+                i.TypeArguments.Length == 1 &&
+                (i.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false) &&
+                SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], propertyType));
+        }
+
+        /// <summary>
+        /// Builds a <c>new AttributeType(args)</c> expression string from compile-time attribute data.
+        /// Used by the source generator to produce code that instantiates the attribute directly
+        /// (no reflection).
+        /// </summary>
+        private static string BuildAttributeInstantiation(AttributeData attr)
+        {
+            var typeName = attr.AttributeClass!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (attr.ConstructorArguments.IsEmpty)
+                return $"new {typeName}()";
+
+            var args = string.Join(", ", attr.ConstructorArguments.Select(FormatTypedConstant));
+            return $"new {typeName}({args})";
+        }
+
+        private static string FormatTypedConstant(TypedConstant arg)
+        {
+            if (arg.IsNull) return "null";
+            return arg.Value switch
+            {
+                int i => i.ToString(),
+                bool b => b ? "true" : "false",
+                string s => $"\"{s}\"",
+                _ => arg.Value?.ToString() ?? "null"
+            };
+        }
 
         private static bool HasLittleEndian(IPropertySymbol property) =>
             property.GetAttributes()
@@ -886,13 +903,15 @@ namespace RpcSourceGenerator
             if (propType.NullableAnnotation == NullableAnnotation.Annotated && propType is INamedTypeSymbol namedNullable && namedNullable.IsGenericType)
                 underlyingType = namedNullable.TypeArguments[0];
 
-            // CString with fixed length
-            if (HasCStringAttribute(prop) && underlyingType.SpecialType == SpecialType.System_String)
-                return GetCStringLength(prop);
-
-            // PascalString — variable
-            if (HasPascalString(prop) && underlyingType.SpecialType == SpecialType.System_String)
-                return null;
+            // ICustomSerializationAttribute — infer fixed wire size from constructor args
+            var customSerAttr = GetCustomSerializationAttribute(prop);
+            if (customSerAttr != null)
+            {
+                // Convention: if the first constructor arg is a positive int, it's the fixed wire size
+                if (customSerAttr.ConstructorArguments.Length > 0 && customSerAttr.ConstructorArguments[0].Value is int len && len > 0)
+                    return len;
+                return null; // variable-length
+            }
 
             // Enum
             if (underlyingType.TypeKind == TypeKind.Enum)

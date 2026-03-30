@@ -32,14 +32,17 @@ namespace Core.Infrastructure.Network
         public FixedLengthAttribute(int length) { Length = length; }
     }
 
+    public interface ICustomSerializationAttribute { }
+    public interface ICustomSerializationAttribute<T> : ICustomSerializationAttribute { }
+
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class PascalStringAttribute : System.Attribute { }
+    public class PascalStringAttribute : System.Attribute, ICustomSerializationAttribute<string> { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class LittleEndianAttribute : System.Attribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class CStringAttribute : System.Attribute
+    public class CStringAttribute : System.Attribute, ICustomSerializationAttribute<string>
     {
         public int? Length { get; }
         public CStringAttribute() { Length = null; }
@@ -509,8 +512,8 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        code.ShouldContain("ReadPascalString()");
-        code.ShouldContain("WritePascalString");
+        code.ShouldContain("PascalStringAttribute().Read(ref reader)");
+        code.ShouldContain("PascalStringAttribute().Write(ref writer,");
         code.ShouldNotContain("ReadString()");  // regular length-prefixed read must not appear
         code.ShouldNotContain("WriteString("); // regular length-prefixed write must not appear
     }
@@ -575,9 +578,8 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        code.ShouldContain("ReadCString(20)");
-        code.ShouldContain("WriteCString(");
-        code.ShouldContain(", 20)");
+        code.ShouldContain("CStringAttribute(20).Read(ref reader)");
+        code.ShouldContain("CStringAttribute(20).Write(ref writer,");
         code.ShouldNotContain("ReadCStringNullTerminated");
         code.ShouldNotContain("WriteCStringNullTerminated");
     }
@@ -607,11 +609,81 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        code.ShouldContain("ReadCString(null)");
-        code.ShouldContain("WriteCString(");
-        code.ShouldContain(", null)");
+        code.ShouldContain("CStringAttribute().Read(ref reader)");
+        code.ShouldContain("CStringAttribute().Write(ref writer,");
         code.ShouldNotContain("ReadCStringNullTerminated");
         code.ShouldNotContain("WriteCStringNullTerminated");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCustomSerializationAttribute_NonGeneric()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class ShortPascalStringAttribute : System.Attribute, ICustomSerializationAttribute { }
+
+    public class ChatMessage
+    {
+        [ShortPascalString]
+        public string Body { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(ChatMessage))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Non-generic form: Read returns object, so a cast to the property type is needed
+        code.ShouldContain("(string)new global::TestNamespace.ShortPascalStringAttribute().Read(ref reader)");
+        code.ShouldContain("ShortPascalStringAttribute().Write(ref writer,");
+        code.ShouldNotContain("ReadString()");
+        code.ShouldNotContain("WriteString(");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCustomSerializationAttribute_Generic()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class ShortPascalStringAttribute : System.Attribute, ICustomSerializationAttribute<string> { }
+
+    public class ChatMessage
+    {
+        [ShortPascalString]
+        public string Body { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(ChatMessage))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Generic form: Read already returns string, so no cast needed
+        code.ShouldContain("new global::TestNamespace.ShortPascalStringAttribute().Read(ref reader)");
+        code.ShouldNotContain("(string)new global::TestNamespace.ShortPascalStringAttribute().Read(ref reader)");
+        code.ShouldContain("ShortPascalStringAttribute().Write(ref writer,");
+        code.ShouldNotContain("ReadString()");
+        code.ShouldNotContain("WriteString(");
     }
 
     [Fact]
