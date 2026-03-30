@@ -978,6 +978,86 @@ namespace TestNamespace
         code.ShouldContain("writer.WriteUInt16LE((ushort)count)");
     }
 
+    [Fact]
+    public void GeneratesSerializer_WithPacketLength4()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Item
+    {
+        public int Id { get; set; }
+    }
+
+    public class LargeList
+    {
+        [PacketLength(4)]
+        public List<Item> Items { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(LargeList))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: reads 4-byte length, validates and casts to int
+        code.ShouldContain("reader.ReadUInt32()");
+        code.ShouldContain("int.MaxValue");
+        code.ShouldContain("(int)rawLength");
+
+        // Serialize: writes count as 4-byte UInt32
+        code.ShouldContain("writer.WriteUInt32((uint)count)");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithPacketLength4_LittleEndian()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Entry
+    {
+        public int Value { get; set; }
+    }
+
+    public class Packet
+    {
+        [PacketLength(4, LittleEndian = true)]
+        public List<Entry> Entries { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: reads 4-byte LE length, validates and casts to int
+        code.ShouldContain("reader.ReadUInt32LE()");
+        code.ShouldContain("int.MaxValue");
+        code.ShouldContain("(int)rawLength");
+
+        // Serialize: writes count as 4-byte LE UInt32
+        code.ShouldContain("writer.WriteUInt32LE((uint)count)");
+    }
+
     private GeneratorTestResult RunGenerator(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);

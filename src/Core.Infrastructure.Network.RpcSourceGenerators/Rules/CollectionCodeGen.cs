@@ -199,9 +199,19 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
             w.AppendLine($"const int length = {fixedCount.Value};");
             w.AppendLine($"if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
         }
+        else if (lengthSize == 4)
+        {
+            w.AppendLine($"var rawLength = {GenerateLengthRead(lengthSize, lengthLE)};");
+            w.AppendLine("if (rawLength > int.MaxValue)");
+            w.Indent();
+            w.AppendLine("throw new System.InvalidOperationException($\"Collection length {rawLength} exceeds int.MaxValue\");");
+            w.Outdent();
+            w.AppendLine("var length = (int)rawLength;");
+            w.AppendLine($"if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
+        }
         else
         {
-            w.AppendLine($"var length = {GenerateLengthRead(lengthSize, lengthLE)};");
+            w.AppendLine($"var length = (int){GenerateLengthRead(lengthSize, lengthLE)};");
             w.AppendLine($"if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
         }
 

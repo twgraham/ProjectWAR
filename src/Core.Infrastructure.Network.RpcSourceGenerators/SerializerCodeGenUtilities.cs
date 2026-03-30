@@ -65,8 +65,9 @@ internal static class SerializerCodeGenUtilities
 
     /// <summary>
     /// Returns <c>true</c> if the type is a supported collection (array, <c>List&lt;T&gt;</c>,
-    /// <c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>, <c>IEnumerable&lt;T&gt;</c>),
-    /// excluding <c>byte[]</c> which is handled specially.
+    /// <c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>),
+    /// excluding <c>byte[]</c> which is handled specially and <c>IEnumerable&lt;T&gt;</c>
+    /// which has no <c>Count</c> property and cannot be efficiently serialized.
     /// </summary>
     internal static bool IsCollectionType(ITypeSymbol type, out ITypeSymbol? elementType)
     {
@@ -86,8 +87,7 @@ internal static class SerializerCodeGenUtilities
 
                 if (genericDefString is "System.Collections.Generic.List<T>"
                     or "System.Collections.Generic.IList<T>"
-                    or "System.Collections.Generic.ICollection<T>"
-                    or "System.Collections.Generic.IEnumerable<T>")
+                    or "System.Collections.Generic.ICollection<T>")
                 {
                     elementType = namedType.TypeArguments[0];
                     return true;
@@ -251,7 +251,10 @@ internal static class SerializerCodeGenUtilities
 
         var propType = prop.Type;
         var underlyingType = propType;
-        if (propType.NullableAnnotation == NullableAnnotation.Annotated && propType is INamedTypeSymbol namedNullable && namedNullable.IsGenericType)
+        if (propType.NullableAnnotation == NullableAnnotation.Annotated
+            && propType is INamedTypeSymbol namedNullable
+            && namedNullable.IsGenericType
+            && namedNullable.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T)
             underlyingType = namedNullable.TypeArguments[0];
 
         // Custom type — recurse
