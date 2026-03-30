@@ -33,7 +33,7 @@ public class ItemEntry
     
     public uint Entry { get; set; }
     
-    // Conditional on Entry. If Entry is 0, ItemData is not sent and the client will ignore it.
+    // Client behavior is conditional on Entry: if Entry is 0, the client will ignore ItemData.
     public ItemData? Data { get; set; }
 
     /// <summary>
@@ -431,7 +431,7 @@ public class ItemTalisman
     public ItemEffect[] Effects { get; set; } = [];
     
     [PacketLength(1)]
-    public ItemCrafting[]? Cratfing { get; set; }
+    public ItemCrafting[]? Crafting { get; set; }
     
     [NullPrefixed]
     public TalismanMystery? Mystery { get; set; }
