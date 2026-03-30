@@ -692,6 +692,7 @@ namespace RpcSourceGenerator
                 i.Name == "ICustomSerializationAttribute" &&
                 i.IsGenericType &&
                 i.TypeArguments.Length == 1 &&
+                (i.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false) &&
                 SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], propertyType));
         }
 

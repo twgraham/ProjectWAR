@@ -78,7 +78,9 @@ public interface ICustomSerializationAttribute<T> : ICustomSerializationAttribut
     /// </summary>
     new T Read(ref BinaryPacketSerializer.SpanReader reader);
 
-    // Default interface methods bridging to the typed overloads
+    // Default interface methods bridging to the typed overloads.
+    // The null-forgiving operator is safe: the non-generic Read contract
+    // returns non-null object, and implementations must not return null.
     void ICustomSerializationAttribute.Write(ref BinaryPacketSerializer.SpanWriter writer, object value)
         => Write(ref writer, (T)value);
 
