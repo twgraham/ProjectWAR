@@ -17,7 +17,7 @@ namespace RpcSourceGenerator
         {
             public HashSet<string> DeserializeMethods { get; } = [];
             public HashSet<string> SerializeMethods { get; } = [];
-            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize, int? FixedCount, int? SizedEntryWidth, bool SizedEntryLE)> CollectionInfo { get; } = new();
+            public Dictionary<string, (ITypeSymbol CollectionType, ITypeSymbol ElementType, int LengthSize, int? FixedCount, int? SizedEntryWidth, bool SizedEntryLE, bool LengthLE)> CollectionInfo { get; } = new();
         }
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -319,7 +319,28 @@ namespace RpcSourceGenerator
 
                 var readExpr = BuildReadExpression(prop, propType, underlyingType, isNullable, tracker);
 
-                if (prop.SetMethod != null)
+                // [ConditionalOn] — wrap in if-guard referencing the already-read local
+                var conditionalInfo = GetConditionalOnInfo(prop);
+                if (conditionalInfo != null)
+                {
+                    var (siblingName, values) = conditionalInfo.Value;
+                    var conditions = string.Join(" || ", values.Select(v => $"local_{siblingName} == {v}"));
+
+                    if (prop.SetMethod != null)
+                    {
+                        // Declare with default before the guard so the local is in scope for the object initializer
+                        var conditionalTypeName = propType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        sb.AppendLine($"            {conditionalTypeName} local_{prop.Name} = default;");
+                        sb.AppendLine($"            if ({conditions})");
+                        sb.AppendLine($"                local_{prop.Name} = {readExpr};");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"            if ({conditions})");
+                        sb.AppendLine($"                _ = {readExpr}; // getter-only — consumed from stream");
+                    }
+                }
+                else if (prop.SetMethod != null)
                     sb.AppendLine($"            var local_{prop.Name} = {readExpr};");
                 else
                     sb.AppendLine($"            _ = {readExpr}; // getter-only — consumed from stream");
@@ -368,9 +389,10 @@ namespace RpcSourceGenerator
             if (IsCollectionType(underlyingType, out var elementType))
             {
                 var lengthSize = GetPacketLengthSize(prop);
+                var lengthLE = GetPacketLengthLE(prop);
                 var fixedLen = GetFixedLength(prop);
                 var (sizedEntryWidth, sizedEntryLE) = GetSizedEntryInfo(prop);
-                var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen, sizedEntryWidth, sizedEntryLE);
+                var methodName = RegisterCollectionDeserializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen, sizedEntryWidth, sizedEntryLE, lengthLE);
                 return $"{methodName}(ref reader)";
             }
 
@@ -387,6 +409,8 @@ namespace RpcSourceGenerator
             if (ShouldGenerateSerializerFor(underlyingType, out var customType))
             {
                 var customSafeName = GetSafeTypeName(customType);
+                if (HasNullPrefixed(prop))
+                    return $"(reader.ReadByte() != 0 ? Deserialize{customSafeName}(ref reader) : null)";
                 return isNullable
                     ? $"reader.IsAtEnd() ? null : Deserialize{customSafeName}(ref reader)"
                     : $"Deserialize{customSafeName}(ref reader)";
@@ -452,7 +476,28 @@ namespace RpcSourceGenerator
 
             foreach (var prop in properties)
             {
-                GenerateSerializeProperty(sb, prop, $"obj.{prop.Name}", tracker);
+                // [ConditionalOn] — wrap in if-guard
+                var conditionalInfo = GetConditionalOnInfo(prop);
+                if (conditionalInfo != null)
+                {
+                    var (siblingName, values) = conditionalInfo.Value;
+                    var conditions = string.Join(" || ", values.Select(v => $"obj.{siblingName} == {v}"));
+                    sb.AppendLine($"            if ({conditions})");
+                    sb.AppendLine("            {");
+                    var inner = new StringBuilder();
+                    GenerateSerializeProperty(inner, prop, $"obj.{prop.Name}", tracker);
+                    // Indent the inner content by 4 extra spaces
+                    foreach (var line in inner.ToString().Split('\n'))
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                            sb.AppendLine($"    {line.TrimEnd()}");
+                    }
+                    sb.AppendLine("            }");
+                }
+                else
+                {
+                    GenerateSerializeProperty(sb, prop, $"obj.{prop.Name}", tracker);
+                }
             }
 
             sb.AppendLine("        }");
@@ -477,10 +522,11 @@ namespace RpcSourceGenerator
             // Check if it's a collection first
             if (IsCollectionType(underlyingType, out var elementType))
             {
+                var lengthLE = GetPacketLengthLE(property);
                 var fixedLen = GetFixedLength(property);
                 var (sizedEntryWidth, sizedEntryLE) = GetSizedEntryInfo(property);
                 // Call discrete collection serialize method
-                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen, sizedEntryWidth, sizedEntryLE);
+                var methodName = RegisterCollectionSerializeMethod(tracker, underlyingType, elementType!, lengthSize, fixedLen, sizedEntryWidth, sizedEntryLE, lengthLE);
                 sb.AppendLine($"            {methodName}(ref writer, {value});");
                 return;
             }
@@ -517,7 +563,17 @@ namespace RpcSourceGenerator
             if (ShouldGenerateSerializerFor(underlyingType, out var customType))
             {
                 var customTypeSafeName = GetSafeTypeName(customType);
-                if (needsCast)
+                if (HasNullPrefixed(property))
+                {
+                    sb.AppendLine($"            if ({valueExpression} == null)");
+                    sb.AppendLine($"                writer.WriteByte(0);");
+                    sb.AppendLine($"            else");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                writer.WriteByte(1);");
+                    sb.AppendLine($"                Serialize{customTypeSafeName}({valueExpression}, ref writer);");
+                    sb.AppendLine("            }");
+                }
+                else if (needsCast)
                 {
                     sb.AppendLine($"            if ({valueExpression} != null)");
                     sb.AppendLine("            {");
@@ -665,6 +721,21 @@ namespace RpcSourceGenerator
             return 1;
         }
 
+        private static bool GetPacketLengthLE(IPropertySymbol property)
+        {
+            var attr = property.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name == "PacketLengthAttribute" &&
+                                    (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+            if (attr == null) return false;
+
+            foreach (var named in attr.NamedArguments)
+            {
+                if (named.Key == "LittleEndian" && named.Value.Value is bool le)
+                    return le;
+            }
+            return false;
+        }
+
         private static int? GetCStringLength(IPropertySymbol property)
         {
             var cstrAttr = property.GetAttributes()
@@ -709,6 +780,35 @@ namespace RpcSourceGenerator
             property.GetAttributes()
                 .Any(a => a.AttributeClass?.Name == "LittleEndianAttribute" &&
                           (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+
+        private static bool HasNullPrefixed(IPropertySymbol property) =>
+            property.GetAttributes()
+                .Any(a => a.AttributeClass?.Name == "NullPrefixedAttribute" &&
+                          (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+
+        /// <summary>
+        /// Returns the (PropertyName, Values[]) from a [ConditionalOn] attribute, or null if absent.
+        /// </summary>
+        private static (string PropertyName, long[] Values)? GetConditionalOnInfo(IPropertySymbol property)
+        {
+            var attr = property.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name == "ConditionalOnAttribute" &&
+                                     (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+            if (attr == null) return null;
+
+            // First ctor arg = property name (string)
+            if (attr.ConstructorArguments.Length < 2) return null;
+            var propName = attr.ConstructorArguments[0].Value as string;
+            if (propName == null) return null;
+
+            // Second ctor arg = params object[] values
+            var valuesArg = attr.ConstructorArguments[1];
+            var values = valuesArg.Values
+                .Select(v => Convert.ToInt64(v.Value))
+                .ToArray();
+
+            return (propName, values);
+        }
 
         private static (int? Width, bool LittleEndian) GetSizedEntryInfo(IPropertySymbol property)
         {
@@ -846,36 +946,38 @@ namespace RpcSourceGenerator
         }
 
         // Register a collection deserialize method and return its name
-        private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+        private static string RegisterCollectionDeserializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
         {
             var safeName = GetSafeTypeName(collectionType);
+            var leSuffix = lengthLE ? "_lle" : "";
             var methodName = fixedCount.HasValue
                 ? $"DeserializeCollection_{safeName}_fixed_{fixedCount.Value}"
                 : sizedEntryWidth.HasValue
-                    ? $"DeserializeCollection_{safeName}_{lengthSize}_sized_{sizedEntryWidth.Value}{(sizedEntryLE ? "_le" : "")}"
-                    : $"DeserializeCollection_{safeName}_{lengthSize}";
+                    ? $"DeserializeCollection_{safeName}_{lengthSize}_sized_{sizedEntryWidth.Value}{(sizedEntryLE ? "_le" : "")}{leSuffix}"
+                    : $"DeserializeCollection_{safeName}_{lengthSize}{leSuffix}";
             
             if (tracker.DeserializeMethods.Add(methodName))
             {
-                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
             }
             
             return methodName;
         }
 
         // Register a collection serialize method and return its name
-        private static string RegisterCollectionSerializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+        private static string RegisterCollectionSerializeMethod(CollectionMethodTracker tracker, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
         {
             var safeName = GetSafeTypeName(collectionType);
+            var leSuffix = lengthLE ? "_lle" : "";
             var methodName = fixedCount.HasValue
                 ? $"SerializeCollection_{safeName}_fixed_{fixedCount.Value}"
                 : sizedEntryWidth.HasValue
-                    ? $"SerializeCollection_{safeName}_{lengthSize}_sized_{sizedEntryWidth.Value}{(sizedEntryLE ? "_le" : "")}"
-                    : $"SerializeCollection_{safeName}_{lengthSize}";
+                    ? $"SerializeCollection_{safeName}_{lengthSize}_sized_{sizedEntryWidth.Value}{(sizedEntryLE ? "_le" : "")}{leSuffix}"
+                    : $"SerializeCollection_{safeName}_{lengthSize}{leSuffix}";
             
             if (tracker.SerializeMethods.Add(methodName))
             {
-                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                tracker.CollectionInfo[methodName] = (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
             }
             
             return methodName;
@@ -887,21 +989,21 @@ namespace RpcSourceGenerator
             // Generate deserialize methods
             foreach (var methodName in tracker.DeserializeMethods)
             {
-                var (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE) = tracker.CollectionInfo[methodName];
-                GenerateCollectionDeserializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                var (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE) = tracker.CollectionInfo[methodName];
+                GenerateCollectionDeserializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
                 sb.AppendLine();
             }
 
             // Generate serialize methods
             foreach (var methodName in tracker.SerializeMethods)
             {
-                var (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE) = tracker.CollectionInfo[methodName];
-                GenerateCollectionSerializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE);
+                var (collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE) = tracker.CollectionInfo[methodName];
+                GenerateCollectionSerializeMethod(sb, methodName, collectionType, elementType, lengthSize, fixedCount, sizedEntryWidth, sizedEntryLE, lengthLE);
                 sb.AppendLine();
             }
         }
 
-        private static void GenerateCollectionDeserializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+        private static void GenerateCollectionDeserializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
         {
             var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -918,7 +1020,7 @@ namespace RpcSourceGenerator
             else
             {
                 // Read length from the span
-                sb.AppendLine($"            var length = {GenerateLengthRead(lengthSize)};");
+                sb.AppendLine($"            var length = {GenerateLengthRead(lengthSize, lengthLE)};");
                 sb.AppendLine($"            if (length == 0) return {GetEmptyCollectionExpression(collectionType, elementType)};");
             }
 
@@ -960,7 +1062,7 @@ namespace RpcSourceGenerator
             sb.AppendLine("        }");
         }
 
-        private static void GenerateCollectionSerializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false)
+        private static void GenerateCollectionSerializeMethod(StringBuilder sb, string methodName, ITypeSymbol collectionType, ITypeSymbol elementType, int lengthSize, int? fixedCount = null, int? sizedEntryWidth = null, bool sizedEntryLE = false, bool lengthLE = false)
         {
             var collectionTypeName = collectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             
@@ -981,7 +1083,7 @@ namespace RpcSourceGenerator
             {
                 // Write length prefix
                 sb.AppendLine($"            var count = {countExpression};");
-                GenerateLengthWrite(sb, "count", lengthSize);
+                GenerateLengthWrite(sb, "count", lengthSize, lengthLE);
             }
 
             // [SizedEntry] — write the computed entry size
@@ -1014,18 +1116,18 @@ namespace RpcSourceGenerator
             sb.AppendLine("        }");
         }
 
-        private static string GenerateLengthRead(int lengthSize)
+        private static string GenerateLengthRead(int lengthSize, bool littleEndian = false)
         {
             return lengthSize switch
             {
                 1 => "reader.ReadByte()",
-                2 => "reader.ReadUInt16()",
-                4 => "reader.ReadUInt32()",
+                2 => littleEndian ? "reader.ReadUInt16LE()" : "reader.ReadUInt16()",
+                4 => littleEndian ? "reader.ReadUInt32LE()" : "reader.ReadUInt32()",
                 _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
             };
         }
 
-        private static void GenerateLengthWrite(StringBuilder sb, string countVar, int lengthSize)
+        private static void GenerateLengthWrite(StringBuilder sb, string countVar, int lengthSize, bool littleEndian = false)
         {
             switch (lengthSize)
             {
@@ -1037,10 +1139,14 @@ namespace RpcSourceGenerator
                 case 2:
                     sb.AppendLine($"            if ({countVar} > ushort.MaxValue)");
                     sb.AppendLine($"                throw new System.InvalidOperationException($\"Collection length {{{countVar}}} exceeds maximum for 2-byte length ({{ushort.MaxValue}})\");");
-                    sb.AppendLine($"            writer.WriteUInt16((ushort){countVar});");
+                    sb.AppendLine(littleEndian
+                        ? $"            writer.WriteUInt16LE((ushort){countVar});"
+                        : $"            writer.WriteUInt16((ushort){countVar});");
                     break;
                 case 4:
-                    sb.AppendLine($"            writer.WriteUInt32((uint){countVar});");
+                    sb.AppendLine(littleEndian
+                        ? $"            writer.WriteUInt32LE((uint){countVar});"
+                        : $"            writer.WriteUInt32((uint){countVar});");
                     break;
                 default:
                     throw new InvalidOperationException($"Invalid length size: {lengthSize}");
@@ -1159,7 +1265,7 @@ namespace RpcSourceGenerator
         {
             // Create a safe method name from the type
             var name = type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-            name = name.Replace(".", "_").Replace("<", "_").Replace(">", "_").Replace("[", "_").Replace("]", "_").Replace(",", "_").Replace(" ", "");
+            name = name.Replace(".", "_").Replace("<", "_").Replace(">", "_").Replace("[", "_").Replace("]", "_").Replace(",", "_").Replace(" ", "").Replace("?", "");
             return name;
         }
 

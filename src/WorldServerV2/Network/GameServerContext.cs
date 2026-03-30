@@ -23,6 +23,7 @@ namespace WorldServerV2.Network;
     typeof(DumpArenasLargeRequest),
     typeof(EncryptKeyRequest),
     typeof(EncryptKeyResponse),
+    typeof(GetItemResponse),
     typeof(InitializePlayerRequest),
     typeof(InterfaceCommandRequest),
     typeof(MasterySkillResponse),

@@ -21,6 +21,7 @@ namespace Core.Infrastructure.Network
     public class PacketLengthAttribute : System.Attribute
     {
         public int ByteCount { get; }
+        public bool LittleEndian { get; set; }
         public PacketLengthAttribute(int byteCount) { ByteCount = byteCount; }
     }
 

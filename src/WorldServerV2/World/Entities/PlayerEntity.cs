@@ -1,4 +1,5 @@
 using WorldServerV2.Data.Entities;
+using WorldServerV2.World.Items;
 
 namespace WorldServerV2.World.Entities;
 
@@ -25,6 +26,12 @@ public sealed class PlayerEntity : UnitEntity
 
     /// <summary>Shorthand for <see cref="Character.CharacterId"/>.</summary>
     public uint CharacterId => Character.CharacterId;
+
+    /// <summary>
+    /// The player's inventory — equipment, backpack, bank, etc.
+    /// Populated during init from DB <c>characters_items</c> rows.
+    /// </summary>
+    public Inventory Inventory { get; } = new();
 
     /// <summary>How the player disconnected (set during the logout flow).</summary>
     public DisconnectType DisconnectType { get; set; }

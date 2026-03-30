@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WorldServerV2.Data.Entities;
 
 namespace WorldServerV2.Data;
@@ -22,12 +23,14 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<ZoneJump> ZoneJumps => Set<ZoneJump>();
     public DbSet<CharacterInfoStat> CharacterInfoStats => Set<CharacterInfoStat>();
     public DbSet<AbilityInfoEntity> AbilityInfos => Set<AbilityInfoEntity>();
+    public DbSet<ItemSetInfo> ItemSetInfos => Set<ItemSetInfo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureClassInfo(modelBuilder);
         ConfigureClassInfoItem(modelBuilder);
         ConfigureItemInfo(modelBuilder);
+        ConfigureItemSetInfo(modelBuilder);
         ConfigureCreatureProto(modelBuilder);
         ConfigureCreatureSpawn(modelBuilder);
         ConfigureZoneInfo(modelBuilder);
@@ -115,7 +118,15 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.SellRequiredItems).HasColumnName("sell_required_items");
             entity.Property(e => e.TalismanSlots).HasColumnName("talisman_slots");
             entity.Property(e => e.MaxStack).HasColumnName("max_stack");
-            entity.Property(e => e.Unk27).HasColumnName("unk27");
+            entity.Property(e => e.Unk27).HasColumnName("unk27")
+                .HasConversion(
+                    v => v == null ? null : string.Join(" ", v) + " ",
+                    v => string.IsNullOrWhiteSpace(v)
+                        ? null
+                        : v.Trim()
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(byte.Parse)
+                            .ToArray());
             entity.Property(e => e.ScriptName).HasColumnName("script_name").HasMaxLength(255);
             entity.Property(e => e.TwoHanded).HasColumnName("two_handed");
             entity.Property(e => e.CraftResult).HasColumnName("craft_result");
@@ -126,6 +137,21 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.TokUnlock).HasColumnName("tok_unlock");
             entity.Property(e => e.TokUnlock2).HasColumnName("tok_unlock2");
             entity.Property(e => e.IsSiege).HasColumnName("is_siege");
+        });
+    }
+
+    private static void ConfigureItemSetInfo(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ItemSetInfo>(entity =>
+        {
+            entity.ToTable("item_sets");
+            entity.HasKey(e => e.Entry);
+
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
+            entity.Property(e => e.Unk).HasColumnName("unk");
+            entity.Property(e => e.ItemsString).HasColumnName("items_string");
+            entity.Property(e => e.BonusString).HasColumnName("bonus_string");
         });
     }
 
