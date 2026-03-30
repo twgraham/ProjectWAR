@@ -276,7 +276,7 @@ public class ItemEntry
                 Name = talisInfo.Name,
                 Stats = tStats,
                 Effects = tEffects,
-                Cratfing = null,
+                Crafting = null,
                 Mystery = null,
             };
         }
