@@ -53,6 +53,17 @@ namespace Core.Infrastructure.Network
         public bool LittleEndian { get; }
         public SizedEntryAttribute(int byteCount = 2, bool littleEndian = false) { ByteCount = byteCount; LittleEndian = littleEndian; }
     }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class NullPrefixedAttribute : System.Attribute { }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class ConditionalOnAttribute : System.Attribute
+    {
+        public string PropertyName { get; }
+        public object[] Values { get; }
+        public ConditionalOnAttribute(string propertyName, params object[] values) { PropertyName = propertyName; Values = values; }
+    }
 }";
 
     [Fact]
@@ -847,6 +858,124 @@ namespace TestNamespace
         // Entry size = 3 (ushort Id + byte Level), written as LE UInt16
         code.ShouldContain("writer.WriteUInt16LE(3);");
         code.ShouldContain("reader.ReadUInt16LE(); // entry size");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithConditionalOnAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Payload
+    {
+        public int X { get; set; }
+    }
+
+    public class Packet
+    {
+        public byte Type { get; set; }
+
+        [ConditionalOn(""Type"", 1, 2)]
+        public Payload Data { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: property declared with default then guarded by if
+        code.ShouldContain("local_Type == 1 || local_Type == 2");
+        code.ShouldContain("local_Data = ");
+
+        // Serialize: if-guard referencing obj.Type
+        code.ShouldContain("obj.Type == 1 || obj.Type == 2");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithNullPrefixedAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Detail
+    {
+        public int Value { get; set; }
+    }
+
+    public class Packet
+    {
+        [NullPrefixed]
+        public Detail? Extra { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: reads a presence byte to decide whether to deserialize
+        code.ShouldContain("reader.ReadByte() != 0");
+        code.ShouldContain("DeserializeDetail");
+
+        // Serialize: writes 0 for null and 1 + payload for non-null
+        code.ShouldContain("writer.WriteByte(0)");
+        code.ShouldContain("writer.WriteByte(1)");
+        code.ShouldContain("SerializeDetail");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithPacketLengthLittleEndian()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Entry
+    {
+        public ushort Id { get; set; }
+    }
+
+    public class Packet
+    {
+        [PacketLength(2, LittleEndian = true)]
+        public List<Entry> Entries { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: reads length as little-endian UInt16
+        code.ShouldContain("reader.ReadUInt16LE()");
+
+        // Serialize: writes count as little-endian UInt16
+        code.ShouldContain("writer.WriteUInt16LE((ushort)count)");
     }
 
     private GeneratorTestResult RunGenerator(string source)
