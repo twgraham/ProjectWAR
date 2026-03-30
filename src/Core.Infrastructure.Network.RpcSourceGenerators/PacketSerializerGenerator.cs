@@ -344,13 +344,18 @@ namespace RpcSourceGenerator
 
         private static string BuildReadExpression(IPropertySymbol prop, ITypeSymbol propType, ITypeSymbol underlyingType, bool isNullable, CollectionMethodTracker tracker)
         {
-            // ICustomSerializationAttribute (handles CString, PascalString, and any future custom attributes)
+            // ICustomSerializationAttribute / ICustomSerializationAttribute<T>
             var customSerAttr = GetCustomSerializationAttribute(prop);
             if (customSerAttr != null)
             {
                 var attrInst = BuildAttributeInstantiation(customSerAttr);
                 var targetTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var inner = $"({targetTypeName}){attrInst}.Read(ref reader)";
+                // When the attribute implements the generic ICustomSerializationAttribute<T>,
+                // Read() already returns T — no cast needed.
+                var needsCast = !ImplementsGenericCustomSerializationFor(customSerAttr.AttributeClass!, underlyingType);
+                var inner = needsCast
+                    ? $"({targetTypeName}){attrInst}.Read(ref reader)"
+                    : $"{attrInst}.Read(ref reader)";
                 return isNullable ? $"reader.IsAtEnd() ? null : {inner}" : inner;
             }
 
@@ -664,7 +669,7 @@ namespace RpcSourceGenerator
 
         /// <summary>
         /// Returns the first attribute on the property whose class implements ICustomSerializationAttribute,
-        /// or null if none is found.
+        /// or null if none is found.  Matches both the non-generic and generic forms.
         /// </summary>
         private static AttributeData? GetCustomSerializationAttribute(IPropertySymbol property)
         {
@@ -673,6 +678,21 @@ namespace RpcSourceGenerator
                                      a.AttributeClass.AllInterfaces.Any(i =>
                                          i.Name == "ICustomSerializationAttribute" &&
                                          (i.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false)));
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> when <paramref name="attrClass"/> implements
+        /// <c>ICustomSerializationAttribute&lt;T&gt;</c> where <c>T</c> matches
+        /// <paramref name="propertyType"/>.  In that case the concrete <c>Read</c>
+        /// method already returns the correct type and no cast is needed.
+        /// </summary>
+        private static bool ImplementsGenericCustomSerializationFor(INamedTypeSymbol attrClass, ITypeSymbol propertyType)
+        {
+            return attrClass.AllInterfaces.Any(i =>
+                i.Name == "ICustomSerializationAttribute" &&
+                i.IsGenericType &&
+                i.TypeArguments.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], propertyType));
         }
 
         /// <summary>

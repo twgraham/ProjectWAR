@@ -10,6 +10,13 @@ namespace Core.Infrastructure.Network.Serialization.Attributes;
 /// changes to either serializer are required when a new implementation is
 /// added.
 /// </para>
+/// <para>
+/// Prefer the generic <see cref="ICustomSerializationAttribute{T}"/> when
+/// the property type is known at compile time.  The generic form provides
+/// strongly-typed <c>Read</c>/<c>Write</c> methods and automatically
+/// bridges to this non-generic interface via default interface methods, so
+/// implementers only need to supply the typed overloads.
+/// </para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -45,4 +52,36 @@ public interface ICustomSerializationAttribute
     /// Used by <c>[SizedEntry]</c> to compute per-entry byte counts.
     /// </summary>
     int? FixedWireSize { get; }
+}
+
+/// <summary>
+/// Strongly-typed variant of <see cref="ICustomSerializationAttribute"/>.
+/// Implement this when the serialized property type is known at compile time.
+/// <para>
+/// Default interface methods automatically bridge the non-generic
+/// <see cref="ICustomSerializationAttribute.Write"/> and
+/// <see cref="ICustomSerializationAttribute.Read"/> overloads, so
+/// implementers only need to supply the typed <see cref="Write"/> and
+/// <see cref="Read"/> methods plus <see cref="ICustomSerializationAttribute.FixedWireSize"/>.
+/// </para>
+/// </summary>
+/// <typeparam name="T">The CLR type of the property being serialized.</typeparam>
+public interface ICustomSerializationAttribute<T> : ICustomSerializationAttribute
+{
+    /// <summary>
+    /// Writes <paramref name="value"/> to the wire using this custom encoding.
+    /// </summary>
+    void Write(ref BinaryPacketSerializer.SpanWriter writer, T value);
+
+    /// <summary>
+    /// Reads a value of type <typeparamref name="T"/> from the wire.
+    /// </summary>
+    new T Read(ref BinaryPacketSerializer.SpanReader reader);
+
+    // Default interface methods bridging to the typed overloads
+    void ICustomSerializationAttribute.Write(ref BinaryPacketSerializer.SpanWriter writer, object value)
+        => Write(ref writer, (T)value);
+
+    object ICustomSerializationAttribute.Read(ref BinaryPacketSerializer.SpanReader reader)
+        => Read(ref reader)!;
 }

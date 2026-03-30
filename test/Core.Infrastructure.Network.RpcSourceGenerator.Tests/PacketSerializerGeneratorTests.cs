@@ -32,15 +32,16 @@ namespace Core.Infrastructure.Network
     }
 
     public interface ICustomSerializationAttribute { }
+    public interface ICustomSerializationAttribute<T> : ICustomSerializationAttribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class PascalStringAttribute : System.Attribute, ICustomSerializationAttribute { }
+    public class PascalStringAttribute : System.Attribute, ICustomSerializationAttribute<string> { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class LittleEndianAttribute : System.Attribute { }
 
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class CStringAttribute : System.Attribute, ICustomSerializationAttribute
+    public class CStringAttribute : System.Attribute, ICustomSerializationAttribute<string>
     {
         public int? Length { get; }
         public CStringAttribute() { Length = null; }
@@ -603,7 +604,7 @@ namespace TestNamespace
     }
 
     [Fact]
-    public void GeneratesSerializer_WithCustomSerializationAttribute()
+    public void GeneratesSerializer_WithCustomSerializationAttribute_NonGeneric()
     {
         var source = @"
 using Core.Infrastructure.Network;
@@ -630,12 +631,47 @@ namespace TestNamespace
         result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
         var code = result.GeneratedTrees[0].ToString();
 
-        // The generator should detect the custom attribute via ICustomSerializationAttribute
-        // and generate attribute instantiation + method calls (no reflection)
-        code.ShouldContain("ShortPascalStringAttribute().Read(ref reader)");
+        // Non-generic form: Read returns object, so a cast to the property type is needed
+        code.ShouldContain("(string)new global::TestNamespace.ShortPascalStringAttribute().Read(ref reader)");
         code.ShouldContain("ShortPascalStringAttribute().Write(ref writer,");
-        code.ShouldNotContain("ReadString()");  // must not fall back to default string read
-        code.ShouldNotContain("WriteString("); // must not fall back to default string write
+        code.ShouldNotContain("ReadString()");
+        code.ShouldNotContain("WriteString(");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithCustomSerializationAttribute_Generic()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class ShortPascalStringAttribute : System.Attribute, ICustomSerializationAttribute<string> { }
+
+    public class ChatMessage
+    {
+        [ShortPascalString]
+        public string Body { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(ChatMessage))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Generic form: Read already returns string, so no cast needed
+        code.ShouldContain("new global::TestNamespace.ShortPascalStringAttribute().Read(ref reader)");
+        code.ShouldNotContain("(string)new global::TestNamespace.ShortPascalStringAttribute().Read(ref reader)");
+        code.ShouldContain("ShortPascalStringAttribute().Write(ref writer,");
+        code.ShouldNotContain("ReadString()");
+        code.ShouldNotContain("WriteString(");
     }
 
     [Fact]

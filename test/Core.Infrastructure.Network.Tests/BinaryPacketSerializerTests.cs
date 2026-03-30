@@ -1282,29 +1282,29 @@ public class BinaryPacketSerializerTests
     }
 
     /// <summary>
-    /// Example custom ICustomSerializationAttribute: a 2-byte (ushort) length-prefixed string.
-    /// Demonstrates that the reflection serializer discovers new formats automatically.
+    /// Example custom ICustomSerializationAttribute&lt;string&gt;: a 2-byte (ushort) length-prefixed string.
+    /// Demonstrates that the reflection serializer discovers new formats automatically via the
+    /// generic interface, with typed Read/Write methods and no boxing.
     /// </summary>
     [AttributeUsage(AttributeTargets.Property)]
-    public sealed class ShortPascalStringAttribute : Attribute, ICustomSerializationAttribute
+    public sealed class ShortPascalStringAttribute : Attribute, ICustomSerializationAttribute<string>
     {
         private static readonly Encoding Iso88591 = Encoding.GetEncoding("iso-8859-1");
 
-        public void Write(ref BinaryPacketSerializer.SpanWriter writer, object value)
+        public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
         {
-            var str = (string)value;
-            if (string.IsNullOrEmpty(str))
+            if (string.IsNullOrEmpty(value))
             {
                 writer.WriteUInt16(0);
                 return;
             }
 
-            var encoded = Iso88591.GetBytes(str);
+            var encoded = Iso88591.GetBytes(value);
             writer.WriteUInt16((ushort)encoded.Length);
             foreach (var b in encoded) writer.WriteByte(b);
         }
 
-        public object Read(ref BinaryPacketSerializer.SpanReader reader)
+        public string Read(ref BinaryPacketSerializer.SpanReader reader)
         {
             var len = reader.ReadUInt16();
             if (len == 0) return string.Empty;

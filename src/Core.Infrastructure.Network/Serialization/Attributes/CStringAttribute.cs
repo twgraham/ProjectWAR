@@ -1,7 +1,7 @@
 namespace Core.Infrastructure.Network.Serialization.Attributes;
 
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
-public sealed class CStringAttribute : Attribute, ICustomSerializationAttribute
+public sealed class CStringAttribute : Attribute, ICustomSerializationAttribute<string>
 {
     public int? Length { get; }
 
@@ -20,11 +20,11 @@ public sealed class CStringAttribute : Attribute, ICustomSerializationAttribute
     }
 
     /// <inheritdoc />
-    public void Write(ref BinaryPacketSerializer.SpanWriter writer, object value)
-        => writer.WriteCString((string)value, Length);
+    public void Write(ref BinaryPacketSerializer.SpanWriter writer, string value)
+        => writer.WriteCString(value, Length);
 
     /// <inheritdoc />
-    public object Read(ref BinaryPacketSerializer.SpanReader reader)
+    public string Read(ref BinaryPacketSerializer.SpanReader reader)
         => reader.ReadCString(Length);
 
     /// <inheritdoc />
