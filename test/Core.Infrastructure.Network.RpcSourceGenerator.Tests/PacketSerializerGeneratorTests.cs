@@ -1058,6 +1058,45 @@ namespace TestNamespace
         code.ShouldContain("writer.WriteUInt32LE((uint)count)");
     }
 
+    [Fact]
+    public void GeneratesSerializer_WithIEnumerableCollection()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class Item
+    {
+        public int Id { get; set; }
+    }
+
+    public class EnumerablePacket
+    {
+        public IEnumerable<Item> Items { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(EnumerablePacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Serialize: IEnumerable<T> must be materialized before writing the length prefix
+        code.ShouldContain("System.Linq.Enumerable.ToArray(collection)");
+        code.ShouldContain("materialized.Length");
+        code.ShouldContain("foreach (var item in materialized)");
+
+        // Deserialize: returns array, which satisfies IEnumerable<T>
+        code.ShouldContain("return array;");
+    }
+
     private GeneratorTestResult RunGenerator(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);

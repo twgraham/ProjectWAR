@@ -358,9 +358,34 @@ public class BinaryPacketSerializerTests
     }
 
     [Fact]
+    public void RoundTrip_IEnumerableProperty()
+    {
+        // GIVEN: A packet with an IEnumerable<int> property set to three elements
+        var original = new IEnumerablePacket { Values = new[] { 1, 2, 3 } };
+
+        // WHEN: Serializing and deserializing the packet
+        var result = RoundTrip<IEnumerablePacket>(original);
+
+        // THEN: Elements are preserved (deserialized back as T[], which satisfies IEnumerable<int>)
+        result.Values.ShouldBe(new[] { 1, 2, 3 });
+    }
+
+    [Fact]
+    public void RoundTrip_IEnumerableProperty_Empty()
+    {
+        // GIVEN: A packet with an empty IEnumerable<int>
+        var original = new IEnumerablePacket { Values = Array.Empty<int>() };
+
+        // WHEN: Serializing and deserializing the packet
+        var result = RoundTrip<IEnumerablePacket>(original);
+
+        // THEN: Empty sequence is preserved
+        result.Values.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void RoundTrip_MultipleProperties_PreservesOrder()
     {
-        // GIVEN: A packet with multiple properties of different types
         var original = new MultiPropertyPacket
         {
             Id = 0xAB,
@@ -1512,6 +1537,7 @@ public class BinaryPacketSerializerTests
     public class ByteArrayPacket { [PacketLength(4)] public byte[] Data { get; set; } = Array.Empty<byte>(); }
     public class UInt16ArrayPacket { public ushort[] Items { get; set; } = Array.Empty<ushort>(); }
     public class ListPacket { public List<byte> Values { get; set; } = new(); }
+    public class IEnumerablePacket { public IEnumerable<int> Values { get; set; } = Array.Empty<int>(); }
     public class MultiPropertyPacket { public byte Id { get; set; } public ushort Count { get; set; } public string Name { get; set; } = ""; }
     public class NullablePacket { public int? MaybeId { get; set; } }
     public class TrailingNullablePacket { public byte Id { get; set; } public string? OptionalName { get; set; } }

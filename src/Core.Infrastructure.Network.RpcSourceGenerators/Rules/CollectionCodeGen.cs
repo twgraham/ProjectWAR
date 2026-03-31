@@ -251,7 +251,18 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
 
         w.OpenBlock($"private void {methodName}(ref BinaryPacketSerializer.SpanWriter writer, {collectionTypeName} collection)");
 
-        string countExpression = collectionType is IArrayTypeSymbol ? "collection.Length" : "collection.Count";
+        // IEnumerable<T> has no Count/Length — materialize to array first so the length prefix
+        // can be written before the elements, as required by the wire format.
+        var isEnumerable = IsRawEnumerableType(collectionType);
+        if (isEnumerable)
+            w.AppendLine("var materialized = System.Linq.Enumerable.ToArray(collection);");
+
+        var iterateTarget = isEnumerable ? "materialized" : "collection";
+        string countExpression = collectionType is IArrayTypeSymbol
+            ? "collection.Length"
+            : isEnumerable
+                ? "materialized.Length"
+                : "collection.Count";
 
         if (fixedCount.HasValue)
         {
@@ -282,7 +293,7 @@ public sealed class CollectionCodeGen : ISerializerRuleCodeGen
         }
 
         w.AppendLine();
-        w.OpenBlock("foreach (var item in collection)");
+        w.OpenBlock($"foreach (var item in {iterateTarget})");
 
         w.AppendLine($"{EmitWriteForType(elementType, "item")};");
 

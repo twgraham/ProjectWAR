@@ -65,9 +65,8 @@ internal static class SerializerCodeGenUtilities
 
     /// <summary>
     /// Returns <c>true</c> if the type is a supported collection (array, <c>List&lt;T&gt;</c>,
-    /// <c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>),
-    /// excluding <c>byte[]</c> which is handled specially and <c>IEnumerable&lt;T&gt;</c>
-    /// which has no <c>Count</c> property and cannot be efficiently serialized.
+    /// <c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>, <c>IEnumerable&lt;T&gt;</c>),
+    /// excluding <c>byte[]</c> which is handled specially.
     /// </summary>
     internal static bool IsCollectionType(ITypeSymbol type, out ITypeSymbol? elementType)
     {
@@ -87,7 +86,8 @@ internal static class SerializerCodeGenUtilities
 
                 if (genericDefString is "System.Collections.Generic.List<T>"
                     or "System.Collections.Generic.IList<T>"
-                    or "System.Collections.Generic.ICollection<T>")
+                    or "System.Collections.Generic.ICollection<T>"
+                    or "System.Collections.Generic.IEnumerable<T>")
                 {
                     elementType = namedType.TypeArguments[0];
                     return true;
@@ -99,6 +99,14 @@ internal static class SerializerCodeGenUtilities
 
         return false;
     }
+
+    /// <summary>
+    /// Returns <c>true</c> if <paramref name="type"/> is <c>IEnumerable&lt;T&gt;</c> exactly
+    /// (not a more derived interface such as <c>IList&lt;T&gt;</c>).
+    /// </summary>
+    internal static bool IsRawEnumerableType(ITypeSymbol type)
+        => type is INamedTypeSymbol { IsGenericType: true } named
+            && named.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>";
 
     // ------------------------------------------------------------------
     //  Code emission — type → read/write expression
