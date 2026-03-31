@@ -120,6 +120,17 @@ public class BinaryPacketSerializer : IPacketSerializer
 
     private object ReadProperty(ref SpanReader reader, Type propertyType, PropertyInfo? propertyInfo = null)
     {
+        // Dispatch to ISerializerRule if an attribute implements it
+        if (propertyInfo != null)
+        {
+            var ctx = new SerializerPropertyContext(propertyType, propertyInfo);
+            foreach (var attr in propertyInfo.GetCustomAttributes())
+            {
+                if (attr is ISerializerRule rule && rule.CanRead(ctx))
+                    return rule.Read(ref reader, ctx)!;
+            }
+        }
+
         // Get the length size from PacketLength attribute (default to 1 byte)
         var lengthSize = 1;
         var lengthLE = false;
@@ -327,6 +338,20 @@ public class BinaryPacketSerializer : IPacketSerializer
 
     private void WriteProperty(ref SpanWriter writer, Type propertyType, object value, PropertyInfo? propertyInfo = null)
     {
+        // Dispatch to ISerializerRule if an attribute implements it
+        if (propertyInfo != null)
+        {
+            var ctx = new SerializerPropertyContext(propertyType, propertyInfo);
+            foreach (var attr in propertyInfo.GetCustomAttributes())
+            {
+                if (attr is ISerializerRule rule && rule.CanWrite(ctx))
+                {
+                    rule.Write(ref writer, value, ctx);
+                    return;
+                }
+            }
+        }
+
         // Get the length size from PacketLength attribute (default to 1 byte)
         var lengthSize = 1;
         var lengthLE = false;
@@ -613,6 +638,22 @@ public class BinaryPacketSerializer : IPacketSerializer
             var total = 0;
             foreach (var prop in props)
             {
+                // Check ISerializerRule for wire size
+                var ruleHandled = false;
+                var ruleCtx = new SerializerPropertyContext(prop);
+                foreach (var attr in prop.GetCustomAttributes())
+                {
+                    if (attr is ISerializerRule rule && rule.CanRead(ruleCtx))
+                    {
+                        var ruleSize = rule.SerializedSize(ruleCtx);
+                        if (ruleSize == null) return null;
+                        total += ruleSize.Value;
+                        ruleHandled = true;
+                        break;
+                    }
+                }
+                if (ruleHandled) continue;
+
                 var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
 
                 // CString with fixed length
