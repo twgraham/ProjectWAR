@@ -23,6 +23,7 @@ public static class GameSessionServiceExtensions
     {
         services.AddSingleton<SessionRegistry>();
         services.AddSingleton<PlayerService>();
+        services.AddSingleton<ISessionResolver>(sp => sp.GetRequiredService<PlayerService>());
         services.AddSingleton<PlayerInitPipeline>();
         services.AddHostedService<SessionLifecycleService>();
 

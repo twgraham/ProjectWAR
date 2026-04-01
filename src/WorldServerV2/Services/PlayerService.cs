@@ -18,10 +18,11 @@ namespace WorldServerV2.Services;
 /// </para>
 /// Registered as a <b>singleton</b> in the DI container.
 /// </summary>
-public sealed class PlayerService
+public sealed class PlayerService : ISessionResolver
 {
     private readonly ConcurrentDictionary<ushort, PlayerEntity> _bySessionId = new();
     private readonly ConcurrentDictionary<uint, PlayerEntity> _byCharacterId = new();
+    private readonly ConcurrentDictionary<uint, GameSession> _sessionByCharId = new();
     private readonly ILogger<PlayerService> _logger;
     private readonly Lock _writeLock = new();
 
@@ -82,6 +83,7 @@ public sealed class PlayerService
 
             _bySessionId[session.Id] = player;
             _byCharacterId[player.CharacterId] = player;
+            _sessionByCharId[player.CharacterId] = session;
         }
 
         _logger.LogDebug(
@@ -109,6 +111,8 @@ public sealed class PlayerService
             // Only remove from char index if it still points to this player.
             _byCharacterId.TryRemove(
                 new KeyValuePair<uint, PlayerEntity>(player.CharacterId, player));
+            _sessionByCharId.TryRemove(
+                new KeyValuePair<uint, GameSession>(player.CharacterId, session));
         }
 
         _logger.LogDebug(
@@ -147,6 +151,10 @@ public sealed class PlayerService
 
         return null;
     }
+
+    /// <inheritdoc />
+    public GameSession? GetSession(PlayerEntity player)
+        => _sessionByCharId.TryGetValue(player.CharacterId, out var session) ? session : null;
 
     /// <summary>The number of players currently in the world.</summary>
     public int Count => _bySessionId.Count;

@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using WorldServerV2.Data;
@@ -91,12 +92,14 @@ public class PlayerInitPipelineTests
                 FrozenDictionary<uint, ItemSetDefinition>.Empty),
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
-                FrozenDictionary<uint, CreatureSpawn>.Empty),
+                FrozenDictionary<uint, CreatureSpawn>.Empty,
+                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty),
             new ZoneData(
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
                 FrozenDictionary<uint, ZoneJump>.Empty),
             data,
-            abilityData));
+            abilityData,
+            SpawnData.Empty));
         return store;
     }
 

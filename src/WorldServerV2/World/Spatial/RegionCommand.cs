@@ -1,3 +1,4 @@
+using WorldServerV2.Data.Domain;
 using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.World.Spatial;
@@ -44,4 +45,26 @@ public abstract class RegionCommand
         public WorldEntity Entity { get; } = entity ?? throw new ArgumentNullException(nameof(entity));
         public WorldPosition Destination { get; } = destination;
     }
+
+    /// <summary>
+    /// Spawn a new entity from a <see cref="SpawnDescriptor"/>.
+    /// The region thread allocates an OID and calls <see cref="Spawning.IEntityFactory"/>
+    /// to create the entity before placing it.
+    /// </summary>
+    public sealed class SpawnEntity(SpawnDescriptor descriptor) : RegionCommand
+    {
+        public SpawnDescriptor Descriptor { get; } = descriptor;
+    }
+
+    /// <summary>
+    /// Activates an entity that was previously inactive (e.g. a player whose client
+    /// has finished loading). The region sets <see cref="WorldEntity.IsActive"/> to
+    /// <c>true</c> and forces a full visibility rescan so the entity discovers all
+    /// nearby entities and receives their create-packets.
+    /// </summary>
+    public sealed class ActivateEntity(WorldEntity entity) : RegionCommand
+    {
+        public WorldEntity Entity { get; } = entity ?? throw new ArgumentNullException(nameof(entity));
+    }
 }
+

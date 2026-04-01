@@ -8,7 +8,7 @@ public class PlayerStateRequest
     public long State { get; set; }
     public long State2 { get; set; }
     
-    [PacketLength(0)]
+    [RawBytes]
     public required byte[] ExtraData { get; set; }
 
     /// <summary>

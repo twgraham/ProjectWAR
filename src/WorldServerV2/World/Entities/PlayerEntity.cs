@@ -19,6 +19,9 @@ public sealed class PlayerEntity : UnitEntity
             (character ?? throw new ArgumentNullException(nameof(character))).Name, maxHealth)
     {
         Character = character;
+        // Players start inactive — they become active when the client signals
+        // readiness via F_DUMP_STATICS, after the loading screen completes.
+        IsActive = false;
     }
 
     /// <summary>The persistent DB character record.</summary>

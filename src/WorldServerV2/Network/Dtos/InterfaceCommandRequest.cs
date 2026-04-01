@@ -6,6 +6,6 @@ public class InterfaceCommandRequest
 {
     public byte Command { get; set; }
     
-    [PacketLength(0)]
+    [RawBytes]
     public byte[] Data { get; set; }
 }

@@ -2,6 +2,8 @@ using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
+using WorldServerV2.World.Entities;
+using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Network.Handlers;
 
@@ -16,6 +18,51 @@ public class CharacterHandler : IPacketHandler
     public CharacterHandler(ILogger<CharacterHandler> logger)
     {
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Handles <c>F_DUMP_STATICS</c> (0x0D).
+    /// Sent by the client after it has loaded terrain and static assets. This is the
+    /// signal that the client is ready to receive entity-create packets and participate
+    /// in gameplay. We activate the player entity (triggering a forced visibility rescan
+    /// on the region thread) and transition the session to <see cref="ClientState.Playing"/>.
+    /// </summary>
+    [Rpc((int)Opcodes.F_DUMP_STATICS)]
+    public void F_DUMP_STATICS(DumpStaticsRequest request, IConnectionContext context,
+        [FromServices] PlayerService playerService,
+        [FromServices] RegionManager regionManager)
+    {
+        var player = playerService.GetPlayer(context.Session);
+        if (player == null)
+        {
+            _logger.LogWarning("No player bound in F_DUMP_STATICS for session {SessionId}",
+                context.Session.Id);
+            return;
+        }
+
+        if (player.IsActive)
+            return; // Already active (e.g. duplicate packet)
+
+        var region = regionManager.Get(player.Position.RegionId);
+        if (region == null)
+        {
+            _logger.LogError(
+                "Player {Name} ({CharId}) has no region in F_DUMP_STATICS — region {RegionId} not found",
+                player.Name, player.CharacterId, player.Position.RegionId);
+            return;
+        }
+
+        // Transition the session to Playing — the player is now fully interactive.
+        context.Session.State = ClientState.Playing;
+
+        // Enqueue the activation on the region thread. This sets IsActive = true
+        // and forces a visibility rescan, causing all nearby entities to be sent
+        // to the client as create-packets.
+        region.EnqueueActivate(player);
+
+        _logger.LogInformation(
+            "Player {Name} ({CharId}, OID {Oid}) activated via F_DUMP_STATICS — session {SessionId} → Playing",
+            player.Name, player.CharacterId, player.ObjectId, context.Session.Id);
     }
 
     /// <summary>

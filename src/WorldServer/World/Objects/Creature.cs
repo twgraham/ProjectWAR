@@ -418,7 +418,7 @@ namespace WorldServer.World.Objects
             Out.WriteByte(Faction);
 
             Out.WriteByte(0);
-            Out.WriteByte(SiegeInterface != null && SiegeInterface.IsDeployed ? (byte)1 : (byte)0);
+            Out.WriteByte(SiegeInterface is { IsDeployed: true } ? (byte)1 : (byte)0);
             Out.Fill(0, 2);
             Out.WriteByte(Spawn.Emote);
             Out.WriteByte(0); // ?

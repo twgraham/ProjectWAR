@@ -91,6 +91,26 @@ public static class GameSessionPacketExtensions
 
     // ── World Loading ───────────────────────────────────────────────────
 
+    /// <summary>Sends <c>F_CREATE_MONSTER</c> (0x72) — notifies client of a visible NPC/creature.</summary>
+    public static void SendCreateMonster(this GameSession session, CreateMonsterResponse response)
+        => session.Send((byte)Opcodes.F_CREATE_MONSTER, response);
+
+    /// <summary>Sends <c>F_CREATE_STATIC</c> (0x71) — notifies client of a visible static game object.</summary>
+    public static void SendCreateStatic(this GameSession session, CreateStaticResponse response)
+        => session.Send((byte)Opcodes.F_CREATE_STATIC, response);
+
+    /// <summary>Sends <c>F_OBJECT_STATE</c> (0x09) — stationary entity state (position, health, heading).</summary>
+    public static void SendObjectState(this GameSession session, StationaryObjectStateResponse response)
+        => session.Send((byte)Opcodes.F_OBJECT_STATE, response);
+
+    /// <summary>Sends <c>F_OBJECT_STATE</c> (0x09) — moving entity state (position, health, speed, destination).</summary>
+    public static void SendObjectState(this GameSession session, MovingObjectStateResponse response)
+        => session.Send((byte)Opcodes.F_OBJECT_STATE, response);
+
+    /// <summary>Sends <c>F_PLAYER_INVENTORY</c> (0xBD) — NPC/creature equipped items.</summary>
+    public static void SendEquippedInventory(this GameSession session, EquippedInventoryResponse response)
+        => session.Send((byte)Opcodes.F_PLAYER_INVENTORY, response);
+
     /// <summary>Sends <c>F_SET_TIME</c> (0xD6) — in-game clock.</summary>
     public static void SendSetTime(this GameSession session, SetTimeResponse response)
         => session.Send((byte)Opcodes.F_SET_TIME, response);

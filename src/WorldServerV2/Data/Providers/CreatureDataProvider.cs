@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data.Domain;
@@ -30,12 +31,19 @@ public sealed class CreatureDataProvider(
 
         var spawns = spawnList.ToFrozenDictionary(s => s.Guid);
 
-        logger.LogInformation(
-            "Loaded {ProtoCount} creature prototypes, {SpawnCount} creature spawns",
-            protos.Count,
-            spawns.Count);
+        var items = (await db.CreatureItems
+            .AsNoTracking()
+            .ToListAsync())
+            .GroupBy(i => i.Entry)
+            .ToFrozenDictionary(g => g.Key, g => g.ToImmutableArray());
 
-        return new CreatureData(Protos: protos, Spawns: spawns);
+        logger.LogInformation(
+            "Loaded {ProtoCount} creature prototypes, {SpawnCount} creature spawns, {ItemGroupCount} creatures with equipment",
+            protos.Count,
+            spawns.Count,
+            items.Count);
+
+        return new CreatureData(Protos: protos, Spawns: spawns, Items: items);
     }
 
     /// <summary>

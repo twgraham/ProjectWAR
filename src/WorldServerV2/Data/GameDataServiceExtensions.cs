@@ -39,6 +39,7 @@ public static class GameDataServiceExtensions
         services.AddScoped<IDataProvider<ZoneData>, ZoneDataProvider>();
         services.AddScoped<IDataProvider<CareerStatData>, CareerStatDataProvider>();
         services.AddScoped<IDataProvider<AbilityData>, AbilityDataProvider>();
+        services.AddScoped<IDataProvider<SpawnData>, SpawnDataProvider>();
 
         // Loader — hosted service runs before the server accepts connections
         services.AddHostedService<GameDataLoader>();

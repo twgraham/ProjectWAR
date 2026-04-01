@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -178,7 +179,8 @@ public class GameDataPipelineTests
             new ConstantProvider<CreatureData>(
                 new CreatureData(
                     FrozenDictionary<uint, CreatureProto>.Empty,
-                    FrozenDictionary<uint, CreatureSpawn>.Empty)));
+                    FrozenDictionary<uint, CreatureSpawn>.Empty,
+                    FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty)));
         services.AddSingleton<IDataProvider<ZoneData>>(
             new ConstantProvider<ZoneData>(
                 new ZoneData(
@@ -188,6 +190,8 @@ public class GameDataPipelineTests
             new ConstantProvider<CareerStatData>(CareerStatData.Empty));
         services.AddSingleton<IDataProvider<AbilityData>>(
             new ConstantProvider<AbilityData>(AbilityData.Empty));
+        services.AddSingleton<IDataProvider<SpawnData>>(
+            new ConstantProvider<SpawnData>(SpawnData.Empty));
 
         var sp = services.BuildServiceProvider();
 
@@ -229,12 +233,14 @@ public class GameDataPipelineTests
                 FrozenDictionary<uint, ItemSetDefinition>.Empty),
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
-                FrozenDictionary<uint, CreatureSpawn>.Empty),
+                FrozenDictionary<uint, CreatureSpawn>.Empty,
+                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty),
             new ZoneData(
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
                 FrozenDictionary<uint, ZoneJump>.Empty),
             CareerStatData.Empty,
-            AbilityData.Empty);
+            AbilityData.Empty,
+            SpawnData.Empty);
 
     /// <summary>
     /// Simple provider that always returns a pre-built constant value.

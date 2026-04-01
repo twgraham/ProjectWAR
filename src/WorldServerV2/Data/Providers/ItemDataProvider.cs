@@ -88,7 +88,13 @@ public sealed class ItemDataProvider(
     }
 
     /// <summary>
-    /// Parses the <c>"key:val;key:val;"</c> stat string into a frozen dictionary.
+    /// Parses the stat string into a frozen dictionary.
+    /// <para>
+    /// Database entries use the format <c>"statId:value;statId:value;"</c>, but some rows
+    /// contain extended four-field entries like <c>"statId:value:field3:field4;"</c>.
+    /// Only the first two fields (stat ID and value) are used — the purpose of fields 3
+    /// and 4 is unknown and they are silently ignored, matching V1 behavior.
+    /// </para>
     /// Duplicate stat keys are summed (matching V1 behavior).
     /// </summary>
     internal FrozenDictionary<byte, ushort> ParseStats(string? statsString, uint itemEntry)
@@ -101,11 +107,17 @@ public sealed class ItemDataProvider(
         {
             if (segment.Length < 3) continue; // minimum "k:v"
 
-            var colonIdx = segment.IndexOf(':');
-            if (colonIdx < 0) continue;
+            var firstColon = segment.IndexOf(':');
+            if (firstColon < 0) continue;
 
-            if (!byte.TryParse(segment[..colonIdx], out var statId) ||
-                !ushort.TryParse(segment[(colonIdx + 1)..], out var value))
+            // Only parse the first two colon-separated fields; additional fields
+            // (e.g. "32:6:0:0") are ignored — their purpose is unknown.
+            var afterFirst = segment[(firstColon + 1)..];
+            var secondColon = afterFirst.IndexOf(':');
+            var valueSpan = secondColon >= 0 ? afterFirst[..secondColon] : afterFirst;
+
+            if (!byte.TryParse(segment[..firstColon], out var statId) ||
+                !ushort.TryParse(valueSpan, out var value))
             {
                 logger.LogWarning("Malformed stat entry in item {Entry}: '{Segment}'",
                     itemEntry, segment.ToString());

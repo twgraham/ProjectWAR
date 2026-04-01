@@ -10,6 +10,6 @@ namespace WorldServerV2.Network.Dtos;
 public class RequestWorldLargeRequest
 {
     /// <summary>Payload bytes (variable length, content not used by the server).</summary>
-    [PacketLength(0)]
+    [RawBytes]
     public required byte[] Data { get; set; }
 }
