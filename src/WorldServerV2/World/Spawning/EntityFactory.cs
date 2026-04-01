@@ -15,9 +15,7 @@ namespace WorldServerV2.World.Spawning;
 /// </summary>
 public sealed class EntityFactory(IGameDataStore gameData) : IEntityFactory
 {
-    // Thread-safe: Random is accessed only from the region tick thread
-    // (cell-load and respawn drain both run on the region thread).
-    private readonly Random _rng = new();
+    private readonly Random _rng = Random.Shared;
 
     // ── IEntityFactory ───────────────────────────────────────────────────
 
@@ -97,7 +95,6 @@ public sealed class EntityFactory(IGameDataStore gameData) : IEntityFactory
         // if (proto.VendorId != 0) entity.Attach(new VendorComponent(proto.VendorId));
 
         // Suppress unused-parameter warning while stubs are commented out
-        _ = proto;
         _ = descriptor;
     }
 }

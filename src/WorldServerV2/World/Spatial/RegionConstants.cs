@@ -42,7 +42,7 @@ public static class RegionConstants
     /// <summary>Target region tick interval in milliseconds (50ms = 20Hz).</summary>
     public const int TickIntervalMs = 50;
     
-    public static TimeSpan TickInterval = TimeSpan.FromMilliseconds(TickIntervalMs);
+    public static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(TickIntervalMs);
 
     /// <summary>Conversion factor: 12 game units = 1 foot.</summary>
     public const int UnitsPerFoot = 12;

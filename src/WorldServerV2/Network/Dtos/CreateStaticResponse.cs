@@ -133,15 +133,18 @@ public sealed class CreateStaticResponse
 
     /// <summary>
     /// Constructs a <see cref="CreateStaticResponse"/> from a live <see cref="GameObjectEntity"/>
-    /// and its spawn descriptor, using <paramref name="zone"/> to derive zone-local coordinates
-    /// from the region-absolute <see cref="WorldEntity.Position"/>.
+    /// and its spawn descriptor. Coordinates are encoded using the region-absolute
+    /// <see cref="WorldEntity.Position"/>, matching the V1 <c>F_CREATE_STATIC</c> behavior.
     /// </summary>
     /// <param name="entity">The game object entity (OID must be assigned).</param>
     /// <param name="descriptor">
     /// The spawn descriptor that sourced this entity — carries the raw DB fields
     /// needed for the wire protocol (Unks, DisplayId, SpawnUnk1-4, DoorId).
     /// </param>
-    /// <param name="zone">Zone used to convert region-absolute → zone-local coordinates.</param>
+    /// <param name="zone">
+    /// Zone associated with the entity's region. Currently unused; coordinates are sent
+    /// as region-absolute values to preserve legacy protocol semantics.
+    /// </param>
     /// <param name="proto">
     /// Optional proto record. When provided, the proto name is used;
     /// falls back to <see cref="GameObjectEntity.Name"/>.

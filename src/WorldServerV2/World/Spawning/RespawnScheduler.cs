@@ -56,7 +56,7 @@ public sealed class RespawnScheduler
     /// Passes all entries whose scheduled time has been reached to <paramref name="action"/>.
     /// Stops when the next entry is still in the future or the queue is empty.
     /// </summary>
-    /// <param name="nowMs">Current <see cref="Environment.TickCount64"/>.</param>
+    /// <param name="nowMs">Current tick timestamp.</param>
     /// <param name="action">Called once per due entry. Must not throw.</param>
     public void DrainDue(long nowMs, Action<RespawnEntry> action)
     {
