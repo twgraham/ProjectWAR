@@ -107,6 +107,10 @@ public static class GameSessionPacketExtensions
     public static void SendObjectState(this GameSession session, MovingObjectStateResponse response)
         => session.Send((byte)Opcodes.F_OBJECT_STATE, response);
 
+    /// <summary>Sends <c>F_PLAYER_INVENTORY</c> (0xBD) — NPC/creature equipped items.</summary>
+    public static void SendEquippedInventory(this GameSession session, EquippedInventoryResponse response)
+        => session.Send((byte)Opcodes.F_PLAYER_INVENTORY, response);
+
     /// <summary>Sends <c>F_SET_TIME</c> (0xD6) — in-game clock.</summary>
     public static void SendSetTime(this GameSession session, SetTimeResponse response)
         => session.Send((byte)Opcodes.F_SET_TIME, response);

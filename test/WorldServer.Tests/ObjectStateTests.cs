@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
@@ -607,7 +608,8 @@ public class ObjectStateTests
             FrozenDictionary<uint, ItemSetDefinition>.Empty);
         public CreatureData Creatures => new(
             FrozenDictionary<uint, CreatureProto>.Empty,
-            FrozenDictionary<uint, CreatureSpawn>.Empty);
+            FrozenDictionary<uint, CreatureSpawn>.Empty,
+            FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty);
         public ZoneData Zones { get; }
         public CareerStatData CareerStats => CareerStatData.Empty;
         public AbilityData Abilities => AbilityData.Empty;

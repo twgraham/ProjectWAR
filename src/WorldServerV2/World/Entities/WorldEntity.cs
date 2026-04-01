@@ -208,6 +208,12 @@ public abstract class WorldEntity
     /// <summary>The number of optional components currently attached.</summary>
     public int ComponentCount => _components.Count;
 
+    /// <summary>
+    /// Enumerates all attached components. Used by the region to discover
+    /// <see cref="Components.IVisibilityInitContributor"/> implementations generically.
+    /// </summary>
+    public IEnumerable<IComponent> Components => _components.Values;
+
     // ── Tick ────────────────────────────────────────────────────────────
 
     /// <summary>

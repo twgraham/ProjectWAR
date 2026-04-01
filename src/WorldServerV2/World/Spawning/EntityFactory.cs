@@ -84,8 +84,12 @@ public sealed class EntityFactory(IGameDataStore gameData) : IEntityFactory
         return Math.Max(1u, (uint)(BaseHp * (woundsModifier > 0 ? woundsModifier : 1f) * level));
     }
 
-    private static void AttachCreatureComponents(CreatureEntity entity, Data.Entities.CreatureProto proto, SpawnDescriptor descriptor)
+    private void AttachCreatureComponents(CreatureEntity entity, Data.Entities.CreatureProto proto, SpawnDescriptor descriptor)
     {
+        // Equipment — visual items from creature_items table
+        if (gameData.Creatures.Items.TryGetValue(proto.Entry, out var items))
+            entity.Attach(new EquipmentComponent(items));
+
         // Waypoint movement — stub until System 5 (AI) is built
         // if (proto.IsWandering != 0) entity.Attach(new MovementComponent());
 

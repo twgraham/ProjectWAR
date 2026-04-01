@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
@@ -10,6 +11,7 @@ using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
 using DomainItemData = WorldServerV2.Data.Domain.ItemData;
+using WorldServerV2.World.Components;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Items;
 using WorldServerV2.World.Spatial;
@@ -51,7 +53,8 @@ public class WorldTopologyTests
             FrozenDictionary<uint, ItemSetDefinition>.Empty);
         public CreatureData Creatures => new(
             FrozenDictionary<uint, CreatureProto>.Empty,
-            FrozenDictionary<uint, CreatureSpawn>.Empty);
+            FrozenDictionary<uint, CreatureSpawn>.Empty,
+            FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty);
         public ZoneData Zones => new(
             FrozenDictionary<ushort, ZoneInfo>.Empty,
             FrozenDictionary<uint, ZoneJump>.Empty);
@@ -1423,6 +1426,221 @@ public class WorldTopologyTests
         stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(1);
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Equipment & Visibility Init Contributors
+    // ═══════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Creature_with_equipment_sends_equipped_inventory_on_visibility()
+    {
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStoreWithEquipment();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        var player = MakePlayer();
+        player.IsActive = true;
+
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+
+        AddEntityDirectly(region, player, CenterPos());
+
+        var creature = MakeCreature();
+        creature.Attach(new WorldServerV2.World.Components.EquipmentComponent(
+            [new CreatureItem { Entry = 1, SlotId = 10, ModelId = 3105, EffectId = 0 }]));
+
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        // Should get F_CREATE_MONSTER + F_PLAYER_INVENTORY + F_OBJECT_STATE
+        stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(1);
+        var invPackets = stub.FindPackets<EquippedInventoryResponse>();
+        invPackets.Count.ShouldBe(1);
+        invPackets[0].Slots.Count.ShouldBe(1);
+        invPackets[0].Slots[0].SlotId.ShouldBe((byte)10);
+        invPackets[0].Slots[0].ModelId.ShouldBe((ushort)3105);
+        invPackets[0].Slots[0].Flags.ShouldBe((byte)0);
+        stub.FindPackets<StationaryObjectStateResponse>().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Creature_without_equipment_sends_no_equipped_inventory()
+    {
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStore();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        var player = MakePlayer();
+        player.IsActive = true;
+
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+
+        AddEntityDirectly(region, player, CenterPos());
+
+        var creature = MakeCreature();
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        // Create-packet + ObjectState, but NO inventory
+        stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(1);
+        stub.FindPackets<EquippedInventoryResponse>().Count.ShouldBe(0);
+        stub.FindPackets<StationaryObjectStateResponse>().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Equipment_with_effect_sets_flags_to_one()
+    {
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStoreWithEquipment();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        var player = MakePlayer();
+        player.IsActive = true;
+
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+
+        AddEntityDirectly(region, player, CenterPos());
+
+        var creature = MakeCreature();
+        creature.Attach(new WorldServerV2.World.Components.EquipmentComponent(
+        [
+            new CreatureItem { Entry = 1, SlotId = 20, ModelId = 3101, EffectId = 27136 },
+            new CreatureItem { Entry = 1, SlotId = 25, ModelId = 3105, EffectId = 0 },
+        ]));
+
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        var inv = stub.FindPackets<EquippedInventoryResponse>();
+        inv.Count.ShouldBe(1);
+        inv[0].Slots.Count.ShouldBe(2);
+        // Slot with effect should have flags=1
+        var bodySlot = inv[0].Slots.First(s => s.SlotId == 20);
+        bodySlot.Flags.ShouldBe((byte)1);
+        bodySlot.EffectId.ShouldBe((ushort)27136);
+        // Slot without effect should have flags=0
+        inv[0].Slots.First(s => s.SlotId == 25).Flags.ShouldBe((byte)0);
+    }
+
+    [Fact]
+    public void Equipped_inventory_response_from_factory_maps_correctly()
+    {
+        var creature = MakeCreature("TestMob", 42);
+        creature.Attach(new WorldServerV2.World.Components.EquipmentComponent(
+        [
+            new CreatureItem { Entry = 1, SlotId = 10, ModelId = 1853, EffectId = 0 },
+            new CreatureItem { Entry = 1, SlotId = 11, ModelId = 1844, EffectId = 500 },
+        ]));
+
+        var equip = creature.Get<WorldServerV2.World.Components.EquipmentComponent>();
+        var response = EquippedInventoryResponse.From(creature, equip.Items);
+
+        response.Oid.ShouldBe((ushort)42);
+        response.WeaponStance.ShouldBe((byte)0);
+        response.Slots.Count.ShouldBe(2);
+        response.Slots[0].SlotId.ShouldBe((byte)10);
+        response.Slots[0].ModelId.ShouldBe((ushort)1853);
+        response.Slots[0].Flags.ShouldBe((byte)0);
+        response.Slots[1].Flags.ShouldBe((byte)1);
+        response.Slots[1].EffectId.ShouldBe((ushort)500);
+        response.Terminator.ShouldBe((byte)0);
+    }
+
+    [Fact]
+    public void Activation_rescan_sends_equipment_for_existing_creatures()
+    {
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStoreWithEquipment();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        // Add creature first (before player)
+        var creature = MakeCreature();
+        creature.Attach(new WorldServerV2.World.Components.EquipmentComponent(
+            [new CreatureItem { Entry = 1, SlotId = 25, ModelId = 3098, EffectId = 0 }]));
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        // Add player (inactive by default)
+        var player = MakePlayer();
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+        AddEntityDirectly(region, player, CenterPos());
+
+        // Nothing sent yet because player is inactive
+        stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(0);
+
+        // Activate player — should get create + equipment + state
+        region.EnqueueActivate(player);
+        region.Tick(0);
+
+        stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(1);
+        stub.FindPackets<EquippedInventoryResponse>().Count.ShouldBe(1);
+        stub.FindPackets<StationaryObjectStateResponse>().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void EquipmentComponent_sends_visibility_init_via_interface()
+    {
+        var creature = MakeCreature("TestMob", 99);
+        var items = ImmutableArray.Create(
+            new CreatureItem { Entry = 1, SlotId = 10, ModelId = 500, EffectId = 0 });
+
+        var component = new WorldServerV2.World.Components.EquipmentComponent(items);
+        creature.Attach(component);
+
+        // Confirm it implements IVisibilityInitContributor
+        (component is WorldServerV2.World.Components.IVisibilityInitContributor).ShouldBeTrue();
+
+        // Confirm component is discoverable via Components enumerable
+        creature.Components.OfType<WorldServerV2.World.Components.IVisibilityInitContributor>()
+            .Count().ShouldBe(1);
+    }
+
+    // ── Equipment Test Helpers ──────────────────────────────────────
+
+    private static IGameDataStore MakeTestDataStoreWithEquipment()
+    {
+        var zoneInfo = new ZoneInfo
+        {
+            ZoneId = 100,
+            OffX = 5,
+            OffY = 5,
+            Region = 1,
+            Name = "TestZone",
+        };
+        return new TestDataStoreWithEquipment(zoneInfo);
+    }
+
+    private sealed class TestDataStoreWithEquipment : IGameDataStore
+    {
+        public TestDataStoreWithEquipment(ZoneInfo zone)
+        {
+            Zones = new ZoneData(
+                new Dictionary<ushort, ZoneInfo> { [zone.ZoneId] = zone }.ToFrozenDictionary(),
+                FrozenDictionary<uint, ZoneJump>.Empty);
+            Creatures = new CreatureData(
+                new Dictionary<uint, CreatureProto>
+                {
+                    [1] = new CreatureProto { Entry = 1, Name = "Mob" }
+                }.ToFrozenDictionary(),
+                FrozenDictionary<uint, CreatureSpawn>.Empty,
+                new Dictionary<uint, ImmutableArray<CreatureItem>>
+                {
+                    [1] = [new CreatureItem { Entry = 1, SlotId = 10, ModelId = 3105, EffectId = 0 }]
+                }.ToFrozenDictionary());
+        }
+
+        public ClassData Classes => new(
+            FrozenDictionary<Class, ClassInfo>.Empty,
+            FrozenDictionary<Class, List<ClassInfoItem>>.Empty);
+        public DomainItemData Items => new(
+            FrozenDictionary<uint, ItemDefinition>.Empty,
+            FrozenDictionary<uint, ItemSetDefinition>.Empty);
+        public CreatureData Creatures { get; }
+        public ZoneData Zones { get; }
+        public CareerStatData CareerStats => CareerStatData.Empty;
+        public AbilityData Abilities => AbilityData.Empty;
+        public SpawnData Spawns => SpawnData.Empty;
+    }
+
     // ── Activation Test Helpers ──────────────────────────────────────
 
     private static IGameDataStore MakeTestDataStore()
@@ -1450,7 +1668,8 @@ public class WorldTopologyTests
                 {
                     [1] = new CreatureProto { Entry = 1, Name = "Mob" }
                 }.ToFrozenDictionary(),
-                FrozenDictionary<uint, CreatureSpawn>.Empty);
+                FrozenDictionary<uint, CreatureSpawn>.Empty,
+                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty);
         }
 
         public ClassData Classes => new(

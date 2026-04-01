@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -178,7 +179,8 @@ public class GameDataPipelineTests
             new ConstantProvider<CreatureData>(
                 new CreatureData(
                     FrozenDictionary<uint, CreatureProto>.Empty,
-                    FrozenDictionary<uint, CreatureSpawn>.Empty)));
+                    FrozenDictionary<uint, CreatureSpawn>.Empty,
+                    FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty)));
         services.AddSingleton<IDataProvider<ZoneData>>(
             new ConstantProvider<ZoneData>(
                 new ZoneData(
@@ -231,7 +233,8 @@ public class GameDataPipelineTests
                 FrozenDictionary<uint, ItemSetDefinition>.Empty),
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
-                FrozenDictionary<uint, CreatureSpawn>.Empty),
+                FrozenDictionary<uint, CreatureSpawn>.Empty,
+                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty),
             new ZoneData(
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
                 FrozenDictionary<uint, ZoneJump>.Empty),

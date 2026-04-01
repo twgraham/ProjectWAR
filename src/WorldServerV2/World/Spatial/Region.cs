@@ -6,6 +6,7 @@ using WorldServerV2.Data.Domain;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
+using WorldServerV2.World.Components;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Spawning;
 using static WorldServerV2.World.Spatial.RegionConstants;
@@ -751,7 +752,21 @@ public sealed class Region : IDisposable
                 session.SendCreateStatic(CreateStaticResponse.From(gameObject, desc.Value, zone));
                 break;
             }
+
+            default:
+                return; // Unknown entity type — no create-packet, skip follow-ups
         }
+
+        // Generic component follow-ups (e.g. F_PLAYER_INVENTORY for equipment)
+        foreach (var component in target.Components)
+        {
+            if (component is IVisibilityInitContributor contributor)
+                contributor.SendVisibilityInit(session);
+        }
+
+        // Follow the create-packet with a stationary F_OBJECT_STATE so the client has
+        // up-to-date position, health, and heading immediately.
+        session.SendObjectState(BuildStationaryState(target, zone));
     }
 
     // ── Spatial Queries ─────────────────────────────────────────────────

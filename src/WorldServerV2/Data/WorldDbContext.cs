@@ -26,6 +26,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<ItemSetInfo> ItemSetInfos => Set<ItemSetInfo>();
     public DbSet<GameObjectSpawn> GameObjectSpawns => Set<GameObjectSpawn>();
     public DbSet<GameObjectProto> GameObjectProtos => Set<GameObjectProto>();
+    public DbSet<CreatureItem> CreatureItems => Set<CreatureItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -35,6 +36,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
         ConfigureItemSetInfo(modelBuilder);
         ConfigureCreatureProto(modelBuilder);
         ConfigureCreatureSpawn(modelBuilder);
+        ConfigureCreatureItem(modelBuilder);
         ConfigureZoneInfo(modelBuilder);
         ConfigureZoneJump(modelBuilder);
         ConfigureCharacterInfoStat(modelBuilder);
@@ -400,6 +402,22 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.Level).HasColumnName("level");
             entity.Property(e => e.Faction).HasColumnName("faction");
             entity.Property(e => e.HealthPoints).HasColumnName("health_points");
+        });
+    }
+
+    private static void ConfigureCreatureItem(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CreatureItem>(entity =>
+        {
+            entity.ToTable("creature_items");
+            entity.HasKey(e => new { e.Entry, e.SlotId });
+
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.SlotId).HasColumnName("slot_id");
+            entity.Property(e => e.ModelId).HasColumnName("model_id");
+            entity.Property(e => e.EffectId).HasColumnName("effect_id");
+            entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
+            entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
         });
     }
 }
