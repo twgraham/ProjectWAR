@@ -28,6 +28,6 @@ public class EncryptKeyRequest
     public byte Unk1 { get; set; }
 
     /// <summary>Client encryption key (typically 256 bytes). No length prefix — remainder of payload.</summary>
-    [PacketLength(0)]
+    [RawBytes]
     public byte[] Key { get; set; } = [];
 }

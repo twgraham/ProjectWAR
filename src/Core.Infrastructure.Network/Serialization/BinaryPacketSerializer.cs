@@ -198,6 +198,8 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 if (propertyInfo != null)
                 {
+                    if (propertyInfo.GetCustomAttribute<RawBytesAttribute>() != null)
+                        return reader.ReadRawBytes();
                     var fixedLenAttr = propertyInfo.GetCustomAttribute<FixedLengthAttribute>();
                     if (fixedLenAttr != null)
                         return reader.ReadFixedByteArray(fixedLenAttr.Length);
@@ -430,6 +432,11 @@ public class BinaryPacketSerializer : IPacketSerializer
             {
                 if (propertyInfo != null)
                 {
+                    if (propertyInfo.GetCustomAttribute<RawBytesAttribute>() != null)
+                    {
+                        writer.WriteRawBytes((byte[])value);
+                        return;
+                    }
                     var fixedLenAttr = propertyInfo.GetCustomAttribute<FixedLengthAttribute>();
                     if (fixedLenAttr != null)
                     {
@@ -924,24 +931,14 @@ public class BinaryPacketSerializer : IPacketSerializer
 
         public byte[] ReadByteArray(int lengthSize = 4)
         {
-            uint length;
-
-            if (lengthSize == 0)
+            // Length-prefixed: [Length:N][Bytes:M]
+            uint length = lengthSize switch
             {
-                // Remainder mode: read all remaining bytes with no length prefix.
-                length = (uint)(_span.Length - _position);
-            }
-            else
-            {
-                // Length-prefixed: [Length:N][Bytes:M]
-                length = lengthSize switch
-                {
-                    1 => ReadByte(),
-                    2 => ReadUInt16(),
-                    4 => ReadUInt32(),
-                    _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
-                };
-            }
+                1 => ReadByte(),
+                2 => ReadUInt16(),
+                4 => ReadUInt32(),
+                _ => throw new InvalidOperationException($"Invalid length size: {lengthSize}")
+            };
 
             if (length == 0)
                 return Array.Empty<byte>();
@@ -967,6 +964,19 @@ public class BinaryPacketSerializer : IPacketSerializer
             var array = new byte[length];
             _span.Slice(_position, length).CopyTo(array);
             _position += length;
+            return array;
+        }
+
+        /// <summary>Reads all remaining bytes in the buffer as a raw byte array (no length prefix).</summary>
+        public byte[] ReadRawBytes()
+        {
+            var remaining = _span.Length - _position;
+            if (remaining <= 0)
+                return Array.Empty<byte>();
+
+            var array = new byte[remaining];
+            _span.Slice(_position, remaining).CopyTo(array);
+            _position += remaining;
             return array;
         }
     }
@@ -1180,18 +1190,6 @@ public class BinaryPacketSerializer : IPacketSerializer
 
         public void WriteByteArray(byte[] value, int lengthSize = 4)
         {
-            // Remainder mode: write raw bytes with no length prefix.
-            if (lengthSize == 0)
-            {
-                if (value is { Length: > 0 })
-                {
-                    var rawSpan = _writer.GetSpan(value.Length);
-                    value.CopyTo(rawSpan);
-                    _writer.Advance(value.Length);
-                }
-                return;
-            }
-
             // Length-prefixed: [Length:N][Bytes:M]
             if (value == null || value.Length == 0)
             {
@@ -1259,6 +1257,17 @@ public class BinaryPacketSerializer : IPacketSerializer
                 span.Slice(value.Length, length - value.Length).Fill(0);
             }
             _writer.Advance(length);
+        }
+
+        /// <summary>Writes raw bytes directly with no length prefix.</summary>
+        public void WriteRawBytes(byte[] value)
+        {
+            if (value is not { Length: > 0 })
+                return;
+
+            var span = _writer.GetSpan(value.Length);
+            value.CopyTo(span);
+            _writer.Advance(value.Length);
         }
     }
 }

@@ -96,7 +96,8 @@ public class PlayerInitPipelineTests
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
                 FrozenDictionary<uint, ZoneJump>.Empty),
             data,
-            abilityData));
+            abilityData,
+            SpawnData.Empty));
         return store;
     }
 

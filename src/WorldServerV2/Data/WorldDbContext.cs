@@ -24,6 +24,8 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<CharacterInfoStat> CharacterInfoStats => Set<CharacterInfoStat>();
     public DbSet<AbilityInfoEntity> AbilityInfos => Set<AbilityInfoEntity>();
     public DbSet<ItemSetInfo> ItemSetInfos => Set<ItemSetInfo>();
+    public DbSet<GameObjectSpawn> GameObjectSpawns => Set<GameObjectSpawn>();
+    public DbSet<GameObjectProto> GameObjectProtos => Set<GameObjectProto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +39,8 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
         ConfigureZoneJump(modelBuilder);
         ConfigureCharacterInfoStat(modelBuilder);
         ConfigureAbilityInfo(modelBuilder);
+        ConfigureGameObjectSpawn(modelBuilder);
+        ConfigureGameObjectProto(modelBuilder);
     }
 
     private static void ConfigureClassInfo(ModelBuilder modelBuilder)
@@ -190,8 +194,24 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.LairBoss).HasColumnName("lair_boss");
             entity.Property(e => e.VendorId).HasColumnName("vendor_id");
             entity.Property(e => e.TokUnlock).HasColumnName("tok_unlock");
-            entity.Property(e => e.States).HasColumnName("states");
-            entity.Property(e => e.FigLeafData).HasColumnName("fig_leaf_data");
+            entity.Property(e => e.States).HasColumnName("states")
+                .HasConversion(
+                    v => v == null ? null : string.Join(" ", v) + " ",
+                    v => string.IsNullOrWhiteSpace(v)
+                        ? null
+                        : v.Trim()
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(byte.Parse)
+                            .ToArray());
+            entity.Property(e => e.FigLeafData).HasColumnName("fig_leaf_data")
+                .HasConversion(
+                    v => v == null ? null : string.Join(" ", v) + " ",
+                    v => string.IsNullOrWhiteSpace(v)
+                        ? null
+                        : v.Trim()
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(byte.Parse)
+                            .ToArray());
             entity.Property(e => e.BaseRadiusUnits).HasColumnName("base_radius_units");
             entity.Property(e => e.Career).HasColumnName("career");
             entity.Property(e => e.PowerModifier).HasColumnName("power_modifier");
@@ -329,6 +349,57 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.AiRange).HasColumnName("ai_range");
             entity.Property(e => e.IgnoreCooldownReduction).HasColumnName("ignore_cooldown_reduction");
             entity.Property(e => e.CooldownCap).HasColumnName("c_dcap");
+        });
+    }
+
+    private static void ConfigureGameObjectSpawn(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<GameObjectSpawn>(entity =>
+        {
+            entity.ToTable("gameobject_spawns");
+            entity.HasKey(e => e.Guid);
+
+            entity.Property(e => e.Guid).HasColumnName("guid").ValueGeneratedOnAdd();
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.ZoneId).HasColumnName("zone_id");
+            entity.Property(e => e.WorldX).HasColumnName("world_x");
+            entity.Property(e => e.WorldY).HasColumnName("world_y");
+            entity.Property(e => e.WorldZ).HasColumnName("world_z");
+            entity.Property(e => e.WorldO).HasColumnName("world_o");
+            entity.Property(e => e.DisplayId).HasColumnName("display_id");
+            entity.Property(e => e.Unk1).HasColumnName("unk1");
+            entity.Property(e => e.Unk2).HasColumnName("unk2");
+            entity.Property(e => e.Unk3).HasColumnName("unk3");
+            entity.Property(e => e.Unk4).HasColumnName("unk4");
+            entity.Property(e => e.Unks).HasColumnName("unks")
+                .HasConversion(
+                    v => v == null ? null : string.Join(" ", v) + " ",
+                    v => string.IsNullOrWhiteSpace(v) ? null
+                        : v.TrimEnd('\r').Trim()
+                             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                             .Select(s => (ushort)(int.Parse(s) & 0xFFFF)).ToArray());
+            entity.Property(e => e.DoorId).HasColumnName("door_id");
+            entity.Property(e => e.VfxState).HasColumnName("vfx_state");
+
+            // Computed property — not stored in DB
+            entity.Ignore(e => e.IsInteractable);
+        });
+    }
+
+    private static void ConfigureGameObjectProto(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<GameObjectProto>(entity =>
+        {
+            entity.ToTable("gameobject_protos");
+            entity.HasKey(e => e.Entry);
+
+            entity.Property(e => e.Entry).HasColumnName("entry").ValueGeneratedOnAdd();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
+            entity.Property(e => e.DisplayId).HasColumnName("display_id");
+            entity.Property(e => e.Scale).HasColumnName("scale");
+            entity.Property(e => e.Level).HasColumnName("level");
+            entity.Property(e => e.Faction).HasColumnName("faction");
+            entity.Property(e => e.HealthPoints).HasColumnName("health_points");
         });
     }
 }

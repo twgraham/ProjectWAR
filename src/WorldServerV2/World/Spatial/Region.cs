@@ -1,7 +1,13 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using WorldServerV2.Data;
+using WorldServerV2.Data.Domain;
+using WorldServerV2.Network;
+using WorldServerV2.Network.Dtos;
+using WorldServerV2.Services;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Spawning;
 using static WorldServerV2.World.Spatial.RegionConstants;
 
 namespace WorldServerV2.World.Spatial;
@@ -21,6 +27,7 @@ namespace WorldServerV2.World.Spatial;
 /// <list type="number">
 ///   <item>Drain command channel (add, remove, move, transfer)</item>
 ///   <item>Iterate active cells → tick each entity</item>
+///   <item>Broadcast dirty entity states (<c>F_OBJECT_STATE</c>) to players in range</item>
 ///   <item>Update visibility for entities that moved beyond the threshold</item>
 /// </list>
 /// </para>
@@ -37,16 +44,23 @@ public sealed class Region : IDisposable
     private readonly Channel<RegionCommand> _commands;
     private readonly List<WorldEntity> _movedEntities = new();
     private readonly ILogger _logger;
+    private readonly IEntityFactory _entityFactory;
+    private readonly IGameDataStore _gameData;
+    private readonly ISessionResolver _sessionResolver;
+    private readonly RespawnScheduler _respawnScheduler = new();
 
     private Thread? _thread;
     private volatile bool _running;
     private int _startGuard; // 0 = not started, 1 = started; CAS-protected
 
     /// <summary>Creates a new region with the given identifier.</summary>
-    public Region(ushort regionId, ILogger logger)
+    public Region(ushort regionId, ILogger logger, IEntityFactory entityFactory, IGameDataStore gameData, ISessionResolver sessionResolver)
     {
         RegionId = regionId;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _entityFactory = entityFactory ?? throw new ArgumentNullException(nameof(entityFactory));
+        _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+        _sessionResolver = sessionResolver ?? throw new ArgumentNullException(nameof(sessionResolver));
 
         _commands = Channel.CreateUnbounded<RegionCommand>(
             new UnboundedChannelOptions { SingleReader = true });
@@ -254,6 +268,17 @@ public sealed class Region : IDisposable
         _commands.Writer.TryWrite(new RegionCommand.TransferIn(entity, destination));
     }
 
+    /// <summary>
+    /// Enqueues an activation command for the given entity. When processed on the
+    /// region thread, the entity’s <see cref="WorldEntity.IsActive"/> is set to <c>true</c>
+    /// and a forced visibility rescan is triggered so the entity discovers all nearby
+    /// entities. Safe to call from any thread.
+    /// </summary>
+    public void EnqueueActivate(WorldEntity entity)
+    {
+        _commands.Writer.TryWrite(new RegionCommand.ActivateEntity(entity));
+    }
+
     // ── Tick Loop ───────────────────────────────────────────────────────
 
     /// <summary>
@@ -305,15 +330,21 @@ public sealed class Region : IDisposable
 
     /// <summary>
     /// Executes a single tick: processes pending commands, ticks entities in active cells,
-    /// and updates visibility for moved entities.
+    /// broadcasts dirty entity states, and updates visibility for moved entities.
     /// <para>
     /// Public for testability — tests call this directly without starting the background thread.
     /// </para>
     /// </summary>
     public void Tick(long tickMs)
     {
+        _respawnScheduler.DrainDue(tickMs, entry =>
+        {
+            var entity = _entityFactory.CreateCreature(entry.Descriptor);
+            EnqueueAdd(entity, entry.Descriptor.Position);
+        });
         ProcessCommands();
         TickEntities(tickMs);
+        BroadcastEntityStates(tickMs);
         UpdateMovedEntitiesVisibility();
     }
 
@@ -339,6 +370,10 @@ public sealed class Region : IDisposable
 
                 case RegionCommand.TransferIn transfer:
                     ExecuteAdd(transfer.Entity, transfer.Destination, placed: null);
+                    break;
+
+                case RegionCommand.ActivateEntity activate:
+                    ExecuteActivate(activate.Entity);
                     break;
             }
         }
@@ -443,6 +478,39 @@ public sealed class Region : IDisposable
         _movedEntities.Add(entity);
     }
 
+    private void ExecuteActivate(WorldEntity entity)
+    {
+        if (entity.ObjectId == 0 || !_allEntities.Contains(entity))
+            return;
+
+        entity.IsActive = true;
+
+        // Send create-packets for every entity already in the player's visibility set.
+        // These were discovered spatially during the initial add but suppressed because
+        // the player was inactive at that time.
+        //
+        // The reverse direction (telling other active players about this player) is also
+        // handled here. The forced visibility rescan below only fires NotifyEntityVisible
+        // for *new* visibility entries — entities already in the set are skipped because
+        // UpdateVisibility checks !entity.Visibility.Contains(other). Without the reverse
+        // call, an already-active player B would never learn that player A appeared.
+        if (entity is PlayerEntity player)
+        {
+            foreach (var other in player.Visibility.Entities)
+            {
+                NotifyEntityVisible(player, other);
+
+                if (other is PlayerEntity otherPlayer)
+                    NotifyEntityVisible(otherPlayer, player);
+            }
+        }
+
+        // Force a full visibility rescan so any entities that entered range between
+        // the initial add and activation are also discovered.
+        entity.LastVisibilityCheckPosition = default;
+        _movedEntities.Add(entity);
+    }
+
     // ── Entity Ticking ──────────────────────────────────────────────────
 
     private void TickEntities(long tickMs)
@@ -474,6 +542,73 @@ public sealed class Region : IDisposable
             for (var i = 0; i < entities.Count; i++)
                 entities[i].Update(tickMs);
         }
+    }
+
+    // ── State Broadcasting ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Iterates all entities in the tick-cell set and broadcasts <c>F_OBJECT_STATE</c>
+    /// (opcode 0x09) to players in each entity's <see cref="VisibilitySet"/>.
+    /// <para>
+    /// Each non-player entity is asked via <see cref="WorldEntity.TryRefresh"/> whether it
+    /// needs a broadcast (dirty flag or keepalive timer expiry). The entity owns its own
+    /// refresh logic; the region is responsible only for dispatch.
+    /// </para>
+    /// <para>
+    /// Reuses the <c>_tickCells</c> set already populated by <c>TickEntities</c> to avoid
+    /// re-scanning active cell neighborhoods.
+    /// </para>
+    /// </summary>
+    private void BroadcastEntityStates(long tickMs)
+    {
+        foreach (var cell in _tickCells)
+        {
+            var entities = cell.Entities;
+            for (var i = 0; i < entities.Count; i++)
+            {
+                var entity = entities[i];
+
+                if (entity is PlayerEntity)
+                    continue;
+
+                if (!entity.TryRefresh(tickMs))
+                    continue;
+
+                if (entity.Visibility.PlayerCount == 0)
+                    continue;
+
+                var zone = _gameData.Zones.Infos.GetValueOrDefault(entity.Position.ZoneId);
+                if (zone is null)
+                    continue;
+
+                var response = BuildStationaryState(entity, zone);
+
+                foreach (var player in entity.Visibility.Players)
+                {
+                    if (!player.IsActive)
+                        continue;
+
+                    var session = _sessionResolver.GetSession(player);
+                    session?.SendObjectState(response);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a <see cref="StationaryObjectStateResponse"/> for the given entity.
+    /// Dispatches between <see cref="UnitEntity"/> and <see cref="GameObjectEntity"/>.
+    /// </summary>
+    private static StationaryObjectStateResponse BuildStationaryState(
+        WorldEntity entity, Data.Entities.ZoneInfo zone)
+    {
+        return entity switch
+        {
+            UnitEntity unit => StationaryObjectStateResponse.From(unit, zone),
+            GameObjectEntity go => StationaryObjectStateResponse.From(go, zone),
+            _ => throw new InvalidOperationException(
+                $"Unexpected entity type {entity.GetType().Name} in BroadcastEntityStates"),
+        };
     }
 
     // ── Visibility ──────────────────────────────────────────────────────
@@ -532,6 +667,12 @@ public sealed class Region : IDisposable
                     {
                         entity.Visibility.Add(other);
                         other.Visibility.Add(entity);
+
+                        // Notify players when a new entity enters their visibility
+                        if (entity is PlayerEntity playerA)
+                            NotifyEntityVisible(playerA, other);
+                        if (other is PlayerEntity playerB)
+                            NotifyEntityVisible(playerB, entity);
                     }
                 }
             }
@@ -546,6 +687,69 @@ public sealed class Region : IDisposable
             {
                 entity.Visibility.Remove(other);
                 other.Visibility.Remove(entity);
+            }
+        }
+    }
+
+    // ── Visibility Notifications ─────────────────────────────────────
+
+    /// <summary>
+    /// Notifies <paramref name="player"/> that <paramref name="target"/> has entered
+    /// its visibility range. Builds the appropriate entity-create message and delivers
+    /// it via the player's session. Called exclusively from the region tick thread.
+    /// </summary>
+    private void NotifyEntityVisible(PlayerEntity player, WorldEntity target)
+    {
+        // Don't send entity-create packets to a player who hasn't finished loading.
+        // The player will receive a forced visibility rescan when activated.
+        if (!player.IsActive)
+            return;
+
+        var session = _sessionResolver.GetSession(player);
+        if (session is null)
+            return;
+
+        var zone = _gameData.Zones.Infos.GetValueOrDefault(target.Position.ZoneId);
+        if (zone is null)
+            return;
+
+        switch (target)
+        {
+            case CreatureEntity creature:
+            {
+                var proto = _gameData.Creatures.Protos.GetValueOrDefault(creature.Entry);
+                if (proto is null)
+                    return;
+
+                session.SendCreateMonster(CreateMonsterResponse.From(creature, proto, zone));
+                break;
+            }
+
+            case GameObjectEntity gameObject:
+            {
+                // GameObjectProto lookup is not yet wired into IGameDataStore (factory TODO);
+                // pass null to fall back to entity.Name.
+                if (!_gameData.Spawns.GameObjects.TryGetValue(
+                        new CellKey(RegionId, target.Position.CellIndex.CellX, target.Position.CellIndex.CellY),
+                        out var descriptors))
+                    return;
+
+                // Find the descriptor that matches this entity's entry (best-effort)
+                GameObjectSpawnDescriptor? desc = null;
+                foreach (var d in descriptors)
+                {
+                    if (d.Entry == gameObject.Entry)
+                    {
+                        desc = d;
+                        break;
+                    }
+                }
+
+                if (desc is null)
+                    return;
+
+                session.SendCreateStatic(CreateStaticResponse.From(gameObject, desc.Value, zone));
+                break;
             }
         }
     }
@@ -665,18 +869,43 @@ public sealed class Region : IDisposable
     }
 
     /// <summary>
-    /// Marks a cell as loaded. Override point for spawn loading — the <see cref="RegionManager"/>
-    /// or a spawn service can hook into this to populate the cell with NPCs.
+    /// Marks a cell as loaded and spawns all creatures and game objects whose spawn
+    /// descriptor falls within this cell.
     /// </summary>
     private void LoadCell(Cell cell)
     {
-        // Mark as loaded to prevent re-entry. Spawn loading will be wired
-        // when the GameDataStore spawn index is built (creature/game object spawns
-        // keyed by regionId + cellX + cellY).
         cell.IsLoaded = true;
 
+        var cellKey = new CellKey(RegionId, cell.X, cell.Y);
+
+        // Spawn creatures
+        if (_gameData.Spawns.Creatures.TryGetValue(cellKey, out var creatures))
+        {
+            foreach (var descriptor in creatures)
+            {
+                var entity = _entityFactory.CreateCreature(descriptor);
+                EnqueueAdd(entity, descriptor.Position);
+
+                if (descriptor.RespawnDelayMs > 0)
+                {
+                    // Pre-register for respawn: when the entity dies, the health component
+                    // will call _respawnScheduler.Schedule. For now we only load, not pre-queue.
+                }
+            }
+        }
+
+        // Spawn game objects
+        if (_gameData.Spawns.GameObjects.TryGetValue(cellKey, out var gameObjects))
+        {
+            foreach (var descriptor in gameObjects)
+            {
+                var entity = _entityFactory.CreateGameObject(descriptor);
+                EnqueueAdd(entity, descriptor.Position);
+            }
+        }
+
         _logger.LogDebug(
-            "Cell ({CellX}, {CellY}) in region {RegionId} marked as loaded",
+            "Cell ({CellX}, {CellY}) in region {RegionId} loaded",
             cell.X, cell.Y, RegionId);
     }
 

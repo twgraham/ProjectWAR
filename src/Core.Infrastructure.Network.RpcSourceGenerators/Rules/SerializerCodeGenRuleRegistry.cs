@@ -26,6 +26,7 @@ public static class SerializerCodeGenRuleRegistry
         new CStringCodeGen(),
         new LittleEndianCodeGen(),
         new EnumCodeGen(),
+        new RawBytesCodeGen(),
         CollectionRule,
     ];
 

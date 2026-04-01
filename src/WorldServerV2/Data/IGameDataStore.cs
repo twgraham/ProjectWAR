@@ -29,4 +29,7 @@ public interface IGameDataStore
 
     /// <summary>Ability definitions, pre-indexed by entry and career line.</summary>
     AbilityData Abilities { get; }
+
+    /// <summary>Creature and game-object spawn descriptors, keyed by cell.</summary>
+    SpawnData Spawns { get; }
 }

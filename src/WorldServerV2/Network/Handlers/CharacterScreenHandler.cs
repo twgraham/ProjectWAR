@@ -208,10 +208,10 @@ public class CharacterScreenHandler : IPacketHandler
         {
             Oid = player.ObjectId,
         });
-        session.State = ClientState.Playing;
+        session.State = ClientState.WorldEnter;
 
         _logger.LogInformation(
-            "Player {Name} ({CharId}, OID {Oid}) initialization complete — session {SessionId} → Playing",
+            "Player {Name} ({CharId}, OID {Oid}) initialization complete — session {SessionId} → WorldEnter",
             player.Name, player.CharacterId, player.ObjectId, session.Id);
     }
 }

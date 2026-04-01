@@ -59,6 +59,23 @@ public abstract class WorldEntity
     /// <summary>Current position in the world. Updated by movement systems.</summary>
     public WorldPosition Position { get; set; }
 
+    // ── Activation ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether this entity is active and should participate in visibility notifications,
+    /// state broadcasts, and gameplay interactions.
+    /// <para>
+    /// NPCs and game objects default to <c>true</c> — they are ready the moment they
+    /// enter the region. Players default to <c>false</c> and become active when the
+    /// client signals readiness via <c>F_DUMP_STATICS</c>.
+    /// </para>
+    /// <para>
+    /// The <see cref="Region"/> checks this flag before sending entity-create packets
+    /// to a player and before including a player in state broadcasts.
+    /// </para>
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
     // ── Visibility ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -72,6 +89,60 @@ public abstract class WorldEntity
     /// if the entity has moved far enough to warrant a re-scan.
     /// </summary>
     internal WorldPosition LastVisibilityCheckPosition { get; set; }
+
+    // ── State Broadcasting ──────────────────────────────────────────────
+
+    /// <summary>
+    /// When <c>true</c>, the next <see cref="TryRefresh"/> call will return <c>true</c>,
+    /// causing the <see cref="Region"/> to broadcast this entity's state
+    /// (<c>F_OBJECT_STATE</c>) to all players in its <see cref="Visibility"/> set.
+    /// <para>
+    /// Game systems (combat, movement, buff application) set this flag whenever they change
+    /// observable state (health, position, heading).
+    /// </para>
+    /// </summary>
+    internal bool StateDirty { get; set; }
+
+    /// <summary>
+    /// Tick timestamp (ms) at which the next keepalive <c>F_OBJECT_STATE</c> broadcast
+    /// should be sent, even if no state has changed. Reset after every broadcast via
+    /// <see cref="TryRefresh"/>.
+    /// <para>
+    /// V1 uses 40–50 seconds (randomized per entity). The client holds an object for
+    /// approximately 1 minute, so the refresh must arrive before that timeout.
+    /// </para>
+    /// </summary>
+    internal long NextStateRefresh { get; set; }
+
+    /// <summary>
+    /// Per-entity keepalive interval in milliseconds. Randomized at construction to
+    /// stagger broadcasts across entities and avoid packet bursts.
+    /// V1: <c>40000 + Random.Next(10000)</c> → 40–50 seconds.
+    /// </summary>
+    internal int StateRefreshInterval { get; } = 40_000 + Random.Shared.Next(10_000);
+
+    /// <summary>
+    /// Checks whether this entity needs a state broadcast and, if so, resets the
+    /// dirty flag and advances the keepalive timer. Returns <c>true</c> when a
+    /// broadcast is required, <c>false</c> otherwise.
+    /// <para>
+    /// Called once per tick by the <see cref="Region"/>'s broadcast phase.
+    /// Encapsulates both the dirty-flag check and the keepalive timer expiry so
+    /// that the region loop remains a simple dispatch.
+    /// </para>
+    /// </summary>
+    internal bool TryRefresh(long tickMs)
+    {
+        if (tickMs >= NextStateRefresh)
+            StateDirty = true;
+
+        if (!StateDirty)
+            return false;
+
+        StateDirty = false;
+        NextStateRefresh = tickMs + StateRefreshInterval;
+        return true;
+    }
 
     // ── Optional Component Bag ──────────────────────────────────────────
 

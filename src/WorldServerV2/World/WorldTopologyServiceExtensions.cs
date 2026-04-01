@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using WorldServerV2.Services;
 using WorldServerV2.World.Spatial;
+using WorldServerV2.World.Spawning;
 
 namespace WorldServerV2.World;
 
@@ -25,6 +26,7 @@ public static class WorldTopologyServiceExtensions
     /// </summary>
     public static IServiceCollection AddWorldTopology(this IServiceCollection services)
     {
+        services.AddSingleton<IEntityFactory, EntityFactory>();
         services.AddSingleton<RegionManager>();
         services.AddSingleton<WorldService>();
         services.AddHostedService<WorldHostedService>();

@@ -1,10 +1,19 @@
+using System.Collections.Frozen;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
+using WorldServerV2.Data;
+using WorldServerV2.Data.Domain;
 using WorldServerV2.Data.Entities;
+using WorldServerV2.Data.Models;
+using WorldServerV2.Network;
+using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
+using DomainItemData = WorldServerV2.Data.Domain.ItemData;
 using WorldServerV2.World.Entities;
+using WorldServerV2.World.Items;
 using WorldServerV2.World.Spatial;
+using WorldServerV2.World.Spawning;
 
 namespace WorldServer.Tests;
 
@@ -20,15 +29,50 @@ public class WorldTopologyTests
     private static readonly ILogger<Region> Logger =
         NullLoggerFactory.Instance.CreateLogger<Region>();
 
+    private static readonly IEntityFactory StubFactory = new StubEntityFactory();
+    private static readonly IGameDataStore StubData = new StubGameDataStore();
+    private static readonly ISessionResolver StubResolver = new StubSessionResolver();
+
+    private sealed class StubEntityFactory : IEntityFactory
+    {
+        public CreatureEntity CreateCreature(SpawnDescriptor d)
+            => new(0, new CreatureProto { Entry = d.Entry, Name = "stub" }, 100);
+        public GameObjectEntity CreateGameObject(GameObjectSpawnDescriptor d)
+            => new(0, d.Entry, "stub");
+    }
+
+    private sealed class StubGameDataStore : IGameDataStore
+    {
+        public ClassData Classes => new(
+            FrozenDictionary<Class, ClassInfo>.Empty,
+            FrozenDictionary<Class, List<ClassInfoItem>>.Empty);
+        public DomainItemData Items => new(
+            FrozenDictionary<uint, ItemDefinition>.Empty,
+            FrozenDictionary<uint, ItemSetDefinition>.Empty);
+        public CreatureData Creatures => new(
+            FrozenDictionary<uint, CreatureProto>.Empty,
+            FrozenDictionary<uint, CreatureSpawn>.Empty);
+        public ZoneData Zones => new(
+            FrozenDictionary<ushort, ZoneInfo>.Empty,
+            FrozenDictionary<uint, ZoneJump>.Empty);
+        public CareerStatData CareerStats => CareerStatData.Empty;
+        public AbilityData Abilities => AbilityData.Empty;
+        public SpawnData Spawns => SpawnData.Empty;
+    }
+
+    private sealed class StubSessionResolver : ISessionResolver
+    {
+        public GameSession? GetSession(PlayerEntity player) => null;
+    }
+
     private static Region MakeRegion(ushort id = 1)
-        => new(id, Logger);
+        => new(id, Logger, StubFactory, StubData, StubResolver);
 
     private static PlayerEntity MakePlayer(string name = "Player", ushort id = 0)
         => new(id, new Character { CharacterId = 1, Name = name }, 1000);
 
     private static CreatureEntity MakeCreature(string name = "Mob", ushort id = 0)
-        => new(id, new CreatureProto { Entry = 1, Name = name },
-            new CreatureSpawn { Guid = 1, Entry = 1 }, 500);
+        => new(id, new CreatureProto { Entry = 1, Name = name }, 500);
 
     private static GameObjectEntity MakeGameObject(string name = "Chest", ushort id = 0)
         => new(id, 100, name);
@@ -937,7 +981,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_creates_region_on_first_access()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
 
         var region = manager.GetOrCreate(1);
 
@@ -949,7 +993,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_returns_same_region_on_second_access()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
 
         var first = manager.GetOrCreate(1);
         var second = manager.GetOrCreate(1);
@@ -961,14 +1005,14 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_get_returns_null_for_unknown()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
         manager.Get(99).ShouldBeNull();
     }
 
     [Fact]
     public void RegionManager_get_returns_existing()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
         var region = manager.GetOrCreate(1);
 
         manager.Get(1).ShouldBeSameAs(region);
@@ -977,7 +1021,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_manages_multiple_regions()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
 
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
@@ -990,7 +1034,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_get_all_regions_returns_snapshot()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
 
@@ -1001,7 +1045,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_dispose_cleans_up()
     {
-        var manager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
 
@@ -1087,7 +1131,7 @@ public class WorldTopologyTests
 
     private static WorldService MakeWorldService()
     {
-        var regionManager = new RegionManager(NullLoggerFactory.Instance, autoStart: false);
+        var regionManager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
         return new WorldService(regionManager, NullLoggerFactory.Instance.CreateLogger<WorldService>());
     }
 
@@ -1224,5 +1268,242 @@ public class WorldTopologyTests
         var player = MakePlayer();
         // Player has default position (region 0, not created)
         svc.GetEntityRegion(player).ShouldBeNull();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Entity Activation — IsActive defaults
+    // ═══════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Player_starts_inactive()
+    {
+        var player = MakePlayer();
+        player.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Creature_starts_active()
+    {
+        var creature = MakeCreature();
+        creature.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void GameObject_starts_active()
+    {
+        var go = MakeGameObject();
+        go.IsActive.ShouldBeTrue();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Entity Activation — Inactive player visibility gating
+    // ═══════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Inactive_player_does_not_receive_create_packets()
+    {
+        // Set up a region with a session resolver that captures packets.
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStore();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        var player = MakePlayer();
+        var creature = MakeCreature();
+
+        // Player starts inactive (IsActive = false by default).
+        AddEntityDirectly(region, player, CenterPos());
+        player.IsActive.ShouldBeFalse();
+
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+
+        // Add a creature nearby — the visibility system runs but shouldn't notify the player.
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        // Player should be in visibility sets (spatial discovery still works for future activation)
+        // but no create-packet was sent.
+        stub.FindPackets<CreateMonsterResponse>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Inactive_player_still_enters_visibility_sets()
+    {
+        var region = MakeRegion();
+        var player = MakePlayer();
+        var creature = MakeCreature();
+
+        AddEntityDirectly(region, player, CenterPos());
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        // Visibility sets are populated even for inactive players
+        // (so activation rescan finds them).
+        player.Visibility.Contains(creature).ShouldBeTrue();
+        creature.Visibility.Contains(player).ShouldBeTrue();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Entity Activation — ActivateEntity command
+    // ═══════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Activate_command_sets_entity_active()
+    {
+        var region = MakeRegion();
+        var player = MakePlayer();
+
+        AddEntityDirectly(region, player, CenterPos());
+        player.IsActive.ShouldBeFalse();
+
+        region.EnqueueActivate(player);
+        region.Tick(0);
+
+        player.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Activate_triggers_visibility_notifications()
+    {
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStore();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        var player = MakePlayer();
+        var creature = MakeCreature();
+
+        // Place both entities — player is inactive, so no create-packets yet.
+        AddEntityDirectly(region, player, CenterPos());
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+
+        stub.FindPackets<CreateMonsterResponse>().ShouldBeEmpty();
+
+        // Activate the player — the next tick should trigger a forced visibility rescan.
+        region.EnqueueActivate(player);
+        region.Tick(0);
+
+        player.IsActive.ShouldBeTrue();
+        stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(1);
+        stub.FindPackets<CreateMonsterResponse>()[0].Oid.ShouldBe(creature.ObjectId);
+    }
+
+    [Fact]
+    public void Activate_command_for_unknown_entity_is_safe()
+    {
+        var region = MakeRegion();
+        var player = MakePlayer();
+
+        // Player is not in the region — activation should be a no-op.
+        region.EnqueueActivate(player);
+        region.Tick(0);
+
+        player.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Active_creatures_are_visible_to_active_player()
+    {
+        var resolver = new RecordingSessionResolver();
+        var data = MakeTestDataStore();
+        var region = new Region(1, Logger, StubFactory, data, resolver);
+
+        var player = MakePlayer();
+        player.IsActive = true; // Pre-activate
+
+        var (session, stub) = CreateSession();
+        resolver.Register(player, session);
+
+        AddEntityDirectly(region, player, CenterPos());
+
+        var creature = MakeCreature();
+        AddEntityDirectly(region, creature, CenterPos(100, 0));
+
+        // Active player should have received the create-packet.
+        stub.FindPackets<CreateMonsterResponse>().Count.ShouldBe(1);
+    }
+
+    // ── Activation Test Helpers ──────────────────────────────────────
+
+    private static IGameDataStore MakeTestDataStore()
+    {
+        var zoneInfo = new ZoneInfo
+        {
+            ZoneId = 100,
+            OffX = 5,
+            OffY = 5,
+            Region = 1,
+            Name = "TestZone",
+        };
+        return new TestDataStore(zoneInfo);
+    }
+
+    private sealed class TestDataStore : IGameDataStore
+    {
+        public TestDataStore(ZoneInfo zone)
+        {
+            Zones = new ZoneData(
+                new Dictionary<ushort, ZoneInfo> { [zone.ZoneId] = zone }.ToFrozenDictionary(),
+                FrozenDictionary<uint, ZoneJump>.Empty);
+            Creatures = new CreatureData(
+                new Dictionary<uint, CreatureProto>
+                {
+                    [1] = new CreatureProto { Entry = 1, Name = "Mob" }
+                }.ToFrozenDictionary(),
+                FrozenDictionary<uint, CreatureSpawn>.Empty);
+        }
+
+        public ClassData Classes => new(
+            FrozenDictionary<Class, ClassInfo>.Empty,
+            FrozenDictionary<Class, List<ClassInfoItem>>.Empty);
+        public DomainItemData Items => new(
+            FrozenDictionary<uint, ItemDefinition>.Empty,
+            FrozenDictionary<uint, ItemSetDefinition>.Empty);
+        public CreatureData Creatures { get; }
+        public ZoneData Zones { get; }
+        public CareerStatData CareerStats => CareerStatData.Empty;
+        public AbilityData Abilities => AbilityData.Empty;
+        public SpawnData Spawns => SpawnData.Empty;
+    }
+
+    private sealed class RecordingSessionResolver : ISessionResolver
+    {
+        private readonly Dictionary<uint, GameSession> _sessions = new();
+
+        public void Register(PlayerEntity player, GameSession session)
+            => _sessions[player.CharacterId] = session;
+
+        public GameSession? GetSession(PlayerEntity player)
+            => _sessions.GetValueOrDefault(player.CharacterId);
+    }
+
+    private static (GameSession Session, StubConnectionContext Stub) CreateSession(ushort sessionId = 1)
+    {
+        var stub = new StubConnectionContext();
+        var session = new GameSession(sessionId, stub);
+        session.State = ClientState.Playing;
+        return (session, stub);
+    }
+
+    private sealed class StubConnectionContext : Core.Infrastructure.Network.IConnectionContext
+    {
+        private readonly List<(byte Opcode, object Packet)> _sent = [];
+
+        public List<T> FindPackets<T>() where T : class =>
+            _sent.Where(p => p.Packet is T).Select(p => (T)p.Packet).ToList();
+
+        public string? RemoteAddress => "127.0.0.1:12345";
+
+        public Core.Infrastructure.Network.IPacketFramer PacketFramer =>
+            throw new NotImplementedException();
+
+        public void SendResponse<T>(byte opcode, T response)
+            => _sent.Add((opcode, response!));
+
+        public void Disconnect(string reason, bool flush = false) { }
+
+        public IDictionary<string, object> Items { get; } = new Dictionary<string, object>();
+
+        public void OnDispatchError(byte opcode, Exception exception) { }
     }
 }

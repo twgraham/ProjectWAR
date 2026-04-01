@@ -32,6 +32,9 @@ public sealed class GameDataStore : IGameDataStore
     /// <inheritdoc />
     public AbilityData Abilities => Current.Abilities;
 
+    /// <inheritdoc />
+    public SpawnData Spawns => Current.Spawns;
+
     /// <summary>
     /// Sets the data snapshot. May only be called once (typically by <see cref="GameDataLoader"/>).
     /// </summary>
@@ -56,5 +59,6 @@ public sealed class GameDataStore : IGameDataStore
         CreatureData Creatures,
         ZoneData Zones,
         CareerStatData CareerStats,
-        AbilityData Abilities);
+        AbilityData Abilities,
+        SpawnData Spawns);
 }
