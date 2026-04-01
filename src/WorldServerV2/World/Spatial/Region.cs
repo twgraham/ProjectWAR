@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data;
@@ -317,12 +318,13 @@ public sealed class Region : IDisposable
 
         while (_running)
         {
-            var tickStart = Environment.TickCount64;
-            Tick(tickStart);
+            var ticks = Stopwatch.GetTimestamp();
+            var ticksMs = ticks * 1000L / Stopwatch.Frequency;
+            Tick(ticksMs);
 
-            var elapsed = (int)(Environment.TickCount64 - tickStart);
-            var remaining = TickIntervalMs - elapsed;
-            if (remaining > 0)
+            var elapsed = Stopwatch.GetElapsedTime(ticks);
+            var remaining = TickInterval - elapsed;
+            if (remaining > TimeSpan.Zero)
                 Thread.Sleep(remaining);
         }
 
@@ -728,28 +730,7 @@ public sealed class Region : IDisposable
 
             case GameObjectEntity gameObject:
             {
-                // GameObjectProto lookup is not yet wired into IGameDataStore (factory TODO);
-                // pass null to fall back to entity.Name.
-                if (!_gameData.Spawns.GameObjects.TryGetValue(
-                        new CellKey(RegionId, target.Position.CellIndex.CellX, target.Position.CellIndex.CellY),
-                        out var descriptors))
-                    return;
-
-                // Find the descriptor that matches this entity's entry (best-effort)
-                GameObjectSpawnDescriptor? desc = null;
-                foreach (var d in descriptors)
-                {
-                    if (d.Entry == gameObject.Entry)
-                    {
-                        desc = d;
-                        break;
-                    }
-                }
-
-                if (desc is null)
-                    return;
-
-                session.SendCreateStatic(CreateStaticResponse.From(gameObject, desc.Value, zone));
+                session.SendCreateStatic(CreateStaticResponse.From(gameObject, gameObject.Descriptor, zone));
                 break;
             }
 

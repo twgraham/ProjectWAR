@@ -40,7 +40,7 @@ public class WorldTopologyTests
         public CreatureEntity CreateCreature(SpawnDescriptor d)
             => new(0, new CreatureProto { Entry = d.Entry, Name = "stub" }, 100);
         public GameObjectEntity CreateGameObject(GameObjectSpawnDescriptor d)
-            => new(0, d.Entry, "stub");
+            => new(0, d);
     }
 
     private sealed class StubGameDataStore : IGameDataStore
@@ -78,7 +78,7 @@ public class WorldTopologyTests
         => new(id, new CreatureProto { Entry = 1, Name = name }, 500);
 
     private static GameObjectEntity MakeGameObject(string name = "Chest", ushort id = 0)
-        => new(id, 100, name);
+        => new(id, new GameObjectSpawnDescriptor { Entry = 100, RegionId = 1, ZoneId = 100, Position = default }, name);
 
     /// <summary>
     /// Adds an entity directly to a region by enqueuing and ticking.

@@ -51,14 +51,11 @@ public sealed class EntityFactory(IGameDataStore gameData) : IEntityFactory
     /// <inheritdoc />
     public GameObjectEntity CreateGameObject(GameObjectSpawnDescriptor descriptor)
     {
-        // TODO: Look up GameObjectProto once GameObjectData domain is wired into IGameDataStore.
-        //       For now, use entry-based stub name.
+        // TODO: Look up GameObjectProto once GameObjectData domain is wired into IGameDataStore
+        //       and use proto.Name as the nameOverride.
         var entity = new GameObjectEntity(
-            objectId:    0,
-            entry:       descriptor.Entry,
-            name:        $"GO_{descriptor.Entry}",
-            vfxState:    descriptor.VfxState,
-            interactable: descriptor.Interactable);
+            objectId:  0,
+            descriptor: descriptor);
 
         if (descriptor.DoorId != 0)
         {

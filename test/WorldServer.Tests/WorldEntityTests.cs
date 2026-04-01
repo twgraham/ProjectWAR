@@ -1,4 +1,5 @@
 using Shouldly;
+using WorldServerV2.Data.Domain;
 using WorldServerV2.Data.Entities;
 using WorldServerV2.World.Components;
 using WorldServerV2.World.Entities;
@@ -19,7 +20,7 @@ public class WorldEntityTests
         => new(id, new Character { CharacterId = id, Name = name }, maxHp);
 
     private static GameObjectEntity MakeGameObject(ushort id = 1, uint entry = 100, string name = "Chest")
-        => new(id, entry, name);
+        => new(id, new GameObjectSpawnDescriptor { Entry = entry, RegionId = 1, ZoneId = 100, Position = default, Interactable = true }, name);
 
     // ── WorldEntity: Identity ───────────────────────────────────────────
 

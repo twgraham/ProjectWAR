@@ -1,3 +1,5 @@
+using WorldServerV2.Data.Domain;
+
 namespace WorldServerV2.World.Entities;
 
 /// <summary>
@@ -10,19 +12,23 @@ public sealed class GameObjectEntity : WorldEntity
 {
     public GameObjectEntity(
         ushort objectId,
-        uint   entry,
-        string name,
-        byte   vfxState    = 0,
-        bool   interactable = true)
-        : base(objectId, EntityType.GameObject, name)
+        GameObjectSpawnDescriptor descriptor,
+        string? nameOverride = null)
+        : base(objectId, EntityType.GameObject, nameOverride ?? $"GO_{descriptor.Entry}")
     {
-        Entry        = entry;
-        VfxState     = vfxState;
-        Interactable = interactable;
+        Descriptor   = descriptor;
+        VfxState     = descriptor.VfxState;
+        Interactable = descriptor.Interactable;
     }
 
+    /// <summary>
+    /// The spawn descriptor that sourced this entity — carries the raw DB fields
+    /// needed for the wire protocol (Unks, DisplayId, DoorId, SpawnUnk1-4).
+    /// </summary>
+    public GameObjectSpawnDescriptor Descriptor { get; }
+
     /// <summary>Template entry ID from the game data store.</summary>
-    public uint Entry { get; }
+    public uint Entry => Descriptor.Entry;
 
     /// <summary>Visual effect state (door open/closed, glow, etc.).</summary>
     public byte VfxState { get; set; }
