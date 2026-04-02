@@ -1,5 +1,22 @@
 # WorldServerV2 — Architecture & Redesign Context
 
+> ⚠️ **This document has been split into focused files. Start here instead:**
+>
+> | Document | Contents |
+> |----------|---------|
+> | **[Overview.md](./Overview.md)** | Project rationale, old architecture, current state, high-level design, roadmap |
+> | [Glossary.md](./Glossary.md) | All WAR-specific and server-internal terms |
+> | [System_01_GameData.md](./System_01_GameData.md) | Static game data loading, IGameDataStore, FrozenDictionary providers |
+> | [System_02_EntityModel.md](./System_02_EntityModel.md) | Entity/component hierarchy, WorldEntity, UnitEntity, PlayerEntity |
+> | [System_03_WorldTopology.md](./System_03_WorldTopology.md) | Regions, cells, visibility sets, 20Hz tick loop |
+> | [Player_Login_Flow.md](./Player_Login_Flow.md) | Init pipeline, protocol handshake, packet sequence, threading model |
+> | [System_04_Combat.md](./System_04_Combat.md) | Stats, damage pipeline, buffs, abilities, career resources |
+> | [System_13_Spawning.md](./System_13_Spawning.md) | Creature/GO lifecycle, EntityFactory, RespawnScheduler, create-packet DTOs |
+>
+> The full original content is preserved below for reference.
+
+---
+
 > **Purpose**: Persistent reference for continuing the incremental rewrite of the
 > WAR World Server. This document captures the old architecture's problems, the new
 > project's current state, and the full redesign roadmap so any future session can
