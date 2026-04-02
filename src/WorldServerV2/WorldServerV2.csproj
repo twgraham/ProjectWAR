@@ -33,6 +33,9 @@
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+      <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.1" />
+      <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.1" />
+      <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.0" />
     </ItemGroup>
 
     <ItemGroup>

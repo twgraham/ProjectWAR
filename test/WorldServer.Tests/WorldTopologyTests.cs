@@ -14,6 +14,7 @@ using DomainItemData = WorldServerV2.Data.Domain.ItemData;
 using WorldServerV2.World.Components;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Items;
+using WorldServerV2.Telemetry;
 using WorldServerV2.World.Spatial;
 using WorldServerV2.World.Spawning;
 
@@ -34,6 +35,7 @@ public class WorldTopologyTests
     private static readonly IEntityFactory StubFactory = new StubEntityFactory();
     private static readonly IGameDataStore StubData = new StubGameDataStore();
     private static readonly ISessionResolver StubResolver = new StubSessionResolver();
+    private static readonly WorldServerMetrics Metrics = new();
 
     private sealed class StubEntityFactory : IEntityFactory
     {
@@ -69,7 +71,7 @@ public class WorldTopologyTests
     }
 
     private static Region MakeRegion(ushort id = 1)
-        => new(id, Logger, StubFactory, StubData, StubResolver);
+        => new(id, Logger, StubFactory, StubData, StubResolver, Metrics);
 
     private static PlayerEntity MakePlayer(string name = "Player", ushort id = 0)
         => new(id, new Character { CharacterId = 1, Name = name }, 1000);
@@ -984,7 +986,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_creates_region_on_first_access()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
 
         var region = manager.GetOrCreate(1);
 
@@ -996,7 +998,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_returns_same_region_on_second_access()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
 
         var first = manager.GetOrCreate(1);
         var second = manager.GetOrCreate(1);
@@ -1008,14 +1010,14 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_get_returns_null_for_unknown()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
         manager.Get(99).ShouldBeNull();
     }
 
     [Fact]
     public void RegionManager_get_returns_existing()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
         var region = manager.GetOrCreate(1);
 
         manager.Get(1).ShouldBeSameAs(region);
@@ -1024,7 +1026,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_manages_multiple_regions()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
 
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
@@ -1037,7 +1039,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_get_all_regions_returns_snapshot()
     {
-        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        using var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
 
@@ -1048,7 +1050,7 @@ public class WorldTopologyTests
     [Fact]
     public void RegionManager_dispose_cleans_up()
     {
-        var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        var manager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
         manager.GetOrCreate(1);
         manager.GetOrCreate(2);
 
@@ -1134,7 +1136,7 @@ public class WorldTopologyTests
 
     private static WorldService MakeWorldService()
     {
-        var regionManager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, autoStart: false);
+        var regionManager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
         return new WorldService(regionManager, NullLoggerFactory.Instance.CreateLogger<WorldService>());
     }
 
@@ -1308,7 +1310,7 @@ public class WorldTopologyTests
         // Set up a region with a session resolver that captures packets.
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         var player = MakePlayer();
         var creature = MakeCreature();
@@ -1368,7 +1370,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         var player = MakePlayer();
         var creature = MakeCreature();
@@ -1409,7 +1411,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true; // Pre-activate
@@ -1435,7 +1437,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStoreWithEquipment();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true;
@@ -1467,7 +1469,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true;
@@ -1491,7 +1493,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStoreWithEquipment();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true;
@@ -1550,7 +1552,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStoreWithEquipment();
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
 
         // Add creature first (before player)
         var creature = MakeCreature();

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data;
 using WorldServerV2.Services;
+using WorldServerV2.Telemetry;
 using WorldServerV2.World.Spawning;
 
 namespace WorldServerV2.World.Spatial;
@@ -26,6 +27,7 @@ public sealed class RegionManager : IDisposable
     private readonly IEntityFactory _entityFactory;
     private readonly IGameDataStore _gameData;
     private readonly ISessionResolver _sessionResolver;
+    private readonly WorldServerMetrics _metrics;
     private readonly bool _autoStart;
 
     public RegionManager(
@@ -33,12 +35,14 @@ public sealed class RegionManager : IDisposable
         IEntityFactory entityFactory,
         IGameDataStore gameData,
         ISessionResolver sessionResolver,
+        WorldServerMetrics metrics,
         bool autoStart = true)
     {
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _entityFactory = entityFactory ?? throw new ArgumentNullException(nameof(entityFactory));
         _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         _sessionResolver = sessionResolver ?? throw new ArgumentNullException(nameof(sessionResolver));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _autoStart = autoStart;
     }
 
@@ -63,7 +67,7 @@ public sealed class RegionManager : IDisposable
     {
         return _regions.GetOrAdd(regionId, id =>
         {
-            var region = new Region(id, _loggerFactory.CreateLogger<Region>(), _entityFactory, _gameData, _sessionResolver);
+            var region = new Region(id, _loggerFactory.CreateLogger<Region>(), _entityFactory, _gameData, _sessionResolver, _metrics);
             if (_autoStart)
                 region.Start();
             return region;
