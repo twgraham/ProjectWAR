@@ -10,6 +10,7 @@ using WorldServerV2.Config;
 using WorldServerV2.Data;
 using WorldServerV2.Network;
 using WorldServerV2.Services;
+using WorldServerV2.Telemetry;
 using WorldServerV2.World;
 
 try
@@ -74,6 +75,8 @@ try
             };
             
             s.AddCharacterData(characterPostgresConfig.ToString());
+
+            s.AddWorldServerTelemetry(ctx.Configuration);
 
             s.AddWorldTopology();
 

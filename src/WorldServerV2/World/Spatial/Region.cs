@@ -7,6 +7,7 @@ using WorldServerV2.Data.Domain;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
+using WorldServerV2.Telemetry;
 using WorldServerV2.World.Components;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Spawning;
@@ -50,19 +51,21 @@ public sealed class Region : IDisposable
     private readonly IGameDataStore _gameData;
     private readonly ISessionResolver _sessionResolver;
     private readonly RespawnScheduler _respawnScheduler = new();
+    private readonly WorldServerMetrics _metrics;
 
     private Thread? _thread;
     private volatile bool _running;
     private int _startGuard; // 0 = not started, 1 = started; CAS-protected
 
     /// <summary>Creates a new region with the given identifier.</summary>
-    public Region(ushort regionId, ILogger logger, IEntityFactory entityFactory, IGameDataStore gameData, ISessionResolver sessionResolver)
+    public Region(ushort regionId, ILogger logger, IEntityFactory entityFactory, IGameDataStore gameData, ISessionResolver sessionResolver, WorldServerMetrics metrics)
     {
         RegionId = regionId;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _entityFactory = entityFactory ?? throw new ArgumentNullException(nameof(entityFactory));
         _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         _sessionResolver = sessionResolver ?? throw new ArgumentNullException(nameof(sessionResolver));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
 
         _commands = Channel.CreateUnbounded<RegionCommand>(
             new UnboundedChannelOptions { SingleReader = true });
@@ -316,6 +319,8 @@ public sealed class Region : IDisposable
     {
         _logger.LogInformation("Region {RegionId} tick thread started", RegionId);
 
+        var tags = new TagList { { "region_id", RegionId } };
+
         while (_running)
         {
             var ticks = Stopwatch.GetTimestamp();
@@ -323,6 +328,8 @@ public sealed class Region : IDisposable
             Tick(ticksMs);
 
             var elapsed = Stopwatch.GetElapsedTime(ticks);
+            _metrics.RecordTick(elapsed, TickInterval, tags);
+
             var remaining = TickInterval - elapsed;
             if (remaining > TimeSpan.Zero)
                 Thread.Sleep(remaining);

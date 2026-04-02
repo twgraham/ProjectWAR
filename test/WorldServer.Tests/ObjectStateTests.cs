@@ -10,6 +10,7 @@ using WorldServerV2.Data.Models;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
+using WorldServerV2.Telemetry;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Items;
 using WorldServerV2.World.Spatial;
@@ -519,6 +520,7 @@ public class ObjectStateTests
         NullLoggerFactory.Instance.CreateLogger<Region>();
 
     private static readonly IEntityFactory StubFactory = new StubEntityFactory();
+    private static readonly WorldServerMetrics Metrics = new();
 
     private static WorldPosition CenterPos(int offsetX = 0, int offsetY = 0)
         => new(1, 5 * 4096 + offsetX, 5 * 4096 + offsetY, 0, 0, TestZoneId);
@@ -558,7 +560,7 @@ public class ObjectStateTests
     {
         var resolver = new RecordingSessionResolver();
         var data = new StubGameDataStoreWithZone(TestZoneId);
-        var region = new Region(1, Logger, StubFactory, data, resolver);
+        var region = new Region(1, Logger, StubFactory, data, resolver, Metrics);
         return (region, resolver, data);
     }
 
