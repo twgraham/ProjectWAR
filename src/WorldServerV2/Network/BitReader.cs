@@ -1,3 +1,4 @@
+using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -36,6 +37,8 @@ public ref struct BitReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadBit()
     {
+        if (BitsRemaining < 1)
+            throw new InvalidDataException($"BitReader: attempted to read 1 bit but only {BitsRemaining} bits remain.");
         int byteIndex = _bitPosition >> 3;       // _bitPosition / 8
         int bitIndex = _bitPosition & 7;          // _bitPosition % 8
         _bitPosition++;
@@ -48,6 +51,10 @@ public ref struct BitReader
     /// </summary>
     public uint ReadBits(int count)
     {
+        if (count < 0 || count > 32)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "count must be between 0 and 32.");
+        if (BitsRemaining < count)
+            throw new InvalidDataException($"BitReader: attempted to read {count} bits but only {BitsRemaining} bits remain.");
         uint value = 0;
         for (int i = 0; i < count; i++)
         {
@@ -105,6 +112,10 @@ public ref struct BitReader
     /// <summary>Skips <paramref name="count"/> bits without reading them.</summary>
     public void Skip(int count)
     {
+        if (count < 0)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "count must be non-negative.");
+        if (BitsRemaining < count)
+            throw new InvalidDataException($"BitReader: attempted to skip {count} bits but only {BitsRemaining} bits remain.");
         _bitPosition += count;
     }
 
