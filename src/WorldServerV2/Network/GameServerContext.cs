@@ -43,6 +43,7 @@ namespace WorldServerV2.Network;
     typeof(PlayerInitCompleteResponse),
     typeof(PlayerInittedResponse),
     typeof(PlayerQuitResponse),
+    typeof(PlayerStateRelayResponse),
     typeof(PlayerStateRequest),
     typeof(PlayerStatsResponse),
     typeof(RequestCharacterRequest),
