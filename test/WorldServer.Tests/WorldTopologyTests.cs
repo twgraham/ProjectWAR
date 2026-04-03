@@ -1137,7 +1137,7 @@ public class WorldTopologyTests
     private static WorldService MakeWorldService()
     {
         var regionManager = new RegionManager(NullLoggerFactory.Instance, StubFactory, StubData, StubResolver, Metrics, autoStart: false);
-        return new WorldService(regionManager, NullLoggerFactory.Instance.CreateLogger<WorldService>());
+        return new WorldService(regionManager, new StubSessionResolver(), NullLoggerFactory.Instance.CreateLogger<WorldService>());
     }
 
     [Fact]
