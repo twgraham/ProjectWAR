@@ -131,6 +131,6 @@ public readonly struct PlayerStateMoveDestination
     /// <summary>Click-to-move destination Z (16-bit signed).</summary>
     public required int TargetZ { get; init; }
 
-    /// <summary>Target entity OID (9-bit, XOR-obfuscated with 0x7EDD by client).</summary>
+    /// <summary>Target entity OID (9-bit real value as carried in the packet bitstream).</summary>
     public required ushort TargetOid { get; init; }
 }

@@ -62,10 +62,11 @@ public static class PlayerStateRequestExtensions
         /// Returns <c>null</c> if <see cref="PlayerStateCommon.HasPosition"/> is
         /// <c>false</c> (heartbeat packets — use <see cref="DecodeCommon"/> instead).
         /// <para>
-        /// When the position data indicates a click-to-move destination, this method
-        /// still returns a <see cref="PlayerStatePosition"/> but the coordinates
-        /// represent the move destination, not the player's current zone-local position.
-        /// Use <see cref="DecodeMoveDestination"/> if you need the typed destination model.
+        /// Returns <c>null</c> for click-to-move packets as well. When
+        /// the position data indicates a move destination, the packet does not contain
+        /// the player's zone-local position fields required to build a
+        /// <see cref="PlayerStatePosition"/>. Use <see cref="DecodeMoveDestination"/>
+        /// if you need the typed destination model.
         /// </para>
         /// </summary>
         public PlayerStatePosition? DecodePosition()

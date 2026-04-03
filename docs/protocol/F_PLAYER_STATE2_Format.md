@@ -75,8 +75,8 @@ observed client behavior — it is always 0.
 
 This is an extremely narrow edge case. When it occurs, the packet contains movement-state
 flags (speed, direction, mode, animation) but **no coordinate data**, yielding a 58-bit
-(8-byte) payload. The current server DTO requires a minimum of 17 bytes and **cannot
-parse this short form**.
+(8-byte) payload. The current server implementation preserves this short form in
+`RawBytes`, and `DecodeCommon()` supports `HasPosition = 0` heartbeat packets.
 
 ---
 
@@ -109,7 +109,7 @@ which flags must be set for the field to be present. An em-dash (—) means alwa
 | 20 | **Target X** | 16 | WriteSigned | Position ∧ Dest | Click-to-move destination X. Source: `entity+0x2FC` (float → int truncation). |
 | 21 | **Target Y** | 16 | WriteSigned | Position ∧ Dest | Click-to-move destination Y. Source: `entity+0x300` (float → int truncation). |
 | 22 | **Target Z** | 16 | WriteSigned | Position ∧ Dest | Click-to-move destination Z. Source: `entity+0x304` (float → int truncation). |
-| 23 | **Target OID** | 9 | WriteBits | Position ∧ Dest | Entity OID of the click-to-move target. XOR-obfuscated with `0x7EDD` before transmission (from `target+0x10A`). |
+| 23 | **Target OID** | 9 | WriteBits | Position ∧ Dest | Entity OID of the click-to-move target. Source value observed at `target+0x10A` is XOR-masked with `0x7EDD` in client memory, but the bitstream writes the de-obfuscated/plain 9-bit OID; the server should read this field as-is and must not XOR-decode it. |
 | 24 | **Combat Data 1** | 1 | WriteBit | Combat ∧ ¬Alt | From the combat state struct: `[entity+0x240]+0x18`. Ability/combat state flag. |
 | 25 | **Combat Data 2** | 1 | WriteBit | Combat ∧ ¬Alt | From the combat state struct: `[entity+0x240]+0x50`. |
 | 26 | **Combat Data 3** | 1 | WriteBit | Combat ∧ ¬Alt | From the combat state struct: `[entity+0x240]+0x34`. |

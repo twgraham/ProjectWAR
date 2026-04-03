@@ -64,18 +64,14 @@ public ref struct BitReader
     /// Reads a ranged value encoded as <c>value − min</c> in the minimum number of bits
     /// needed to represent the range <c>[min, max]</c>.
     /// <para>
-    /// The bit count is the smallest <c>n</c> where <c>2^n &gt; |max − min| + 1</c>,
-    /// matching the client's <c>WriteRanged</c> (sub_4332D4).
+    /// The bit count is computed by <see cref="BitsForRange"/> to match the client's
+    /// <c>WriteRanged</c> encoding (sub_4332D4).
     /// </para>
     /// </summary>
     public int ReadRanged(int min, int max)
     {
         int range = Math.Abs(max - min) + 1;
         int bitCount = BitsForRange(range);
-
-        if (bitCount == 0)
-            return min;
-
         return (int)ReadBits(bitCount) + min;
     }
 
