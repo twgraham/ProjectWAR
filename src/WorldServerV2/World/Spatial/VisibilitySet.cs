@@ -26,23 +26,54 @@ namespace WorldServerV2.World.Spatial;
 public sealed class VisibilitySet
 {
     private readonly object _lock = new();
-    private readonly HashSet<WorldEntity> _entities = new();
-    private readonly HashSet<PlayerEntity> _players = new();
+    private readonly HashSet<WorldEntity> _entities = [];
+    private readonly HashSet<PlayerEntity> _players = [];
 
     /// <summary>All entities currently within visibility range.</summary>
-    public IReadOnlyCollection<WorldEntity> Entities => _entities;
+    public IReadOnlyCollection<WorldEntity> Entities
+    {
+        get
+        {
+            lock (_lock)
+                return _entities.AsReadOnly();
+        }
+    }
 
     /// <summary>Players currently within visibility range (subset of <see cref="Entities"/>).</summary>
-    public IReadOnlyCollection<PlayerEntity> Players => _players;
+    public IReadOnlyCollection<PlayerEntity> Players
+    {
+        get {
+            lock (_lock)
+                return _players.AsReadOnly();
+        }
+    }
 
     /// <summary>Total number of entities in the visibility set.</summary>
-    public int Count => _entities.Count;
+    public int Count
+    {
+        get
+        {
+            lock (_lock)
+                return _entities.Count;
+        }
+    }
 
     /// <summary>Number of players in the visibility set.</summary>
-    public int PlayerCount => _players.Count;
+    public int PlayerCount
+    {
+        get
+        {
+            lock (_lock)
+                return _players.Count;
+        }
+    }
 
     /// <summary>Returns <c>true</c> if <paramref name="entity"/> is in the visibility set.</summary>
-    public bool Contains(WorldEntity entity) => _entities.Contains(entity);
+    public bool Contains(WorldEntity entity)
+    {
+        lock (_lock)
+            return _entities.Contains(entity);
+    }
 
     /// <summary>
     /// Adds an entity to the visibility set. If the entity is a <see cref="PlayerEntity"/>,
