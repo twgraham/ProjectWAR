@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using WorldServerV2.Network;
+using WorldServerV2.Network.Dtos;
 using WorldServerV2.World.Entities;
 using WorldServerV2.World.Spatial;
 
@@ -26,11 +28,16 @@ namespace WorldServerV2.Services;
 public sealed class WorldService
 {
     private readonly RegionManager _regionManager;
+    private readonly ISessionResolver _sessionResolver;
     private readonly ILogger<WorldService> _logger;
 
-    public WorldService(RegionManager regionManager, ILogger<WorldService> logger)
+    public WorldService(
+        RegionManager regionManager,
+        ISessionResolver sessionResolver,
+        ILogger<WorldService> logger)
     {
         _regionManager = regionManager ?? throw new ArgumentNullException(nameof(regionManager));
+        _sessionResolver = sessionResolver ?? throw new ArgumentNullException(nameof(sessionResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -131,5 +138,65 @@ public sealed class WorldService
     {
         ArgumentNullException.ThrowIfNull(entity);
         return _regionManager.Get(entity.Position.RegionId);
+    }
+
+    /// <summary>
+    /// Updates a player's position and immediately broadcasts the relay packet to nearby
+    /// players on the <b>calling thread</b> (handler I/O thread). The position move is
+    /// enqueued as a region command for the tick thread; the relay is sent directly via
+    /// a lock-guarded snapshot of the visibility set — eliminating the tick-interval
+    /// latency that a command-based relay would incur.
+    /// <para>
+    /// Typical caller: the <c>F_PLAYER_STATE2</c> movement handler.
+    /// </para>
+    /// </summary>
+    /// <param name="player">The player whose position is being updated.</param>
+    /// <param name="newPosition">The player's new region-wide position.</param>
+    /// <param name="relay">The pre-built relay response to broadcast to nearby players.</param>
+    public void UpdatePlayerState(PlayerEntity player, WorldPosition newPosition, PlayerStateRelayResponse relay)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(relay);
+
+        // Broadcast immediately on the caller (handler) thread via a pooled snapshot.
+        // The lock inside SnapshotPlayers covers only the array copy — all send work
+        // happens outside the lock and off the region tick thread.
+        BroadcastPlayerStateRelay(player, relay);
+
+        // Enqueue the authoritative position update for the region tick thread.
+        MoveEntity(player, newPosition);
+    }
+
+    /// <summary>
+    /// Broadcasts the relay packet to nearby players without updating position.
+    /// Used for heartbeat packets and click-to-move where the server doesn't need
+    /// to track a position change but still needs to relay the state to neighbors.
+    /// </summary>
+    public void RelayPlayerState(PlayerEntity player, PlayerStateRelayResponse relay)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(relay);
+
+        BroadcastPlayerStateRelay(player, relay);
+    }
+
+    /// <summary>
+    /// Sends a <see cref="PlayerStateRelayResponse"/> to every active player in the
+    /// source player's visibility set. Executes entirely on the calling thread.
+    /// </summary>
+    private void BroadcastPlayerStateRelay(PlayerEntity source, PlayerStateRelayResponse relay)
+    {
+        using var snapshot = source.Visibility.SnapshotPlayers();
+        if (snapshot.Count == 0)
+            return;
+
+        foreach (var player in snapshot.Span)
+        {
+            if (!player.IsActive)
+                continue;
+
+            var session = _sessionResolver.GetSession(player);
+            session?.SendPlayerStateRelay(relay);
+        }
     }
 }

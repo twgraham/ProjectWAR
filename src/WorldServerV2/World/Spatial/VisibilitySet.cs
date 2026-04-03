@@ -1,3 +1,4 @@
+using System.Buffers;
 using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.World.Spatial;
@@ -16,9 +17,15 @@ namespace WorldServerV2.World.Spatial;
 /// <see cref="Players"/> set avoids <c>is PlayerEntity</c> type checks on the hot path
 /// (e.g. "send combat packet to all nearby players").
 /// </para>
+/// <para>
+/// Mutations and player snapshots are guarded by <see cref="_lock"/> to allow safe
+/// concurrent reads from handler threads (e.g. movement relay) while the region tick
+/// thread mutates the sets.
+/// </para>
 /// </summary>
 public sealed class VisibilitySet
 {
+    private readonly object _lock = new();
     private readonly HashSet<WorldEntity> _entities = new();
     private readonly HashSet<PlayerEntity> _players = new();
 
@@ -44,13 +51,16 @@ public sealed class VisibilitySet
     /// <returns><c>true</c> if the entity was added; <c>false</c> if already present.</returns>
     internal bool Add(WorldEntity entity)
     {
-        if (!_entities.Add(entity))
-            return false;
+        lock (_lock)
+        {
+            if (!_entities.Add(entity))
+                return false;
 
-        if (entity is PlayerEntity player)
-            _players.Add(player);
+            if (entity is PlayerEntity player)
+                _players.Add(player);
 
-        return true;
+            return true;
+        }
     }
 
     /// <summary>
@@ -59,19 +69,81 @@ public sealed class VisibilitySet
     /// <returns><c>true</c> if the entity was removed; <c>false</c> if not present.</returns>
     internal bool Remove(WorldEntity entity)
     {
-        if (!_entities.Remove(entity))
-            return false;
+        lock (_lock)
+        {
+            if (!_entities.Remove(entity))
+                return false;
 
-        if (entity is PlayerEntity player)
-            _players.Remove(player);
+            if (entity is PlayerEntity player)
+                _players.Remove(player);
 
-        return true;
+            return true;
+        }
     }
 
     /// <summary>Removes all entities from both sets.</summary>
     internal void Clear()
     {
-        _entities.Clear();
-        _players.Clear();
+        lock (_lock)
+        {
+            _entities.Clear();
+            _players.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Creates a point-in-time snapshot of the <see cref="Players"/> set, backed by an
+    /// <see cref="ArrayPool{T}"/>-rented array. The lock is held only for the duration
+    /// of the copy — all downstream work (session resolution, packet sends) happens
+    /// outside the lock.
+    /// <para>
+    /// Callers <b>must</b> dispose the returned <see cref="PlayerSnapshot"/> to return
+    /// the rented array to the pool.
+    /// </para>
+    /// </summary>
+    public PlayerSnapshot SnapshotPlayers()
+    {
+        lock (_lock)
+        {
+            var count = _players.Count;
+            if (count == 0)
+                return default;
+
+            var array = ArrayPool<PlayerEntity>.Shared.Rent(count);
+            _players.CopyTo(array);
+            return new PlayerSnapshot(array, count);
+        }
+    }
+}
+
+/// <summary>
+/// A disposable, pooled snapshot of the players in a <see cref="VisibilitySet"/>.
+/// Use <see cref="Span"/> to iterate the players, then dispose to return the
+/// backing array to <see cref="ArrayPool{T}"/>.
+/// </summary>
+public struct PlayerSnapshot : IDisposable
+{
+    private PlayerEntity[]? _array;
+
+    /// <summary>Number of valid entries in the snapshot.</summary>
+    public readonly int Count;
+
+    internal PlayerSnapshot(PlayerEntity[] array, int count)
+    {
+        _array = array;
+        Count = count;
+    }
+
+    /// <summary>The snapshot entries. Valid indices are <c>[0, Count)</c>.</summary>
+    public readonly ReadOnlySpan<PlayerEntity> Span => _array.AsSpan(0, Count);
+
+    /// <summary>Returns the rented array to the pool, clearing references to avoid GC roots.</summary>
+    public void Dispose()
+    {
+        if (_array is not null)
+        {
+            ArrayPool<PlayerEntity>.Shared.Return(_array, clearArray: true);
+            _array = null;
+        }
     }
 }

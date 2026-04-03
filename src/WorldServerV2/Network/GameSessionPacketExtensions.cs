@@ -118,4 +118,10 @@ public static class GameSessionPacketExtensions
     /// <summary>Sends <c>S_WORLD_SENT</c> (0x83) — final render signal.</summary>
     public static void SendWorldSent(this GameSession session, WorldSentResponse response)
         => session.Send((byte)Opcodes.S_WORLD_SENT, response);
+
+    // ── Movement Relay ──────────────────────────────────────────────────
+
+    /// <summary>Sends <c>F_PLAYER_STATE2</c> (0x62) — relayed movement state of another player.</summary>
+    public static void SendPlayerStateRelay(this GameSession session, PlayerStateRelayResponse response)
+        => session.Send((byte)Opcodes.F_PLAYER_STATE2, response);
 }
