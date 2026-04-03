@@ -215,7 +215,7 @@ public class PlayerStateRequestTests
     [Fact]
     public void DecodeCommon_TruncatedPayload_ThrowsInvalidDataException()
     {
-        // 1 byte is far too short for all common fields (minimum ~7 bytes needed)
+        // 1 byte provides only 8 bits; ReadCommon needs at least 47 bits before the first conditional branch
         var req = new PlayerStateRequest { Data = [0xFF] };
         Should.Throw<InvalidDataException>(() => req.DecodeCommon());
     }
@@ -386,6 +386,9 @@ public class PlayerStateRequestTests
         {
             if (range <= 1) return 1;
             int bits = 32 - BitOperations.LeadingZeroCount((uint)(range - 1));
+            // The WAR client's WriteRanged uses strict ">": 2^n > range.
+            // For exact power-of-2 ranges (1 << bits) == range fails strict ">",
+            // so one extra bit is used — intentionally mirroring BitReader.BitsForRange.
             if ((1 << bits) <= range)
                 bits++;
             return bits;
