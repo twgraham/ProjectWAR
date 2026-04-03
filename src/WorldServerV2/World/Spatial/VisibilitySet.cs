@@ -166,15 +166,22 @@ public struct PlayerSnapshot : IDisposable
     }
 
     /// <summary>The snapshot entries. Valid indices are <c>[0, Count)</c>.</summary>
-    public readonly ReadOnlySpan<PlayerEntity> Span => _array.AsSpan(0, Count);
+    public readonly ReadOnlySpan<PlayerEntity> Span
+    {
+        get
+        {
+            var array = _array;
+            return array is null ? default : array.AsSpan(0, Count);
+        }
+    }
 
     /// <summary>Returns the rented array to the pool, clearing references to avoid GC roots.</summary>
     public void Dispose()
     {
-        if (_array is not null)
-        {
-            ArrayPool<PlayerEntity>.Shared.Return(_array, clearArray: true);
-            _array = null;
-        }
+        if (_array is null)
+            return;
+        
+        _array.AsSpan(0, Count).Clear();
+        ArrayPool<PlayerEntity>.Shared.Return(_array, clearArray: true);
     }
 }
