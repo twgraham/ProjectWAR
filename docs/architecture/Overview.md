@@ -20,6 +20,7 @@
 | [Player Login Flow](./Player_Login_Flow.md) | Init pipeline, protocol handshake, packet sequence, threading model |
 | [System 4: Combat & Ability Engine](./System_04_Combat.md) | Stats, damage pipeline, buffs, abilities, career resources |
 | [System 13: NPC & Static Object Spawning](./System_13_Spawning.md) | Creature/GO lifecycle, EntityFactory, RespawnScheduler, create-packet DTOs |
+| [Architecture Guardrails](./Architecture_Guardrails.md) | Solution structure, threading rules, data flow patterns, project split, anti-patterns |
 
 ---
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Core.GameWorld.Telemetry;
 
 namespace WorldServerV2.Telemetry;
 
@@ -11,7 +12,7 @@ namespace WorldServerV2.Telemetry;
 /// place and prevents accidental duplication.
 /// </para>
 /// </summary>
-public sealed class WorldServerMetrics : IDisposable
+public sealed class WorldServerMetrics : IWorldServerMetrics, IDisposable
 {
     /// <summary>Name of the application meter — used as the meter name in the OTel pipeline.</summary>
     public const string MeterName = "WorldServer";

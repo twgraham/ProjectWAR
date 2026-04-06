@@ -23,6 +23,7 @@ namespace WorldServerV2.Network;
     typeof(CreateStaticResponse),
     typeof(DeleteCharacterRequest),
     typeof(DeleteNameRequest),
+    typeof(DoAbilityRequest),
     typeof(DumpArenasLargeRequest),
     typeof(EncryptKeyRequest),
     typeof(EncryptKeyResponse),

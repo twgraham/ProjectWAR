@@ -1,4 +1,6 @@
 ﻿using System.Net;
+using Core.GameWorld;
+using Core.GameWorld.Events;
 using Core.Infrastructure.Network;
 using Core.Infrastructure.Network.Serialization;
 using Grpc.Net.Client;
@@ -7,11 +9,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
 using WorldServerV2.Config;
-using WorldServerV2.Data;
 using WorldServerV2.Network;
+using WorldServerV2.RegionHandlers;
 using WorldServerV2.Services;
 using WorldServerV2.Telemetry;
-using WorldServerV2.World;
 
 try
 {
@@ -78,12 +79,18 @@ try
 
             s.AddWorldServerTelemetry(ctx.Configuration);
 
-            s.AddWorldTopology();
+            s.AddWorldTopology()
+                .OnEvent<EntityBecameVisible, VisibilityHandler>()
+                .OnEvent<EntityStateChanged, VisibilityHandler>();
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
                 .WithPacketSerializer<BinaryPacketSerializer>(ServiceLifetime.Scoped)
                 .AddDefaultPacketHandlers();
+
+            s.AddSingleton<PlayerService>();
+            s.AddSingleton<WorldService>();
+            s.AddHostedService<WorldHostedService>();
         });
 
     var host = builder.Build();

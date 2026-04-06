@@ -1,5 +1,6 @@
-using WorldServerV2.Data.Domain;
-using WorldServerV2.Data.Entities;
+using Core.Domain.Entities;
+using Core.Domain.ValueObjects;
+using Core.GameWorld.DataStore.Models;
 
 namespace WorldServerV2.Data.Models;
 

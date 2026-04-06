@@ -1,9 +1,8 @@
 using System.Collections.Frozen;
+using Core.GameWorld.Combat.Abilities;
+using Core.GameWorld.Items;
+using Core.GameWorld.Stats;
 using Core.Infrastructure.Network.Serialization.Attributes;
-using WorldServerV2.Data.Domain;
-using WorldServerV2.World.Combat.Abilities;
-using WorldServerV2.World.Items;
-using WorldServerV2.World.Stats;
 
 namespace WorldServerV2.Network.Dtos;
 

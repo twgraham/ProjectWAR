@@ -10,9 +10,12 @@
   <Folder Name="/src/">
     <Project Path="src/AccountCacher/AccountCacher.csproj" />
     <Project Path="src/Common/Common.csproj" />
+    <Project Path="src/Core.Domain/Core.Domain.csproj" />
+    <Project Path="src/Core.GameWorld/Core.GameWorld.csproj" />
     <Project Path="src/Core.Infrastructure.Cryptography/Core.Infrastructure.Cryptography.csproj" />
     <Project Path="src/Core.Infrastructure.Network.RpcSourceGenerators/Core.Infrastructure.Network.RpcSourceGenerators.csproj" />
     <Project Path="src/Core.Infrastructure.Network/Core.Infrastructure.Network.csproj" />
+    <Project Path="src/Core.Session/Core.Session.csproj" />
     <Project Path="src/FrameWork/FrameWork.csproj" />
     <Project Path="src/Launcher/Launcher.csproj" />
     <Project Path="src/LauncherServer.Dtos/LauncherServer.Dtos.csproj" />
@@ -27,6 +30,7 @@
     <Project Path="test/Core.Infrastructure.Network.RpcSourceGenerator.Tests/Core.Infrastructure.Network.RpcSourceGenerator.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.Tests/Core.Infrastructure.Network.Tests.csproj" />
     <Project Path="test/LobbyServer.Tests/LobbyServer.Tests.csproj" />
-    <Project Path="test/WorldServer.Tests/WorldServer.Tests.csproj" />
+    <Project Path="test/Core.GameWorld.Tests/Core.GameWorld.Tests.csproj" />
+    <Project Path="test/WorldServerV2.Tests/WorldServerV2.Tests.csproj" />
   </Folder>
 </Solution>

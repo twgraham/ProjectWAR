@@ -1,9 +1,8 @@
+using Core.GameWorld.Spatial;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
-using WorldServerV2.World.Entities;
-using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Network.Handlers;
 
@@ -53,7 +52,7 @@ public class CharacterHandler : IPacketHandler
         }
 
         // Transition the session to Playing — the player is now fully interactive.
-        context.Session.State = ClientState.Playing;
+        context.Session.MoveToPlaying();
 
         // Enqueue the activation on the region thread. This sets IsActive = true
         // and forces a visibility rescan, causing all nearby entities to be sent

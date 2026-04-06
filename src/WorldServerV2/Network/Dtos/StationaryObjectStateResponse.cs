@@ -1,6 +1,6 @@
+using Core.Domain.Entities;
+using Core.GameWorld.Entities;
 using Core.Infrastructure.Network.Serialization.Attributes;
-using WorldServerV2.Data.Entities;
-using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.Network.Dtos;
 

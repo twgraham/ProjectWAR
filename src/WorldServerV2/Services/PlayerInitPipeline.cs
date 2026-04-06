@@ -1,13 +1,15 @@
+using Core.Domain.Entities;
+using Core.GameWorld.Abilities;
+using Core.GameWorld.Combat.Abilities;
+using Core.GameWorld.DataStore;
+using Core.GameWorld.Entities;
+using Core.GameWorld.Items;
+using Core.GameWorld.Stats;
+using Core.Session;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data;
-using WorldServerV2.Data.Domain;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
-using WorldServerV2.World.Abilities;
-using WorldServerV2.World.Combat.Abilities;
-using WorldServerV2.World.Entities;
-using WorldServerV2.World.Items;
-using WorldServerV2.World.Stats;
 
 namespace WorldServerV2.Services;
 
@@ -302,7 +304,7 @@ public sealed class PlayerInitPipeline
     /// <summary>
     /// Builds the tactic slots array from character value (non-null, non-zero entries).
     /// </summary>
-    internal static ushort[] BuildTacticsList(Data.Entities.CharacterValue charValue)
+    internal static ushort[] BuildTacticsList(CharacterValue charValue)
     {
         var tactics = new List<ushort>(4);
         if (charValue.Tactic1 is > 0) tactics.Add(charValue.Tactic1.Value);
@@ -515,7 +517,7 @@ public sealed class PlayerInitPipeline
 
     /// <summary>
     /// Populates the player's <see cref="Inventory"/> from the character's DB items.
-    /// Sets expansion tiers and resolves each <see cref="Data.Entities.CharacterItem"/>
+    /// Sets expansion tiers and resolves each <see cref="CharacterItem"/>
     /// against the <see cref="IGameDataStore"/> to create live <see cref="Item"/> instances.
     /// </summary>
     private void PopulateInventory(PlayerEntity player)

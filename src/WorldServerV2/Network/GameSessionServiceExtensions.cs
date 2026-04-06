@@ -1,3 +1,5 @@
+using Core.GameWorld.Entities;
+using Core.Session;
 using Microsoft.Extensions.DependencyInjection;
 using WorldServerV2.Services;
 
@@ -23,7 +25,7 @@ public static class GameSessionServiceExtensions
     {
         services.AddSingleton<SessionRegistry>();
         services.AddSingleton<PlayerService>();
-        services.AddSingleton<ISessionResolver>(sp => sp.GetRequiredService<PlayerService>());
+        services.AddSingleton<ISessionResolver<PlayerEntity>>(sp => sp.GetRequiredService<PlayerService>());
         services.AddSingleton<PlayerInitPipeline>();
         services.AddHostedService<SessionLifecycleService>();
 
