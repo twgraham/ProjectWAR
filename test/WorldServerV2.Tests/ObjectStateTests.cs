@@ -5,6 +5,7 @@ using Core.Domain.ValueObjects;
 using Core.GameWorld.DataStore;
 using Core.GameWorld.DataStore.Models;
 using Core.GameWorld.Entities;
+using Core.GameWorld.Events;
 using Core.GameWorld.Items;
 using Core.GameWorld.Spatial;
 using Core.GameWorld.Spawning;
@@ -16,6 +17,7 @@ using WorldServerV2.Data;
 using WorldServerV2.Data.Models;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
+using WorldServerV2.RegionHandlers;
 using WorldServerV2.Services;
 using WorldServerV2.Telemetry;
 using ItemData = Core.GameWorld.DataStore.Models.ItemData;
@@ -532,6 +534,21 @@ public class ObjectStateTests
         public void Dispatch<TEvent>(TEvent @event) { }
     }
 
+    private static IRegionEventDispatcher MakeDispatcher(ISessionResolver<PlayerEntity> resolver)
+        => new DelegatingDispatcher(new VisibilityHandler(resolver));
+
+    private sealed class DelegatingDispatcher(VisibilityHandler handler) : IRegionEventDispatcher
+    {
+        public void Dispatch<TEvent>(TEvent @event)
+        {
+            switch (@event)
+            {
+                case EntityBecameVisible v: handler.Handle(v); break;
+                case EntityStateChanged s: handler.Handle(s); break;
+            }
+        }
+    }
+
     private static WorldPosition CenterPos(int offsetX = 0, int offsetY = 0)
         => new(1, 5 * 4096 + offsetX, 5 * 4096 + offsetY, 0, 0, TestZoneId);
 
@@ -570,7 +587,7 @@ public class ObjectStateTests
     {
         var resolver = new RecordingSessionResolver();
         var data = new StubGameDataStoreWithZone(TestZoneId);
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
         return (region, resolver, data);
     }
 

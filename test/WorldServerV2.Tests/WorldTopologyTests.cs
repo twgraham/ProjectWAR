@@ -5,6 +5,7 @@ using Core.Domain.ValueObjects;
 using Core.GameWorld.Components;
 using Core.GameWorld.DataStore;
 using Core.GameWorld.DataStore.Models;
+using Core.GameWorld.Events;
 using Core.GameWorld.Entities;
 using Core.GameWorld.Items;
 using Core.GameWorld.Spatial;
@@ -19,6 +20,7 @@ using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
 using DomainItemData = Core.GameWorld.DataStore.Models.ItemData;
+using WorldServerV2.RegionHandlers;
 using WorldServerV2.Telemetry;
 
 namespace WorldServerV2.Tests;
@@ -44,6 +46,21 @@ public class WorldTopologyTests
     private sealed class StubEventDispatcher : IRegionEventDispatcher
     {
         public void Dispatch<TEvent>(TEvent @event) { }
+    }
+
+    private static IRegionEventDispatcher MakeDispatcher(ISessionResolver<PlayerEntity> resolver)
+        => new DelegatingDispatcher(new VisibilityHandler(resolver));
+
+    private sealed class DelegatingDispatcher(VisibilityHandler handler) : IRegionEventDispatcher
+    {
+        public void Dispatch<TEvent>(TEvent @event)
+        {
+            switch (@event)
+            {
+                case EntityBecameVisible v: handler.Handle(v); break;
+                case EntityStateChanged s: handler.Handle(s); break;
+            }
+        }
     }
 
     private sealed class StubEntityFactory : IEntityFactory
@@ -1319,7 +1336,7 @@ public class WorldTopologyTests
         // Set up a region with a session resolver that captures packets.
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         var player = MakePlayer();
         var creature = MakeCreature();
@@ -1379,7 +1396,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         var player = MakePlayer();
         var creature = MakeCreature();
@@ -1420,7 +1437,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true; // Pre-activate
@@ -1446,7 +1463,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStoreWithEquipment();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true;
@@ -1478,7 +1495,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStore();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true;
@@ -1502,7 +1519,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStoreWithEquipment();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         var player = MakePlayer();
         player.IsActive = true;
@@ -1561,7 +1578,7 @@ public class WorldTopologyTests
     {
         var resolver = new RecordingSessionResolver();
         var data = MakeTestDataStoreWithEquipment();
-        var region = new Region(1, StubDispatcher, StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
 
         // Add creature first (before player)
         var creature = MakeCreature();
