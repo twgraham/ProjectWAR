@@ -84,8 +84,6 @@ public sealed class PlayerService : ISessionResolver<PlayerEntity>
             _bySessionId[session.Id] = player;
             _byCharacterId[player.CharacterId] = player;
             _sessionByCharId[player.CharacterId] = session;
-
-            session.OnClientStateChanged += HandleUnbindEvent;
         }
 
         _logger.LogDebug(
@@ -166,12 +164,4 @@ public sealed class PlayerService : ISessionResolver<PlayerEntity>
     /// of the dictionary values.
     /// </summary>
     public IEnumerable<PlayerEntity> OnlinePlayers => _byCharacterId.Values;
-    
-    private void HandleUnbindEvent(object? sender, ClientState clientState)
-    {
-        if (clientState != ClientState.Disconnected || sender is not GameSession session)
-            return;
-
-        Unbind(session);
-    }
 }

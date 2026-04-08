@@ -9,7 +9,7 @@ using WorldServerV2.Network.Dtos;
 
 namespace WorldServerV2.RegionHandlers;
 
-public class VisibilityHandler : IRegionEventHandler<EntityBecameVisible>, IRegionEventHandler<EntityStateChanged>
+public class VisibilityHandler : IRegionEventHandler<EntityBecameVisible>, IRegionEventHandler<EntityStateChanged>, IRegionEventHandler<EntityLeftVisibility>
 {
     private readonly ISessionResolver<PlayerEntity> _sessionResolver;
     
@@ -20,29 +20,35 @@ public class VisibilityHandler : IRegionEventHandler<EntityBecameVisible>, IRegi
     
     public void Handle(EntityBecameVisible @event)
     {
+        var session = _sessionResolver.GetSession(@event.Observer);
+        
+        if (session is null)
+            return;
+        
         switch (@event.Entity)
         {
             case CreatureEntity creature:
             {
-                @event.Observer.SendCreateMonster(CreateMonsterResponse.From(creature, @event.Zone));
+                session.SendCreateMonster(CreateMonsterResponse.From(creature, @event.Zone));
                 break;
             }
 
             case GameObjectEntity gameObject:
             {
-                @event.Observer.SendCreateStatic(CreateStaticResponse.From(gameObject, gameObject.Descriptor, @event.Zone));
+                session.SendCreateStatic(CreateStaticResponse.From(gameObject, gameObject.Descriptor, @event.Zone));
                 break;
             }
 
             case PlayerEntity otherPlayer:
             {
-                var session = _sessionResolver.GetSession(otherPlayer);
+                var otherPlayerSession = _sessionResolver.GetSession(otherPlayer);
 
                 // The user has disconnected and the session will be cleaned up. No further processing.
-                if (session == null)
+                if (otherPlayerSession == null)
                     return;
                 
-                @event.Observer.SendCreatePlayer(CreatePlayerResponse.From(session.Id, otherPlayer));
+                session.SendCreatePlayer(CreatePlayerResponse.From(otherPlayerSession.Id, otherPlayer));
+                session.SendEquippedInventory(EquippedInventoryResponse.From(otherPlayer));
                 break;
             }
 
@@ -53,12 +59,12 @@ public class VisibilityHandler : IRegionEventHandler<EntityBecameVisible>, IRegi
         // Generic component follow-ups (e.g. F_PLAYER_INVENTORY for equipment)
         if (@event.Entity.TryGet<EquipmentComponent>() is  { } equipmentComponent)
         {
-            @event.Observer.SendEquippedInventory(EquippedInventoryResponse.From(@event.Entity, equipmentComponent.Items));
+            session.SendEquippedInventory(EquippedInventoryResponse.From(@event.Entity, equipmentComponent.Items));
         }
 
         // Follow the create-packet with a stationary F_OBJECT_STATE so the client has
         // up-to-date position, health, and heading immediately.
-        @event.Observer.SendObjectState(BuildStationaryState(@event.Entity, @event.Zone));
+        session.SendObjectState(BuildStationaryState(@event.Entity, @event.Zone));
     }
     
     /// <summary>
@@ -79,6 +85,13 @@ public class VisibilityHandler : IRegionEventHandler<EntityBecameVisible>, IRegi
 
     public void Handle(EntityStateChanged @event)
     {
-        @event.Observer.SendObjectState(BuildStationaryState(@event.Entity, @event.Zone));
+        var session = _sessionResolver.GetSession(@event.Observer);
+        session?.SendObjectState(BuildStationaryState(@event.Entity, @event.Zone));
+    }
+
+    public void Handle(EntityLeftVisibility @event)
+    {
+        var session = _sessionResolver.GetSession(@event.Observer);
+        session?.SendRemovePlayer(new RemovePlayerResponse { Oid = @event.Entity.ObjectId });
     }
 }

@@ -54,9 +54,9 @@ public sealed class EquippedInventoryResponse
     /// <param name="items">The creature's equipped item definitions.</param>
     public static EquippedInventoryResponse From(
         WorldEntity entity,
-        ImmutableArray<CreatureItem> items)
+        ICollection<CreatureItem> items)
     {
-        var slots = new List<EquippedSlot>(items.Length);
+        var slots = new List<EquippedSlot>(items.Count);
         foreach (var item in items)
         {
             slots.Add(new EquippedSlot
@@ -73,6 +73,28 @@ public sealed class EquippedInventoryResponse
             Oid = entity.ObjectId,
             WeaponStance = 0,
             Slots = slots,
+        };
+    }
+    
+    public static EquippedInventoryResponse From(PlayerEntity entity)
+    {
+        var items = entity.Inventory.GetEquippedItems().ToList();
+        var slots = new List<EquippedSlot>(items.Count);
+        foreach (var item in items)
+        {
+            slots.Add(new EquippedSlot
+            {
+                Flags = 0, // item.EffectId > 0 ? (byte)1 : (byte)0,
+                SlotId = (byte)item.SlotId,
+                ModelId = (ushort)item.ModelId,
+            });
+        }
+
+        return new EquippedInventoryResponse
+        {
+            Oid = entity.ObjectId,
+            WeaponStance = 0,
+            Slots = slots
         };
     }
 }

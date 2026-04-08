@@ -115,6 +115,10 @@ public static class GameSessionPacketExtensions
     public static void SendEquippedInventory(this IGameSession session, EquippedInventoryResponse response)
         => session.Send((byte)Opcodes.F_PLAYER_INVENTORY, response);
 
+    /// <summary>Sends <c>F_REMOVE_PLAYER</c> (0x49) — tells client to destroy a visible entity.</summary>
+    public static void SendRemovePlayer(this IGameSession session, RemovePlayerResponse response)
+        => session.Send((byte)Opcodes.F_REMOVE_PLAYER, response);
+
     /// <summary>Sends <c>F_SET_TIME</c> (0xD6) — in-game clock.</summary>
     public static void SendSetTime(this IGameSession session, SetTimeResponse response)
         => session.Send((byte)Opcodes.F_SET_TIME, response);

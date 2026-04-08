@@ -81,7 +81,8 @@ try
 
             s.AddWorldTopology()
                 .OnEvent<EntityBecameVisible, VisibilityHandler>()
-                .OnEvent<EntityStateChanged, VisibilityHandler>();
+                .OnEvent<EntityStateChanged, VisibilityHandler>()
+                .OnEvent<EntityLeftVisibility, VisibilityHandler>();
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
@@ -98,6 +99,8 @@ try
     // Populate the lightweight character directory before accepting connections
     var characterService = host.Services.GetRequiredService<ICharacterService>();
     await characterService.LoadDirectoryAsync();
+    
+    var ps = host.Services.GetRequiredService<PlayerService>();
 
     await host.RunAsync();
 }

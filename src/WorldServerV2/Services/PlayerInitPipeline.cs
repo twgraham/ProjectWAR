@@ -94,7 +94,7 @@ public sealed class PlayerInitPipeline
         player.Level = charValue.Level;
         player.Realm = character.Realm;
         // Faction mirrors realm for players (1 = Order, 2 = Destruction).
-        player.Faction = character.Realm;
+        player.Faction = (byte)(character.Realm == 1 ? 6 : 8);
 
         // Load career base stats into StatContainer from the game data store.
         var baseStats = _gameDataStore.CareerStats.GetBaseStats(character.CareerLine, charValue.Level);

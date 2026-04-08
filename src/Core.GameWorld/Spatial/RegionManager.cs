@@ -1,9 +1,7 @@
 using System.Collections.Concurrent;
 using Core.GameWorld.DataStore;
-using Core.GameWorld.Entities;
 using Core.GameWorld.Spawning;
 using Core.GameWorld.Telemetry;
-using Core.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Core.GameWorld.Spatial;
@@ -28,7 +26,6 @@ public sealed class RegionManager : IDisposable
     private readonly IRegionEventDispatcher _eventDispatcher;
     private readonly IEntityFactory _entityFactory;
     private readonly IGameDataStore _gameData;
-    private readonly ISessionResolver<PlayerEntity> _sessionResolver;
     private readonly IWorldServerMetrics _metrics;
     private readonly bool _autoStart;
 
@@ -37,7 +34,6 @@ public sealed class RegionManager : IDisposable
         IRegionEventDispatcher eventDispatcher,
         IEntityFactory entityFactory,
         IGameDataStore gameData,
-        ISessionResolver<PlayerEntity> sessionResolver,
         IWorldServerMetrics metrics,
         bool autoStart = true)
     {
@@ -45,7 +41,6 @@ public sealed class RegionManager : IDisposable
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _entityFactory = entityFactory ?? throw new ArgumentNullException(nameof(entityFactory));
         _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
-        _sessionResolver = sessionResolver ?? throw new ArgumentNullException(nameof(sessionResolver));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _autoStart = autoStart;
     }
@@ -71,7 +66,7 @@ public sealed class RegionManager : IDisposable
     {
         return _regions.GetOrAdd(regionId, id =>
         {
-            var region = new Region(id, _eventDispatcher, _entityFactory, _gameData, _sessionResolver, _loggerFactory.CreateLogger<Region>(), _metrics);
+            var region = new Region(id, _eventDispatcher, _entityFactory, _gameData, _loggerFactory.CreateLogger<Region>(), _metrics);
             if (_autoStart)
                 region.Start();
             return region;

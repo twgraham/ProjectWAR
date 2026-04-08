@@ -13,12 +13,8 @@ using Core.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
-using WorldServerV2.Data;
-using WorldServerV2.Data.Models;
-using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.RegionHandlers;
-using WorldServerV2.Services;
 using WorldServerV2.Telemetry;
 using ItemData = Core.GameWorld.DataStore.Models.ItemData;
 
@@ -587,7 +583,7 @@ public class ObjectStateTests
     {
         var resolver = new RecordingSessionResolver();
         var data = new StubGameDataStoreWithZone(TestZoneId);
-        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, resolver, Logger, Metrics);
+        var region = new Region(1, MakeDispatcher(resolver), StubFactory, data, Logger, Metrics);
         return (region, resolver, data);
     }
 

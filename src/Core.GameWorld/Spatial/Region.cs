@@ -7,7 +7,6 @@ using Core.GameWorld.Entities;
 using Core.GameWorld.Events;
 using Core.GameWorld.Spawning;
 using Core.GameWorld.Telemetry;
-using Core.Session;
 using Microsoft.Extensions.Logging;
 using static Core.GameWorld.Spatial.RegionConstants;
 
@@ -48,7 +47,6 @@ public sealed class Region : IDisposable
     private readonly IRegionEventDispatcher _dispatcher;
     private readonly IEntityFactory _entityFactory;
     private readonly IGameDataStore _gameData;
-    private readonly ISessionResolver<PlayerEntity> _sessionResolver;
     private readonly RespawnScheduler _respawnScheduler = new();
     
     private readonly ILogger<Region> _logger;
@@ -64,7 +62,6 @@ public sealed class Region : IDisposable
         IRegionEventDispatcher dispatcher,
         IEntityFactory entityFactory,
         IGameDataStore gameData,
-        ISessionResolver<PlayerEntity> sessionResolver,
         ILogger<Region> logger,
         IWorldServerMetrics metrics)
     {
@@ -72,7 +69,6 @@ public sealed class Region : IDisposable
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _entityFactory = entityFactory ?? throw new ArgumentNullException(nameof(entityFactory));
         _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
-        _sessionResolver = sessionResolver ?? throw new ArgumentNullException(nameof(sessionResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
 
@@ -441,9 +437,22 @@ public sealed class Region : IDisposable
         if (oid == 0)
             return;
 
-        // Clear visibility — bidirectional removal
+        // Notify players that this entity is leaving their visibility before we
+        // tear down the sets. Two directions:
+        //  1. Tell every player who can see this entity that it disappeared.
+        //  2. If the removed entity is a player, tell it about all departing entities
+        //     (usually a no-op because the player is disconnected, but keeps symmetry
+        //     for voluntary leave-world such as logout or region transfer).
         foreach (var other in entity.Visibility.Entities)
+        {
+            if (other is PlayerEntity observer && observer.IsActive)
+                _dispatcher.Dispatch(new EntityLeftVisibility(observer, entity));
+
+            if (entity is PlayerEntity player && player.IsActive && other.ObjectId != 0)
+                _dispatcher.Dispatch(new EntityLeftVisibility(player, other));
+
             other.Visibility.Remove(entity);
+        }
         entity.Visibility.Clear();
 
         // Remove from cell
@@ -602,12 +611,8 @@ public sealed class Region : IDisposable
                 {
                     if (!player.IsActive)
                         continue;
-
-                    var session = _sessionResolver.GetSession(player);
-                    if (session is null)
-                        continue;
                     
-                    _dispatcher.Dispatch(new EntityStateChanged(session, entity, zone));
+                    _dispatcher.Dispatch(new EntityStateChanged(player, entity, zone));
                 }
             }
         }
@@ -706,15 +711,11 @@ public sealed class Region : IDisposable
         if (!player.IsActive)
             return;
 
-        var session = _sessionResolver.GetSession(player);
-        if (session is null)
-            return;
-
         var zone = _gameData.Zones.Infos.GetValueOrDefault(target.Position.ZoneId);
         if (zone is null)
             return;
 
-        _dispatcher.Dispatch(new EntityBecameVisible(session, target, zone));
+        _dispatcher.Dispatch(new EntityBecameVisible(player, target, zone));
     }
 
     // ── Spatial Queries ─────────────────────────────────────────────────

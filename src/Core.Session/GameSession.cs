@@ -18,12 +18,6 @@ namespace Core.Session;
 /// </summary>
 public sealed class GameSession : IGameSession
 {
-    /// <summary>
-    /// Key used to store the session in <see cref="IConnectionContext.Items"/>
-    /// so packet handlers can retrieve it via the <c>context.Session</c> extension property.
-    /// </summary>
-    internal const string ItemKey = "GameSession";
-
     private readonly IConnectionContext _connection;
 
     internal GameSession(ushort sessionId, IConnectionContext connection)

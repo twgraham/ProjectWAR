@@ -30,6 +30,12 @@ public sealed class SessionRegistry
     /// Maximum number of concurrent sessions (ushort range minus the reserved zero ID).
     /// </summary>
     public const int MaxSessionId = ushort.MaxValue; // 65535
+    
+    /// <summary>
+    /// Key used to store the session in <see cref="IConnectionContext.Items"/>
+    /// so packet handlers can retrieve it via the <c>context.Session</c> extension property.
+    /// </summary>
+    public const string ConnectionItemKey = "GameSession";
 
     private readonly ConcurrentDictionary<ushort, GameSession> _bySessionId = new();
     private readonly ConcurrentDictionary<uint, GameSession> _byAccountId = new();
@@ -75,7 +81,7 @@ public sealed class SessionRegistry
             _bySessionId[sessionId] = session;
 
             // Stash on the connection so handlers can reach it via the extension property.
-            connection.Items[GameSession.ItemKey] = session;
+            connection.Items[ConnectionItemKey] = session;
 
             return session;
         }
@@ -142,6 +148,7 @@ public sealed class SessionRegistry
                     new KeyValuePair<uint, GameSession>(session.AccountId.Value, session));
             }
         }
+
     }
 
     // ── Lock-free reads ─────────────────────────────────────────────────
