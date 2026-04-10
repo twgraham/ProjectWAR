@@ -262,31 +262,30 @@ public sealed class AbilityCastService
     /// <summary>
     /// Tick the active cast for an entity. Call once per region tick.
     /// </summary>
-    /// <returns>
-    /// A <see cref="CastTickResult"/> indicating whether the cast completed, failed,
-    /// or is still in progress. The caller is responsible for dispatching region events
-    /// based on the outcome.
-    /// </returns>
-    public CastTickResult Update(AbilityComponent abilities, UnitEntity caster, long tick)
+    public void Update(AbilityComponent abilities, UnitEntity caster, long tick)
     {
         var context = abilities.ActiveCast;
         if (context is null)
-            return CastTickResult.None;
+            return;
 
         if (context.HasFailed)
         {
-            var reason = context.FailureCode ?? AbilityFailure.Cancelled;
             abilities.ClearCast();
-            return CastTickResult.Failed(context, reason);
+            return;
         }
 
-        return context.CastState switch
+        switch (context.CastState)
         {
-            CastState.Casting => UpdateCasting(abilities, context, caster, tick),
-            CastState.Channeling => UpdateChanneling(abilities, context, caster, tick),
+            case CastState.Casting:
+                UpdateCasting(abilities, context, caster, tick);
+                break;
+
+            case CastState.Channeling:
+                UpdateChanneling(abilities, context, caster, tick);
+                break;
+
             // Instant casts are fully handled in ConfirmCast — never in ActiveCast.
-            _ => CastTickResult.None,
-        };
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -334,7 +333,7 @@ public sealed class AbilityCastService
     //  CAST COMPLETION
     // ═══════════════════════════════════════════════════════════════════
 
-    private CastTickResult CompleteCast(AbilityComponent abilities, AbilityCastContext context, long tick)
+    private void CompleteCast(AbilityComponent abilities, AbilityCastContext context, long tick)
     {
         var caster = context.Caster;
         var definition = context.Definition;
@@ -344,7 +343,7 @@ public sealed class AbilityCastService
         {
             context.Fail(AbilityFailure.CasterDead);
             abilities.ClearCast();
-            return CastTickResult.Failed(context, AbilityFailure.CasterDead);
+            return;
         }
 
         // Consume AP
@@ -367,8 +366,6 @@ public sealed class AbilityCastService
 
         // Clear active cast
         abilities.ClearCast();
-
-        return CastTickResult.Completed(context);
     }
 
     // ═══════════════════════════════════════════════════════════════════
