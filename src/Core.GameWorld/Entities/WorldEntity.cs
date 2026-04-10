@@ -1,4 +1,5 @@
 using Core.GameWorld.Components;
+using Core.GameWorld.Events;
 using Core.GameWorld.Spatial;
 
 namespace Core.GameWorld.Entities;
@@ -221,7 +222,7 @@ public abstract class WorldEntity
     /// Ticks subclass-specific state (override in <see cref="UnitEntity"/> for health regen, etc.)
     /// then ticks all <see cref="ITickable"/> optional components.
     /// </summary>
-    public virtual void Update(long tick)
+    public virtual void Update(long tick, Action<ITickEvent> emit)
     {
         _tickableCache ??= BuildTickableCache();
 

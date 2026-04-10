@@ -42,6 +42,7 @@ public class WorldTopologyTests
     private sealed class StubEventDispatcher : IRegionEventDispatcher
     {
         public void Dispatch<TEvent>(TEvent @event) { }
+        public void Dispatch(ITickEvent @event) { }
     }
 
     private static IRegionEventDispatcher MakeDispatcher(ISessionResolver<PlayerEntity> resolver)
@@ -57,6 +58,8 @@ public class WorldTopologyTests
                 case EntityStateChanged s: handler.Handle(s); break;
             }
         }
+
+        public void Dispatch(ITickEvent @event) { }
     }
 
     private sealed class StubEntityFactory : IEntityFactory

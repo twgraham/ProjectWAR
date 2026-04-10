@@ -9,7 +9,7 @@ namespace Core.GameWorld.Tests;
 
 /// <summary>
 /// Unit tests for Step 7: Career Resource archetypes — each archetype's
-/// generate/consume/decay cycle plus AbilityCastService integration.
+/// generate/consume/decay cycle plus AbilityComponent integration.
 /// </summary>
 public class CareerResourceTests
 {
@@ -776,7 +776,7 @@ public class CareerResourceTests
         AttachResource(unit, res);
 
         // Entity.Update ticks all ITickable components
-        unit.Update(1000);
+        unit.Update(1000, _ => { });
         res.Current.ShouldBe((byte)40); // decayed by 10
     }
 
@@ -793,7 +793,7 @@ public class CareerResourceTests
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  AbilityCastService Integration
+    //  AbilityComponent integration
     // ═══════════════════════════════════════════════════════════════════
 
     private static AbilityDefinition MakeAbilityDef(
@@ -818,19 +818,16 @@ public class CareerResourceTests
         ushort id = 1, uint maxHealth = 1000)
     {
         var entity = MakeUnit(id, maxHealth);
-        var comp = new AbilityComponent();
-        entity.Attach(comp);
-        return (entity, comp);
+        return (entity, entity.Abilities);
     }
 
     [Fact]
     public void Initiate_fails_with_NotEnoughResource_when_no_component()
     {
         var (caster, comp) = MakeCaster();
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 10);
 
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldBeNull();
         failure.ShouldBe(AbilityFailure.NotEnoughResource);
     }
@@ -842,11 +839,9 @@ public class CareerResourceTests
         var res = new ContinuousResource(new ContinuousResourceConfig());
         res.Generate(5); // only 5
         AttachResource(caster, res);
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 10);
 
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldBeNull();
         failure.ShouldBe(AbilityFailure.NotEnoughResource);
     }
@@ -858,11 +853,9 @@ public class CareerResourceTests
         var res = new ContinuousResource(new ContinuousResourceConfig());
         res.Generate(50);
         AttachResource(caster, res);
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 20);
 
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldNotBeNull();
         failure.ShouldBe(AbilityFailure.Ok);
     }
@@ -874,14 +867,12 @@ public class CareerResourceTests
         var res = new ContinuousResource(new ContinuousResourceConfig());
         res.Generate(50);
         AttachResource(caster, res);
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 20);
 
-        var ctx = service.TryInitiate(comp, def, caster, null, 0, out _);
+        var ctx = comp.TryInitiate(def, null, 0, out _);
         ctx.ShouldNotBeNull();
 
-        service.ConfirmCast(comp, ctx, 0); // instant cast → CompleteCast
+        comp.ConfirmCast(ctx, 0); // instant cast → CompleteCast
 
         res.Current.ShouldBe((byte)30); // 50 - 20
     }
@@ -891,10 +882,9 @@ public class CareerResourceTests
     {
         var (caster, comp) = MakeCaster();
         // No career resource attached, but SpecialCost = 0 → should pass
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 0);
 
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldNotBeNull();
         failure.ShouldBe(AbilityFailure.Ok);
     }
@@ -903,6 +893,7 @@ public class CareerResourceTests
     public void ModifyCareerResource_command_generates()
     {
         var (caster, comp) = MakeCaster();
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random());
         var res = new ContinuousResource(new ContinuousResourceConfig());
         res.Generate(10);
         AttachResource(caster, res);
@@ -912,13 +903,11 @@ public class CareerResourceTests
             EffectType = AbilityEffectType.ModifyCareerResource,
             PrimaryValue = 25,
         };
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(commands: [cmd]);
 
-        var ctx = service.TryInitiate(comp, def, caster, null, 0, out _);
+        var ctx = comp.TryInitiate(def, null, 0, out _);
         ctx.ShouldNotBeNull();
-        service.ConfirmCast(comp, ctx, 0);
+        comp.ConfirmCast(ctx, 0);
 
         res.Current.ShouldBe((byte)35); // 10 + 25
     }
@@ -927,6 +916,7 @@ public class CareerResourceTests
     public void ModifyCareerResource_command_negative_consumes()
     {
         var (caster, comp) = MakeCaster();
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random());
         var res = new ContinuousResource(new ContinuousResourceConfig());
         res.Generate(50);
         AttachResource(caster, res);
@@ -936,13 +926,11 @@ public class CareerResourceTests
             EffectType = AbilityEffectType.ModifyCareerResource,
             PrimaryValue = -15,
         };
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(commands: [cmd]);
 
-        var ctx = service.TryInitiate(comp, def, caster, null, 0, out _);
+        var ctx = comp.TryInitiate(def, null, 0, out _);
         ctx.ShouldNotBeNull();
-        service.ConfirmCast(comp, ctx, 0);
+        comp.ConfirmCast(ctx, 0);
 
         res.Current.ShouldBe((byte)35); // 50 - 15
     }
@@ -954,11 +942,9 @@ public class CareerResourceTests
         var res = new StanceResource(new StanceResourceConfig { StanceCount = 3 });
         res.SetResource(2);
         AttachResource(caster, res);
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 2); // requires stance 2
 
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldNotBeNull();
         failure.ShouldBe(AbilityFailure.Ok);
     }
@@ -970,11 +956,9 @@ public class CareerResourceTests
         var res = new StanceResource(new StanceResourceConfig { StanceCount = 3 });
         res.SetResource(1); // in stance 1
         AttachResource(caster, res);
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 2); // requires stance 2
 
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldBeNull();
         failure.ShouldBe(AbilityFailure.NotEnoughResource);
     }
@@ -985,12 +969,10 @@ public class CareerResourceTests
         var (caster, comp) = MakeCaster();
         var res = new BalanceNeedleResource(new BalanceNeedleConfig { Max = 5 });
         AttachResource(caster, res);
-
-        var service = new AbilityCastService();
         var def = MakeAbilityDef(specialCost: 99); // high cost
 
         // Balance needle always returns HasResource = true
-        var result = service.TryInitiate(comp, def, caster, null, 0, out var failure);
+        var result = comp.TryInitiate(def, null, 0, out var failure);
         result.ShouldNotBeNull();
         failure.ShouldBe(AbilityFailure.Ok);
     }

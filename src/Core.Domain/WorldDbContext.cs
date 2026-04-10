@@ -26,6 +26,8 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<GameObjectSpawn> GameObjectSpawns => Set<GameObjectSpawn>();
     public DbSet<GameObjectProto> GameObjectProtos => Set<GameObjectProto>();
     public DbSet<CreatureItem> CreatureItems => Set<CreatureItem>();
+    public DbSet<AbilityCommandEntity> AbilityCommands => Set<AbilityCommandEntity>();
+    public DbSet<AbilityDamageHealEntity> AbilityDamageHeals => Set<AbilityDamageHealEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +42,8 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
         ConfigureZoneJump(modelBuilder);
         ConfigureCharacterInfoStat(modelBuilder);
         ConfigureAbilityInfo(modelBuilder);
+        ConfigureAbilityCommand(modelBuilder);
+        ConfigureAbilityDamageHeal(modelBuilder);
         ConfigureGameObjectSpawn(modelBuilder);
         ConfigureGameObjectProto(modelBuilder);
     }
@@ -417,6 +421,65 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.EffectId).HasColumnName("effect_id");
             entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
             entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
+        });
+    }
+
+    private static void ConfigureAbilityCommand(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AbilityCommandEntity>(entity =>
+        {
+            entity.ToTable("ability_commands");
+            entity.HasKey(e => new { e.Entry, e.CommandId, e.CommandSequence });
+
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.CommandId).HasColumnName("command_id");
+            entity.Property(e => e.CommandSequence).HasColumnName("command_sequence");
+            entity.Property(e => e.CommandName).HasColumnName("command_name").HasMaxLength(30);
+            entity.Property(e => e.PrimaryValue).HasColumnName("primary_value");
+            entity.Property(e => e.SecondaryValue).HasColumnName("secondary_value");
+            entity.Property(e => e.Target).HasColumnName("target").HasMaxLength(24);
+            entity.Property(e => e.EffectSource).HasColumnName("effect_source").HasMaxLength(24);
+            entity.Property(e => e.EffectRadius).HasColumnName("effect_radius");
+            entity.Property(e => e.EffectAngle).HasColumnName("effect_angle");
+            entity.Property(e => e.MaxTargets).HasColumnName("max_targets");
+            entity.Property(e => e.AttackingStat).HasColumnName("attacking_stat");
+            entity.Property(e => e.IsDelayedEffect).HasColumnName("is_delayed_effect");
+            entity.Property(e => e.FromAllTargets).HasColumnName("from_all_targets");
+            entity.Property(e => e.NoAutoUse).HasColumnName("no_auto_use");
+        });
+    }
+
+    private static void ConfigureAbilityDamageHeal(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AbilityDamageHealEntity>(entity =>
+        {
+            entity.ToTable("ability_damage_heals");
+            entity.HasKey(e => new { e.Entry, e.Index, e.ParentCommandId, e.ParentCommandSequence });
+
+            entity.Property(e => e.Entry).HasColumnName("entry");
+            entity.Property(e => e.DisplayEntry).HasColumnName("display_entry");
+            entity.Property(e => e.Index).HasColumnName("index");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(36);
+            entity.Property(e => e.MinDamage).HasColumnName("min_damage");
+            entity.Property(e => e.MaxDamage).HasColumnName("max_damage");
+            entity.Property(e => e.DamageVariance).HasColumnName("damage_variance");
+            entity.Property(e => e.DamageType).HasColumnName("damage_type").HasMaxLength(16);
+            entity.Property(e => e.ParentCommandId).HasColumnName("parent_command_id");
+            entity.Property(e => e.ParentCommandSequence).HasColumnName("parent_command_sequence");
+            entity.Property(e => e.CastTimeDamageMult).HasColumnName("cast_time_damage_mult");
+            entity.Property(e => e.WeaponDamageFrom).HasColumnName("weapon_damage_from").HasMaxLength(16);
+            entity.Property(e => e.WeaponDamageScale).HasColumnName("weapon_damage_scale");
+            entity.Property(e => e.NoCrits).HasColumnName("no_crits");
+            entity.Property(e => e.Undefendable).HasColumnName("undefendable");
+            entity.Property(e => e.OverrideDefenseEvent).HasColumnName("override_defense_event");
+            entity.Property(e => e.StatUsed).HasColumnName("stat_used");
+            entity.Property(e => e.StatDamageScale).HasColumnName("stat_damage_scale");
+            entity.Property(e => e.ResourceBuild).HasColumnName("resource_build");
+            entity.Property(e => e.CastPlayerSubId).HasColumnName("cast_player_sub_id");
+            entity.Property(e => e.ArmorResistPenFactor).HasColumnName("armor_resist_pen_factor");
+            entity.Property(e => e.HatredScale).HasColumnName("hatred_scale");
+            entity.Property(e => e.HealHatredScale).HasColumnName("heal_hatred_scale");
+            entity.Property(e => e.PriStatMultiplier).HasColumnName("pri_stat_multiplier");
         });
     }
 }

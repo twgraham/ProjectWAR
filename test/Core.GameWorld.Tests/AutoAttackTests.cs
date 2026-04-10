@@ -778,7 +778,7 @@ public class AutoAttackTests
         comp.StartAttack(target);
 
         // Use entity update which ticks all ITickable components
-        attacker.Update(0);
+        attacker.Update(0, _ => { });
 
         target.Health.Current.ShouldBeLessThan(target.Health.Max);
     }

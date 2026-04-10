@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using Core.GameWorld;
+using Core.GameWorld.Combat.Abilities;
 using Core.GameWorld.Events;
 using Core.Infrastructure.Network;
 using Core.Infrastructure.Network.Serialization;
@@ -82,7 +83,12 @@ try
             s.AddWorldTopology()
                 .OnEvent<EntityBecameVisible, VisibilityHandler>()
                 .OnEvent<EntityStateChanged, VisibilityHandler>()
-                .OnEvent<EntityLeftVisibility, VisibilityHandler>();
+                .OnEvent<EntityLeftVisibility, VisibilityHandler>()
+                .OnEvent<AbilityCastConfirmed, CombatRegionHandler>()
+                .OnEvent<AbilityCastCompleted, CombatRegionHandler>()
+                .OnEvent<AbilityCastFailed, CombatRegionHandler>()
+                .OnEvent<AbilityCooldownApplied, CombatRegionHandler>()
+                .OnEvent<DamageDealt, CombatRegionHandler>();
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
@@ -91,6 +97,7 @@ try
 
             s.AddSingleton<PlayerService>();
             s.AddSingleton<WorldService>();
+            s.AddSingleton<CombatService>();
             s.AddHostedService<WorldHostedService>();
         });
 

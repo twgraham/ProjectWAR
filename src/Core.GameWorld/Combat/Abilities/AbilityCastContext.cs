@@ -95,7 +95,7 @@ public sealed class AbilityCastContext
     public bool CanCastWhileMoving { get; set; }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  CAST STATE (managed by AbilityCastService, Step 5)
+    //  CAST STATE (managed by AbilityComponent)
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>Current cast state.</summary>

@@ -154,7 +154,7 @@ public class WorldEntityTests
         entity.Attach(tickable);
         entity.Attach(nonTickable);
 
-        entity.Update(1000);
+        entity.Update(1000, _ => { });
 
         tickable.LastTick.ShouldBe(1000L);
     }
@@ -166,18 +166,18 @@ public class WorldEntityTests
         entity.Attach(new StubComponent());
 
         // Should not throw
-        entity.Update(1000);
+        entity.Update(1000, _ => { });
     }
 
     [Fact]
     public void Tickable_cache_invalidates_on_attach()
     {
         var entity = MakePlayer();
-        entity.Update(100); // builds empty cache
+        entity.Update(100, _ => { }); // builds empty cache
 
         var tickable = new TickableStub();
         entity.Attach(tickable);
-        entity.Update(200);
+        entity.Update(200, _ => { });
 
         tickable.LastTick.ShouldBe(200L);
     }
@@ -188,11 +188,11 @@ public class WorldEntityTests
         var tickable = new TickableStub();
         var entity = MakePlayer();
         entity.Attach(tickable);
-        entity.Update(100);
+        entity.Update(100, _ => { });
         tickable.LastTick.ShouldBe(100L);
 
         entity.Detach<TickableStub>();
-        entity.Update(200);
+        entity.Update(200, _ => { });
 
         // Should still be 100 — was detached before tick 200
         tickable.LastTick.ShouldBe(100L);

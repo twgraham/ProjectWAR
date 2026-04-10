@@ -928,7 +928,7 @@ public class BuffSystemTests
         var def = MakeDef();
 
         unit.Buffs.QueueBuff(def, null);
-        unit.Update(0);
+        unit.Update(0, _ => { });
 
         unit.Buffs.ActiveBuffs.Count.ShouldBe(1);
     }
@@ -940,11 +940,11 @@ public class BuffSystemTests
         var def = MakeDef(durationMs: 1000);
 
         unit.Buffs.QueueBuff(def, null);
-        unit.Update(0);
+        unit.Update(0, _ => { });
 
         unit.Buffs.ActiveBuffs.Count.ShouldBe(1);
 
-        unit.Update(1000);
+        unit.Update(1000, _ => { });
 
         unit.Buffs.ActiveBuffs.Count.ShouldBe(0);
     }

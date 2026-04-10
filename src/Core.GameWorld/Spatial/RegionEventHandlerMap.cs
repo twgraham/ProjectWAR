@@ -14,7 +14,12 @@ internal sealed class RegionEventHandlerMap
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly List<(Type EventType, Type HandlerType)> _registrations;
-    private volatile FrozenDictionary<Type, object>? _frozen;
+
+    /// <summary>Typed handler arrays — used by <see cref="Get{TEvent}"/> for the fast, exact-type path.</summary>
+    private volatile FrozenDictionary<Type, object>? _handlers;
+
+    /// <summary>Pre-built dispatch delegates — used by <see cref="Dispatch"/> for the runtime-type path.</summary>
+    private volatile FrozenDictionary<Type, Action<object>>? _dispatchers;
 
     internal RegionEventHandlerMap(
         IServiceProvider serviceProvider,
@@ -27,14 +32,32 @@ internal sealed class RegionEventHandlerMap
     /// <summary>
     /// Returns all handlers registered for <typeparamref name="TEvent"/>.
     /// Freezes the map on first call; all subsequent calls are lock-free lookups.
+    /// <para>
+    /// <b>Important:</b> <typeparamref name="TEvent"/> must be the concrete event type.
+    /// If the event is typed as a base interface (e.g. <c>ITickEvent</c>), use
+    /// <see cref="Dispatch"/> instead to avoid an <see cref="InvalidCastException"/>.
+    /// </para>
     /// </summary>
-    public IRegionEventHandler<TEvent>[] Get<TEvent>()
+    public IRegionEventHandler<TEvent>[] Get<TEvent>(TEvent @event)
     {
-        var frozen = _frozen ?? BuildAndFreeze();
+        var frozen = _handlers ?? BuildAndFreeze();
 
-        return frozen.TryGetValue(typeof(TEvent), out var handlers)
+        return frozen.TryGetValue(@event!.GetType(), out var handlers)
             ? (IRegionEventHandler<TEvent>[])handlers
             : [];
+    }
+
+    /// <summary>
+    /// Dispatches <paramref name="event"/> to all handlers registered for its runtime type.
+    /// Unlike <see cref="Get{TEvent}"/>, this works even when the compile-time type is a
+    /// base interface (e.g. <c>ITickEvent</c>).
+    /// </summary>
+    public void Dispatch(object @event)
+    {
+        var dispatchers = _dispatchers ?? BuildAndFreeze_Dispatchers();
+
+        if (dispatchers.TryGetValue(@event.GetType(), out var dispatch))
+            dispatch(@event);
     }
 
     private FrozenDictionary<Type, object> BuildAndFreeze()
@@ -61,7 +84,48 @@ internal sealed class RegionEventHandlerMap
         }
 
         var result = dict.ToFrozenDictionary();
-        Interlocked.CompareExchange(ref _frozen, result, null);
-        return _frozen!;
+        Interlocked.CompareExchange(ref _handlers, result, null);
+        return _handlers!;
+    }
+
+    private FrozenDictionary<Type, Action<object>> BuildAndFreeze_Dispatchers()
+    {
+        // Ensure handler arrays are built first.
+        var frozen = _handlers ?? BuildAndFreeze();
+
+        var dict = new Dictionary<Type, Action<object>>();
+
+        foreach (var group in _registrations.GroupBy(r => r.EventType))
+        {
+            var eventType = group.Key;
+            if (!frozen.TryGetValue(eventType, out var handlersObj))
+                continue;
+
+            // Build: (object e) => { for each handler in typed array, handler.Handle((TEvent)e); }
+            dict[eventType] = BuildDispatchDelegate(eventType, handlersObj);
+        }
+
+        var result = dict.ToFrozenDictionary();
+        Interlocked.CompareExchange(ref _dispatchers, result, null);
+        return _dispatchers!;
+    }
+
+    /// <summary>
+    /// Creates an <c>Action&lt;object&gt;</c> that casts the event to <paramref name="eventType"/>
+    /// and invokes every handler in <paramref name="handlersArray"/>.
+    /// </summary>
+    private static Action<object> BuildDispatchDelegate(Type eventType, object handlersArray)
+    {
+        // handlersArray is IRegionEventHandler<TEvent>[] at runtime.
+        // We resolve the concrete Handle method once and invoke it for each handler.
+        var handlerInterfaceType = typeof(IRegionEventHandler<>).MakeGenericType(eventType);
+        var handleMethod = handlerInterfaceType.GetMethod(nameof(IRegionEventHandler<object>.Handle))!;
+        var array = (Array)handlersArray;
+
+        return e =>
+        {
+            for (var i = 0; i < array.Length; i++)
+                handleMethod.Invoke(array.GetValue(i), [e]);
+        };
     }
 }

@@ -2,16 +2,16 @@ using Core.Domain.Entities;
 using Core.GameWorld.Combat;
 using Core.GameWorld.Combat.Abilities;
 using Core.GameWorld.Entities;
+using Core.GameWorld.Events;
 using Core.GameWorld.Stats;
 using Shouldly;
 
 namespace Core.GameWorld.Tests;
 
 /// <summary>
-/// Integration tests for Step 5: <see cref="AbilityCastService"/>,
-/// <see cref="AbilityComponent"/>, and the end-to-end cast pipeline.
+/// Integration tests for <see cref="AbilityComponent"/> and the end-to-end cast pipeline.
 /// </summary>
-public class AbilityCastServiceTests
+public class AbilityComponentTests
 {
     // ═══════════════════════════════════════════════════════════════════
     //  Helpers
@@ -31,9 +31,7 @@ public class AbilityCastServiceTests
         ushort id = 1, uint maxHealth = 1000)
     {
         var entity = MakeUnit(id, maxHealth);
-        var comp = new AbilityComponent();
-        entity.Attach(comp);
-        return (entity, comp);
+        return (entity, entity.Abilities);
     }
 
     /// <summary>Places an entity at the given region-absolute coordinates.</summary>
@@ -118,7 +116,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void Component_cooldown_tracks_expiry()
     {
-        var comp = new AbilityComponent();
+        var entity = MakeUnit();
+        var comp = entity.Abilities;
         comp.SetCooldown(100, tick: 1000, durationMs: 5000);
 
         comp.IsOnCooldown(100, tick: 1000).ShouldBeTrue();
@@ -130,7 +129,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void Component_gcd_tracks_expiry()
     {
-        var comp = new AbilityComponent();
+        var entity = MakeUnit();
+        var comp = entity.Abilities;
         comp.SetGlobalCooldown(tick: 1000);
 
         comp.IsOnGlobalCooldown(1000).ShouldBeTrue();
@@ -141,7 +141,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void Component_purge_expired_removes_old_cooldowns()
     {
-        var comp = new AbilityComponent();
+        var entity = MakeUnit();
+        var comp = entity.Abilities;
         comp.SetCooldown(100, tick: 0, durationMs: 1000);
         comp.SetCooldown(200, tick: 0, durationMs: 5000);
 
@@ -154,7 +155,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void Component_clear_gcd_resets()
     {
-        var comp = new AbilityComponent();
+        var entity = MakeUnit();
+        var comp = entity.Abilities;
         comp.SetGlobalCooldown(tick: 0);
         comp.ClearGlobalCooldown();
         comp.IsOnGlobalCooldown(0).ShouldBeFalse();
@@ -167,11 +169,10 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_caster_is_dead()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         caster.Health.TakeDamage(caster.Health.Max);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(), caster, null, 0, out var fail);
+        var ctx = comp.TryInitiate(MakeDef(), null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.CasterDead);
@@ -180,11 +181,10 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_already_casting()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         comp.ActiveCast = new AbilityCastContext(MakeDef(), caster);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(entry: 2000), caster, null, 0, out var fail);
+        var ctx = comp.TryInitiate(MakeDef(entry: 2000), null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.AlreadyActive);
@@ -193,11 +193,10 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_on_gcd()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         comp.SetGlobalCooldown(0);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(), caster, null, 500, out var fail);
+        var ctx = comp.TryInitiate(MakeDef(), null, 500, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.Cooldown);
@@ -206,12 +205,11 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_succeeds_when_gcd_ignored()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         comp.SetGlobalCooldown(0);
 
         var def = MakeDef(ignoreGcd: true, targetType: CommandTargetType.Caster);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 500, out var fail);
+        var ctx = comp.TryInitiate(def, null, 500, out var fail);
 
         ctx.ShouldNotBeNull();
         fail.ShouldBe(AbilityFailure.Ok);
@@ -220,11 +218,10 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_on_cooldown()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         comp.SetCooldown(1000, tick: 0, durationMs: 10_000);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(), caster, null, 5000, out var fail);
+        var ctx = comp.TryInitiate(MakeDef(), null, 5000, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.Cooldown);
@@ -233,11 +230,10 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_not_enough_ap()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         caster.ActionPoints = 10;
 
-        var ctx = svc.TryInitiate(comp, MakeDef(apCost: 25), caster, null, 0, out var fail);
+        var ctx = comp.TryInitiate(MakeDef(apCost: 25), null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.NotEnoughAp);
@@ -246,12 +242,11 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_target_dead_and_not_affects_dead()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         target.Health.TakeDamage(target.Health.Max);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(), caster, target, 0, out var fail);
+        var ctx = comp.TryInitiate(MakeDef(), target, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.TargetDead);
@@ -260,12 +255,11 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_target_alive_and_affects_dead()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
 
-        var ctx = svc.TryInitiate(
-            comp, MakeDef(affectsDead: true), caster, target, 0, out var fail);
+        var ctx = comp.TryInitiate(
+            MakeDef(affectsDead: true), target, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.InvalidTarget);
@@ -274,11 +268,10 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_no_target_and_requires_target()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
 
-        var ctx = svc.TryInitiate(
-            comp, MakeDef(targetType: CommandTargetType.Enemy), caster, null, 0, out var fail);
+        var ctx = comp.TryInitiate(
+            MakeDef(targetType: CommandTargetType.Enemy), null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.InvalidTarget);
@@ -287,15 +280,14 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_out_of_range()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         // 100 feet = 1200 units; place 1800 units apart (150 feet)
         PlaceAt(caster, 1000, 1000);
         PlaceAt(target, 2800, 1000);
 
-        var ctx = svc.TryInitiate(
-            comp, MakeDef(range: 100), caster, target, 0, out var fail);
+        var ctx = comp.TryInitiate(
+            MakeDef(range: 100), target, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.OutOfRange);
@@ -304,15 +296,14 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_too_close()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         // MinRange = 20 feet = 240 units; place 120 units apart (10 feet)
         PlaceAt(caster, 1000, 1000);
         PlaceAt(target, 1120, 1000);
 
-        var ctx = svc.TryInitiate(
-            comp, MakeDef(range: 100, minRange: 20), caster, target, 0, out var fail);
+        var ctx = comp.TryInitiate(
+            MakeDef(range: 100, minRange: 20), target, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.TooClose);
@@ -321,15 +312,14 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_succeeds_when_in_range()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         // 50 feet = 600 units; range 100 feet = 1200 units
         PlaceAt(caster, 1000, 1000);
         PlaceAt(target, 1600, 1000);
 
-        var ctx = svc.TryInitiate(
-            comp, MakeDef(range: 100), caster, target, 0, out var fail);
+        var ctx = comp.TryInitiate(
+            MakeDef(range: 100), target, 0, out var fail);
 
         ctx.ShouldNotBeNull();
         fail.ShouldBe(AbilityFailure.Ok);
@@ -338,17 +328,15 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_wrong_weapon()
     {
-        var svc = new AbilityCastService();
-        svc.WeaponCheck = (_, _) => false; // always fail
         var (caster, comp) = MakeCaster();
+        comp.WeaponCheck = (_, _) => false; // always fail
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
-        var ctx = svc.TryInitiate(
-            comp,
+        var ctx = comp.TryInitiate(
             MakeDef(weaponNeeded: WeaponRequirement.Shield),
-            caster, target, 0, out var fail);
+            target, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.WrongWeapon);
@@ -357,7 +345,6 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_silenced_and_verbal()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         // Apply a silence buff
         caster.Buffs.QueueBuff(
@@ -372,10 +359,9 @@ public class AbilityCastServiceTests
             caster);
         caster.Buffs.Update(0);
 
-        var ctx = svc.TryInitiate(
-            comp,
+        var ctx = comp.TryInitiate(
             MakeDef(abilityType: AbilityType.Verbal, targetType: CommandTargetType.Caster),
-            caster, null, 0, out var fail);
+            null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.Silenced);
@@ -384,7 +370,6 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_disarmed_and_melee()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         caster.Buffs.QueueBuff(
             new BuffDefinition
@@ -398,10 +383,9 @@ public class AbilityCastServiceTests
             caster);
         caster.Buffs.Update(0);
 
-        var ctx = svc.TryInitiate(
-            comp,
+        var ctx = comp.TryInitiate(
             MakeDef(abilityType: AbilityType.Melee, targetType: CommandTargetType.Caster),
-            caster, null, 0, out var fail);
+            null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.Disarmed);
@@ -410,7 +394,6 @@ public class AbilityCastServiceTests
     [Fact]
     public void Initiate_fails_when_knockdown()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         caster.Buffs.QueueBuff(
             new BuffDefinition
@@ -424,10 +407,9 @@ public class AbilityCastServiceTests
             caster);
         caster.Buffs.Update(0);
 
-        var ctx = svc.TryInitiate(
-            comp,
+        var ctx = comp.TryInitiate(
             MakeDef(targetType: CommandTargetType.Caster),
-            caster, null, 0, out var fail);
+            null, 0, out var fail);
 
         ctx.ShouldBeNull();
         fail.ShouldBe(AbilityFailure.Knockdown);
@@ -440,17 +422,18 @@ public class AbilityCastServiceTests
     [Fact]
     public void Instant_cast_deals_damage_and_consumes_ap()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(apCost: 25, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _);
+        var ctx = comp.TryInitiate(def, target, 0, out _);
         ctx.ShouldNotBeNull();
 
-        svc.ConfirmCast(comp, ctx, 0).ShouldBeTrue();
+        comp.ConfirmCast(ctx, 0).ShouldBeTrue();
 
         target.Health.Current.ShouldBe(900u); // 1000 − 100
         caster.ActionPoints.ShouldBe(225);    // 250 − 25
@@ -460,13 +443,12 @@ public class AbilityCastServiceTests
     [Fact]
     public void Instant_cast_sets_gcd()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(targetType: CommandTargetType.Caster);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 1000, out _)!;
-        svc.ConfirmCast(comp, ctx, 1000);
+        var ctx = comp.TryInitiate(def, null, 1000, out _)!;
+        comp.ConfirmCast(ctx, 1000);
 
         comp.IsOnGlobalCooldown(1000).ShouldBeTrue();
         comp.IsOnGlobalCooldown(2500).ShouldBeFalse();
@@ -475,13 +457,12 @@ public class AbilityCastServiceTests
     [Fact]
     public void Instant_cast_sets_cooldown()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(entry: 1000, cooldown: 5000, targetType: CommandTargetType.Caster);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         comp.IsOnCooldown(1000, tick: 0).ShouldBeTrue();
         comp.IsOnCooldown(1000, tick: 4999).ShouldBeTrue();
@@ -491,15 +472,14 @@ public class AbilityCastServiceTests
     [Fact]
     public void Instant_cast_uses_shared_cooldown_entry()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(
             entry: 1000, cooldown: 5000, cooldownEntry: 500,
             targetType: CommandTargetType.Caster);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         comp.IsOnCooldown(500, tick: 0).ShouldBeTrue(); // shared entry
         comp.IsOnCooldown(1000, tick: 0).ShouldBeFalse(); // own entry not set
@@ -508,13 +488,12 @@ public class AbilityCastServiceTests
     [Fact]
     public void Instant_cast_zero_cooldown_sets_none()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(cooldown: 0, targetType: CommandTargetType.Caster);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         comp.IsOnCooldown(1000, tick: 0).ShouldBeFalse();
     }
@@ -522,8 +501,9 @@ public class AbilityCastServiceTests
     [Fact]
     public void Instant_steal_life_heals_caster()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         caster.Health.TakeDamage(500); // caster at 500/1000
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
@@ -543,8 +523,8 @@ public class AbilityCastServiceTests
             },
         };
         var def = MakeDef(apCost: 0, commands: [cmd]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         target.Health.Current.ShouldBe(900u);
         caster.Health.Current.ShouldBe(600u); // 500 + 100 healed
@@ -557,15 +537,16 @@ public class AbilityCastServiceTests
     [Fact]
     public void CastBar_registers_pending_and_completes_on_tick()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(castTime: 2000, apCost: 25, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // Cast bar active, damage not applied yet
         comp.HasActiveCast.ShouldBeTrue();
@@ -573,11 +554,11 @@ public class AbilityCastServiceTests
         caster.ActionPoints.ShouldBe(250); // AP not consumed yet
 
         // Tick at 50% — still casting
-        svc.Update(comp, caster, 1000);
+        comp.Update(1000, _ => { });
         comp.HasActiveCast.ShouldBeTrue();
 
         // Tick at 100% — cast completes
-        svc.Update(comp, caster, 2000);
+        comp.Update(2000, _ => { });
         comp.HasActiveCast.ShouldBeFalse();
         target.Health.Current.ShouldBe(900u);
         caster.ActionPoints.ShouldBe(225); // AP consumed on completion
@@ -586,38 +567,36 @@ public class AbilityCastServiceTests
     [Fact]
     public void CastBar_60_percent_range_check_cancels_if_target_moved()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(castTime: 2000, range: 100, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // Move target out of range before the 60% mark
         PlaceAt(target, 100_000, 0);
 
         // Tick past 60% (1200ms)
-        svc.Update(comp, caster, 1300);
+        comp.Update(1300, _ => { });
         comp.HasActiveCast.ShouldBeFalse(); // cancelled
     }
 
     [Fact]
     public void CastBar_clears_gcd_when_interrupted()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(
             castTime: 2000, targetType: CommandTargetType.Caster);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         comp.IsOnGlobalCooldown(0).ShouldBeTrue();
-        svc.CancelCast(comp, AbilityFailure.Interrupted);
+        comp.CancelCast(AbilityFailure.Interrupted);
         comp.IsOnGlobalCooldown(0).ShouldBeFalse();
     }
 
@@ -628,8 +607,9 @@ public class AbilityCastServiceTests
     [Fact]
     public void Channel_applies_effects_per_tick()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         caster.ActionPoints = 500; // enough for several ticks
         var target = MakeUnit(2, 10_000);
         PlaceAt(caster, 0, 0);
@@ -638,32 +618,33 @@ public class AbilityCastServiceTests
         var def = MakeDef(
             castTime: 3000, channelId: 1, channelInterval: 1000,
             apCost: 10, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         comp.HasActiveCast.ShouldBeTrue();
         target.Health.Current.ShouldBe(10_000u); // no tick yet
 
         // First tick at 1000ms
-        svc.Update(comp, caster, 1000);
+        comp.Update(1000, _ => { });
         target.Health.Current.ShouldBe(9_900u);     // −100 from first tick
         caster.ActionPoints.ShouldBe(490);          // −10 AP per tick
 
         // Second tick at 2000ms
-        svc.Update(comp, caster, 2000);
+        comp.Update(2000, _ => { });
         target.Health.Current.ShouldBe(9_800u);
         caster.ActionPoints.ShouldBe(480);
 
         // Channel ends at 3000ms
-        svc.Update(comp, caster, 3000);
+        comp.Update(3000, _ => { });
         comp.HasActiveCast.ShouldBeFalse();
     }
 
     [Fact]
     public void Channel_cancels_when_target_dies()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2, maxHealth: 50); // low HP
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
@@ -671,23 +652,24 @@ public class AbilityCastServiceTests
         var def = MakeDef(
             castTime: 5000, channelId: 1, channelInterval: 1000,
             apCost: 0, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // First tick kills the target (100 > 50)
-        svc.Update(comp, caster, 1000);
+        comp.Update(1000, _ => { });
         target.Health.IsDead.ShouldBeTrue();
 
         // Next tick should cancel the channel
-        svc.Update(comp, caster, 2000);
+        comp.Update(2000, _ => { });
         comp.HasActiveCast.ShouldBeFalse();
     }
 
     [Fact]
     public void Channel_cancels_when_ap_runs_out()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         caster.ActionPoints = 15;
         var target = MakeUnit(2, 10_000);
         PlaceAt(caster, 0, 0);
@@ -696,15 +678,15 @@ public class AbilityCastServiceTests
         var def = MakeDef(
             castTime: 5000, channelId: 1, channelInterval: 1000,
             apCost: 10, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // First tick: 15 ≥ 10 → OK
-        svc.Update(comp, caster, 1000);
+        comp.Update(1000, _ => { });
         caster.ActionPoints.ShouldBe(5);
 
         // Second tick: 5 < 10 → cancel
-        svc.Update(comp, caster, 2000);
+        comp.Update(2000, _ => { });
         comp.HasActiveCast.ShouldBeFalse();
     }
 
@@ -715,26 +697,27 @@ public class AbilityCastServiceTests
     [Fact]
     public void Setback_extends_cast_time()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(castTime: 2000, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // Add 500ms of setback
-        svc.AddSetback(comp, 500);
+        comp.AddSetback(500);
         ctx.SetbackAccumulator.ShouldBe(500f);
 
         // Tick at 2000ms — would normally complete, but now needs 2500ms
-        svc.Update(comp, caster, 2000);
+        comp.Update(2000, _ => { });
         comp.HasActiveCast.ShouldBeTrue();
 
         // Tick at 2500ms — now completes
-        svc.Update(comp, caster, 2500);
+        comp.Update(2500, _ => { });
         comp.HasActiveCast.ShouldBeFalse();
         target.Health.Current.ShouldBe(900u);
     }
@@ -742,17 +725,16 @@ public class AbilityCastServiceTests
     [Fact]
     public void Setback_fragile_2_interrupts_immediately()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(castTime: 2000, fragile: 2, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
-        svc.AddSetback(comp, 100);
+        comp.AddSetback(100);
         comp.HasActiveCast.ShouldBeFalse();
         target.Health.Current.ShouldBe(1000u); // no damage dealt
     }
@@ -760,10 +742,9 @@ public class AbilityCastServiceTests
     [Fact]
     public void Setback_ignored_for_instant_casts()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         // Instant cast has no active cast after confirm
-        svc.AddSetback(comp, 100); // should not crash
+        comp.AddSetback(100); // should not crash
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -773,35 +754,33 @@ public class AbilityCastServiceTests
     [Fact]
     public void ConfirmCast_fails_if_target_died_since_initiation()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(), caster, target, 0, out _)!;
+        var ctx = comp.TryInitiate(MakeDef(), target, 0, out _)!;
 
         // Target dies between initiation and confirm
         target.Health.TakeDamage(target.Health.Max);
 
-        svc.ConfirmCast(comp, ctx, 50).ShouldBeFalse();
+        comp.ConfirmCast(ctx, 50).ShouldBeFalse();
         ctx.FailureCode.ShouldBe(AbilityFailure.TargetDead);
     }
 
     [Fact]
     public void ConfirmCast_fails_if_target_moved_out_of_range()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
-        var ctx = svc.TryInitiate(comp, MakeDef(range: 100), caster, target, 0, out _)!;
+        var ctx = comp.TryInitiate(MakeDef(range: 100), target, 0, out _)!;
 
         PlaceAt(target, 100_000, 0); // move far away
 
-        svc.ConfirmCast(comp, ctx, 50).ShouldBeFalse();
+        comp.ConfirmCast(ctx, 50).ShouldBeFalse();
         ctx.FailureCode.ShouldBe(AbilityFailure.OutOfRange);
     }
 
@@ -812,7 +791,6 @@ public class AbilityCastServiceTests
     [Fact]
     public void PreCast_modifier_reduces_ap_cost()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         caster.ActionPoints = 100;
         PlaceAt(caster, 0, 0);
@@ -830,17 +808,16 @@ public class AbilityCastServiceTests
                 },
             ]);
 
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
         ctx.ApCost.ShouldBe(10f); // modified from 50 to 10
 
-        svc.ConfirmCast(comp, ctx, 0);
+        comp.ConfirmCast(ctx, 0);
         caster.ActionPoints.ShouldBe(90); // 100 − 10 (not 50)
     }
 
     [Fact]
     public void PreCast_modifiers_skipped_when_ignoreOwnModifiers()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
@@ -858,15 +835,16 @@ public class AbilityCastServiceTests
                 },
             ]);
 
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
         ctx.ApCost.ShouldBe(50f); // not modified
     }
 
     [Fact]
     public void PostCast_modifier_adjusts_damage_bonus()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
@@ -884,8 +862,8 @@ public class AbilityCastServiceTests
                 },
             ]);
 
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // DamageBonus goes from 1.0 to 2.0, so raw damage 100 → pipeline applies bonus → 200
         target.Health.Current.ShouldBe(800u);
@@ -894,9 +872,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void Conditional_modifier_applied_when_evaluator_returns_true()
     {
-        var svc = new AbilityCastService();
-        svc.ConditionEvaluator = (cond, val, ctx) => true; // always met
         var (caster, comp) = MakeCaster();
+        comp.ConditionEvaluator = (cond, val, ctx) => true; // always met
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(
@@ -914,16 +891,15 @@ public class AbilityCastServiceTests
                 },
             ]);
 
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
         ctx.ApCost.ShouldBe(0f); // condition met, modifier applied
     }
 
     [Fact]
     public void Conditional_modifier_skipped_when_evaluator_returns_false()
     {
-        var svc = new AbilityCastService();
-        svc.ConditionEvaluator = (cond, val, ctx) => false; // never met
         var (caster, comp) = MakeCaster();
+        comp.ConditionEvaluator = (cond, val, ctx) => false; // never met
         PlaceAt(caster, 0, 0);
 
         var def = MakeDef(
@@ -941,7 +917,7 @@ public class AbilityCastServiceTests
                 },
             ]);
 
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
         ctx.ApCost.ShouldBe(50f); // condition not met, modifier skipped
     }
 
@@ -952,7 +928,6 @@ public class AbilityCastServiceTests
     [Fact]
     public void Cooldown_respects_cooldown_cap()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         PlaceAt(caster, 0, 0);
 
@@ -970,8 +945,8 @@ public class AbilityCastServiceTests
                 },
             ]);
 
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         // Cap enforces minimum cooldown of 3000ms
         comp.IsOnCooldown(1000, tick: 2999).ShouldBeTrue();
@@ -985,8 +960,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void ModifyActionPoints_adds_ap_to_target()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random());
         caster.ActionPoints = 100;
         PlaceAt(caster, 0, 0);
 
@@ -997,8 +972,8 @@ public class AbilityCastServiceTests
             PrimaryValue = 50,
         };
         var def = MakeDef(apCost: 0, targetType: CommandTargetType.Caster, commands: [cmd]);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         caster.ActionPoints.ShouldBe(150);
     }
@@ -1006,8 +981,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void ModifyActionPoints_does_not_go_below_zero()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random());
         caster.ActionPoints = 30;
         PlaceAt(caster, 0, 0);
 
@@ -1018,8 +993,8 @@ public class AbilityCastServiceTests
             PrimaryValue = -100,
         };
         var def = MakeDef(apCost: 0, targetType: CommandTargetType.Caster, commands: [cmd]);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         caster.ActionPoints.ShouldBe(0);
     }
@@ -1031,8 +1006,9 @@ public class AbilityCastServiceTests
     [Fact]
     public void NoAutoUse_commands_are_skipped()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
@@ -1049,8 +1025,8 @@ public class AbilityCastServiceTests
             },
         };
         var def = MakeDef(apCost: 0, commands: [cmd]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         target.Health.Current.ShouldBe(1000u); // no damage — command was skipped
     }
@@ -1062,8 +1038,9 @@ public class AbilityCastServiceTests
     [Fact]
     public void Caster_targeted_command_resolves_to_self()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         caster.Health.TakeDamage(200); // 800/1000
         PlaceAt(caster, 0, 0);
 
@@ -1078,8 +1055,8 @@ public class AbilityCastServiceTests
             },
         };
         var def = MakeDef(apCost: 0, targetType: CommandTargetType.Caster, commands: [cmd]);
-        var ctx = svc.TryInitiate(comp, def, caster, null, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, null, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         caster.Health.Current.ShouldBe(750u); // 800 − 50
     }
@@ -1091,17 +1068,16 @@ public class AbilityCastServiceTests
     [Fact]
     public void CancelCast_clears_active_cast()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(castTime: 2000, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
-        svc.CancelCast(comp, AbilityFailure.Cancelled);
+        comp.CancelCast(AbilityFailure.Cancelled);
 
         comp.HasActiveCast.ShouldBeFalse();
         target.Health.Current.ShouldBe(1000u); // no damage
@@ -1110,9 +1086,8 @@ public class AbilityCastServiceTests
     [Fact]
     public void CancelCast_on_idle_component_is_noop()
     {
-        var svc = new AbilityCastService();
-        var comp = new AbilityComponent();
-        svc.CancelCast(comp, AbilityFailure.Cancelled); // should not throw
+        var entity = MakeUnit();
+        entity.Abilities.CancelCast(AbilityFailure.Cancelled); // should not throw
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1122,26 +1097,24 @@ public class AbilityCastServiceTests
     [Fact]
     public void Update_does_nothing_when_no_active_cast()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
-        svc.Update(comp, caster, 1000); // should not throw
+        comp.Update(1000, _ => { }); // should not throw
     }
 
     [Fact]
     public void Update_clears_failed_cast()
     {
-        var svc = new AbilityCastService();
         var (caster, comp) = MakeCaster();
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
 
         var def = MakeDef(castTime: 2000, commands: [MakeDamageCmd(100)]);
-        var ctx = svc.TryInitiate(comp, def, caster, target, 0, out _)!;
-        svc.ConfirmCast(comp, ctx, 0);
+        var ctx = comp.TryInitiate(def, target, 0, out _)!;
+        comp.ConfirmCast(ctx, 0);
 
         ctx.Fail(AbilityFailure.Interrupted);
-        svc.Update(comp, caster, 100);
+        comp.Update(100, _ => { });
 
         comp.HasActiveCast.ShouldBeFalse();
     }
@@ -1153,8 +1126,9 @@ public class AbilityCastServiceTests
     [Fact]
     public void Multiple_instant_casts_accumulate_damage()
     {
-        var svc = new AbilityCastService(new Random(42));
         var (caster, comp) = MakeCaster();
+
+        comp.EffectExecutor = new AbilityEffectExecutor(new Random(42));
         var target = MakeUnit(2);
         PlaceAt(caster, 0, 0);
         PlaceAt(target, 0, 0);
@@ -1165,8 +1139,8 @@ public class AbilityCastServiceTests
 
         for (var i = 0; i < 5; i++)
         {
-            var ctx = svc.TryInitiate(comp, def, caster, target, i * 100, out _)!;
-            svc.ConfirmCast(comp, ctx, i * 100);
+            var ctx = comp.TryInitiate(def, target, i * 100, out _)!;
+            comp.ConfirmCast(ctx, i * 100);
         }
 
         target.Health.Current.ShouldBe(500u); // 1000 − (5 × 100)

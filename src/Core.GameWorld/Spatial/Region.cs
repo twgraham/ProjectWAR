@@ -43,11 +43,14 @@ public sealed class Region : IDisposable
     private readonly HashSet<Cell> _tickCells = new();
     private readonly Channel<RegionCommand> _commands;
     private readonly List<WorldEntity> _movedEntities = new();
+    private readonly List<ITickEvent> _tickEvents = new();
+    private readonly Action<ITickEvent> _emitEvent;
 
     private readonly IRegionEventDispatcher _dispatcher;
     private readonly IEntityFactory _entityFactory;
     private readonly IGameDataStore _gameData;
     private readonly RespawnScheduler _respawnScheduler = new();
+    private readonly RegionActionContext _actionContext;
     
     private readonly ILogger<Region> _logger;
     private readonly IWorldServerMetrics _metrics;
@@ -74,6 +77,9 @@ public sealed class Region : IDisposable
 
         _commands = Channel.CreateUnbounded<RegionCommand>(
             new UnboundedChannelOptions { SingleReader = true });
+
+        _actionContext = new RegionActionContext(_entitiesByOid, _gameData, _dispatcher);
+        _emitEvent = _tickEvents.Add;
 
         // Pre-populate OID pool: usable range is 1..65535 (0 is reserved).
         // ConcurrentBag does not guarantee ordering — callers must not depend on
@@ -288,7 +294,16 @@ public sealed class Region : IDisposable
     {
         _commands.Writer.TryWrite(new RegionCommand.ActivateEntity(entity));
     }
-
+    /// <summary>
+    /// Enqueues a game-logic action for execution on the region thread.
+    /// The action runs during the command-drain phase of the next tick, with full
+    /// access to entity internals via <see cref="IRegionActionContext"/>.
+    /// Safe to call from any thread.
+    /// </summary>
+    public void EnqueueAction(IRegionAction action)
+    {
+        _commands.Writer.TryWrite(new RegionCommand.ExecuteAction(action));
+    }
     // ── Tick Loop ───────────────────────────────────────────────────────
 
     /// <summary>
@@ -357,7 +372,7 @@ public sealed class Region : IDisposable
             var entity = _entityFactory.CreateCreature(entry.Descriptor);
             EnqueueAdd(entity, entry.Descriptor.Position);
         });
-        ProcessCommands();
+        ProcessCommands(tickMs);
         TickEntities(tickMs);
         BroadcastEntityStates(tickMs);
         UpdateMovedEntitiesVisibility();
@@ -365,7 +380,7 @@ public sealed class Region : IDisposable
 
     // ── Command Processing ──────────────────────────────────────────────
 
-    private void ProcessCommands()
+    private void ProcessCommands(long tickMs)
     {
         while (_commands.Reader.TryRead(out var command))
         {
@@ -389,6 +404,10 @@ public sealed class Region : IDisposable
 
                 case RegionCommand.ActivateEntity activate:
                     ExecuteActivate(activate.Entity);
+                    break;
+
+                case RegionCommand.ExecuteAction exec:
+                    exec.Action.Execute(_actionContext, tickMs);
                     break;
             }
         }
@@ -568,8 +587,14 @@ public sealed class Region : IDisposable
         {
             var entities = cell.Entities;
             for (var i = 0; i < entities.Count; i++)
-                entities[i].Update(tickMs);
+                entities[i].Update(tickMs, _emitEvent);
         }
+
+        // Dispatch all events emitted during this tick
+        for (var i = 0; i < _tickEvents.Count; i++)
+            _dispatcher.Dispatch(_tickEvents[i]);
+
+        _tickEvents.Clear();
     }
 
     // ── State Broadcasting ──────────────────────────────────────────────

@@ -1,3 +1,5 @@
+using Core.GameWorld.Events;
+
 namespace Core.GameWorld.Spatial;
 
 /// <summary>
@@ -9,7 +11,17 @@ internal sealed class RegionEventDispatcher(RegionEventHandlerMap handlers) : IR
 {
     public void Dispatch<TEvent>(TEvent @event)
     {
-        var registered = handlers.Get<TEvent>();
+        // When TEvent is a concrete event type the fast path works: Get<T> returns
+        // the typed handler array directly.  When TEvent is a base interface (e.g.
+        // ITickEvent) the cast inside Get<T> would fail, so we fall back to the
+        // runtime-type dispatch path which resolves handlers by @event.GetType().
+        if (typeof(TEvent) != @event!.GetType())
+        {
+            handlers.Dispatch(@event);
+            return;
+        }
+
+        var registered = handlers.Get(@event);
         for (var i = 0; i < registered.Length; i++)
         {
             registered[i].Handle(@event);

@@ -66,5 +66,14 @@ public abstract class RegionCommand
     {
         public WorldEntity Entity { get; } = entity ?? throw new ArgumentNullException(nameof(entity));
     }
+
+    /// <summary>
+    /// Executes a game-logic action on the region thread. Used for player intent
+    /// (cast ability, interact) and system-driven mutations.
+    /// </summary>
+    public sealed class ExecuteAction(IRegionAction action) : RegionCommand
+    {
+        public IRegionAction Action { get; } = action ?? throw new ArgumentNullException(nameof(action));
+    }
 }
 

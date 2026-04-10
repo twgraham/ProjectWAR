@@ -1,24 +1,37 @@
+using Core.GameWorld.Combat.Abilities;
 using Core.GameWorld.Combat.Buffs;
 using Core.GameWorld.Components;
+using Core.GameWorld.Events;
 using Core.GameWorld.Stats;
 
 namespace Core.GameWorld.Entities;
 
 /// <summary>
 /// Abstract base for all combat-capable entities (players, creatures, pets).
-/// Provides guaranteed <see cref="Health"/>, <see cref="Level"/>, <see cref="Realm"/>,
-/// and <see cref="Faction"/> as direct fields — no component lookup needed.
+/// Provides guaranteed <see cref="Health"/>, <see cref="Abilities"/>, <see cref="Level"/>,
+/// <see cref="Realm"/>, and <see cref="Faction"/> as direct fields — no component lookup needed.
 /// <para>
 /// Combat systems can accept <c>UnitEntity</c> as a parameter type and be confident
-/// that health, level, and realm are always available.
+/// that health, level, abilities, and realm are always available.
 /// </para>
 /// </summary>
 public abstract class UnitEntity : WorldEntity
 {
+    /// <summary>
+    /// Shared default <see cref="AbilityEffectExecutor"/> used by all entities unless
+    /// overridden via <c>entity.Abilities.EffectExecutor = …</c>.
+    /// <para>
+    /// Wire <see cref="AbilityEffectExecutor.BuffLookup"/> on this instance at startup
+    /// to enable buff invocation globally.
+    /// </para>
+    /// </summary>
+    public static AbilityEffectExecutor SharedEffectExecutor { get; set; } = new();
+
     protected UnitEntity(ushort objectId, EntityType type, string name, uint maxHealth)
         : base(objectId, type, name)
     {
         Health = new HealthComponent(maxHealth);
+        Abilities = new AbilityComponent(this) { EffectExecutor = SharedEffectExecutor };
         Stats = new StatContainer();
         Buffs = new BuffContainer(this);
         Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
@@ -26,6 +39,9 @@ public abstract class UnitEntity : WorldEntity
 
     /// <summary>Health pool — always present on units. Never null.</summary>
     public HealthComponent Health { get; }
+
+    /// <summary>Per-entity ability state (active cast, cooldowns, GCD) — always present on units. Never null.</summary>
+    public AbilityComponent Abilities { get; }
 
     /// <summary>Stat modifier container — always present on units. Never null.</summary>
     public StatContainer Stats { get; }
@@ -46,14 +62,26 @@ public abstract class UnitEntity : WorldEntity
     public int ActionPoints { get; set; }
 
     /// <summary>
+    /// OID of the entity's current offensive target. Set by the client via
+    /// <c>F_PLAYER_INFO</c> (target-update packet). <c>0</c> = no target selected.
+    /// <para>
+    /// Read advisorily by <see cref="Combat.Abilities.AbilityComponent"/> to resolve
+    /// the target at cast initiation. The region thread may also read this during
+    /// action execution.
+    /// </para>
+    /// </summary>
+    public ushort CurrentTargetOid { get; set; }
+
+    /// <summary>
     /// Override to tick unit-specific state (HP regen, combat timers) before
     /// optional component ticks.
     /// </summary>
-    public override void Update(long tick)
+    public override void Update(long tick, Action<ITickEvent> emit)
     {
         Buffs.Update(tick);
         Stats.Flush();
+        Abilities.Update(tick, emit);
         // TODO: HP regen, combat timers (System 4 — remaining steps)
-        base.Update(tick);
+        base.Update(tick, emit);
     }
 }

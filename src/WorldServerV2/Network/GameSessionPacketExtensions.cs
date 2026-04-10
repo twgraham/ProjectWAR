@@ -132,4 +132,22 @@ public static class GameSessionPacketExtensions
     /// <summary>Sends <c>F_PLAYER_STATE2</c> (0x62) — relayed movement state of another player.</summary>
     public static void SendPlayerStateRelay(this IGameSession session, PlayerStateRelayResponse response)
         => session.Send((byte)Opcodes.F_PLAYER_STATE2, response);
+
+    // ── Combat / Abilities ──────────────────────────────────────────────
+
+    /// <summary>Sends <c>F_USE_ABILITY</c> (0xDA) — ability cast state change (start, complete, cancel).</summary>
+    public static void SendUseAbility(this IGameSession session, UseAbilityResponse response)
+        => session.Send((byte)Opcodes.F_USE_ABILITY, response);
+
+    /// <summary>Sends <c>F_SET_ABILITY_TIMER</c> (0x7E) — cast bar timer (initial or setback).</summary>
+    public static void SendCastBarTimer(this IGameSession session, CastBarTimerResponse response)
+        => session.Send((byte)Opcodes.F_SET_ABILITY_TIMER, response);
+
+    /// <summary>Sends <c>F_SET_ABILITY_TIMER</c> (0x7E) — ability cooldown notification.</summary>
+    public static void SendCooldownTimer(this IGameSession session, CooldownTimerResponse response)
+        => session.Send((byte)Opcodes.F_SET_ABILITY_TIMER, response);
+
+    /// <summary>Sends <c>F_CAST_PLAYER_EFFECT</c> (0xB3) — combat damage/heal/defense numbers.</summary>
+    public static void SendCastPlayerEffect(this IGameSession session, CastPlayerEffectResponse response)
+        => session.Send((byte)Opcodes.F_CAST_PLAYER_EFFECT, response);
 }

@@ -528,6 +528,7 @@ public class ObjectStateTests
     private sealed class StubEventDispatcher : IRegionEventDispatcher
     {
         public void Dispatch<TEvent>(TEvent @event) { }
+        public void Dispatch(ITickEvent @event) { }
     }
 
     private static IRegionEventDispatcher MakeDispatcher(ISessionResolver<PlayerEntity> resolver)
@@ -543,6 +544,8 @@ public class ObjectStateTests
                 case EntityStateChanged s: handler.Handle(s); break;
             }
         }
+
+        public void Dispatch(ITickEvent @event) { }
     }
 
     private static WorldPosition CenterPos(int offsetX = 0, int offsetY = 0)
