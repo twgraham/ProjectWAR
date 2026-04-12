@@ -5,9 +5,6 @@ namespace WorldServerV2.Network;
 
 public static class GameClientConnectionContext
 {
-    private const string GameSessionItemKey = "GameSession";
-
-    
     extension(IConnectionContext context)
     {
         public string ClientId => context.Get<string>("ClientId") ?? "UnknownClient";
@@ -17,7 +14,7 @@ public static class GameClientConnectionContext
         /// Set automatically by <see cref="SessionLifecycleService"/> on connect.
         /// </summary>
         public GameSession Session
-            => context.TryGetValue<GameSession>(GameSessionItemKey, out var session)
+            => context.TryGetValue<GameSession>(SessionRegistry.ConnectionItemKey, out var session)
                 ? session
                 : throw new InvalidOperationException("GameSession not found in connection context. Ensure SessionLifecycleService is properly configured.");
 

@@ -119,7 +119,7 @@ internal sealed class RegionEventHandlerMap
         // handlersArray is IRegionEventHandler<TEvent>[] at runtime.
         // We resolve the concrete Handle method once and invoke it for each handler.
         var handlerInterfaceType = typeof(IRegionEventHandler<>).MakeGenericType(eventType);
-        var handleMethod = handlerInterfaceType.GetMethod(nameof(IRegionEventHandler<object>.Handle))!;
+        var handleMethod = handlerInterfaceType.GetMethod(nameof(IRegionEventHandler<>.Handle))!;
         var array = (Array)handlersArray;
 
         return e =>

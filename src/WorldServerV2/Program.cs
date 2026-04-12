@@ -108,8 +108,6 @@ try
     var characterService = host.Services.GetRequiredService<ICharacterService>();
     await characterService.LoadDirectoryAsync();
     
-    var ps = host.Services.GetRequiredService<PlayerService>();
-
     await host.RunAsync();
 }
 catch (Exception ex)
