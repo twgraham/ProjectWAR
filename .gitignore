@@ -25,3 +25,5 @@ TestResults/
 *.trx
 coverage*.xml
 coverage*.json
+
+appsettings.development.json
