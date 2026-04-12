@@ -1,3 +1,4 @@
+using Core.Domain.ValueObjects;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
@@ -57,18 +58,34 @@ public class CombatHandler : IPacketHandler
             request.IsMoving);
     }
     
+    /// <summary>
+    /// Handles <c>F_PLAYER_INFO</c> (0x18) — client target change.
+    /// <para>
+    /// Updates the player's <see cref="Core.GameWorld.Entities.UnitEntity.CurrentTargetOid"/>
+    /// and sends <c>F_SET_TARGET</c> back to the client. The target OID is a simple
+    /// <c>ushort</c> field that is captured by value when enqueuing ability actions,
+    /// so a mid-tick change on the handler thread cannot corrupt an in-flight cast.
+    /// </para>
+    /// </summary>
     [Rpc((int)Opcodes.F_PLAYER_INFO)]
     public void F_PLAYER_INFO(PlayerInfoRequest request, IConnectionContext context, [FromServices] PlayerService playerService)
     {
-        //cclient.Plr.DebugMessage("F_PLAYER_INFO: SetTarget: "+Oid);
-        // if (request.TargetType == (byte)TargetTypes.TARGETTYPES_TARGET_SELF)
-        //     TargetType = (byte)TargetTypes.TARGETTYPES_TARGET_ALLY;
-
         var player = playerService.GetPlayer(context.Session);
+        if (player is null)
+            return;
+        
         player.CurrentTargetOid = request.Oid;
-        /*cclient.Plr.CbtInterface.SetTarget(Oid, (TargetTypes)TargetType);
 
-        if (LOS == 0)
-            cclient.Plr.AbtInterface.Cancel(true, (ushort)AbilityResult.ABILITYRESULT_NOTVISIBLECLIENT);*/
+        // Send F_SET_TARGET acknowledgement to the client
+        context.Session.SendSetTarget(new SetTargetResponse
+        {
+            TargetOid = request.Oid,
+            PlayerOid = player.ObjectId,
+            SwitchType = request.TargetType == TargetType.Enemy ? (byte)1 : (byte)0,
+        });
+
+        // TODO: Send F_INIT_EFFECTS (target buff list) when buff system
+        // is fully wired. Requires reading target entity's BuffContainer
+        // on the region thread via an enqueued action.
     }
 }

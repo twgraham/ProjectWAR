@@ -1,6 +1,5 @@
 using Core.GameWorld.Combat.Career;
 using Core.GameWorld.Entities;
-using Core.GameWorld.Events;
 using Core.GameWorld.Spatial;
 
 namespace Core.GameWorld.Combat.Abilities;
@@ -50,14 +49,27 @@ public sealed class AbilityComponent
     /// </summary>
     public AbilityEffectExecutor? EffectExecutor { get; set; }
 
+    // ── Domain Callbacks ────────────────────────────────────────────────
+    // The owning UnitEntity subscribes to these and translates them into
+    // region-level tick events via its protected Emit() method.
+
+    /// <summary>Invoked when a cast is confirmed (instant = already done, cast-bar = just started).</summary>
+    public Action<AbilityCastContext>? OnCastConfirmed;
+
+    /// <summary>Invoked when a cast-bar or channeled ability completes.</summary>
+    public Action<AbilityCastContext>? OnCastCompleted;
+
+    /// <summary>Invoked when a cast is cancelled or fails.</summary>
+    public Action<AbilityCastContext, AbilityFailure>? OnCastFailed;
+
+    /// <summary>Invoked when a cooldown is applied after cast completion.</summary>
+    public Action<ushort, int>? OnCooldownApplied;
+
     /// <summary>
-    /// Events emitted during an instant cast's <see cref="CompleteCast"/> call.
-    /// Drained by <see cref="BeginCastAction"/> after <see cref="ConfirmCast"/> returns.
+    /// Invoked when a damage effect is resolved. Caster and result are provided
+    /// so the entity can emit a <c>DamageDealt</c> tick event.
     /// </summary>
-    private List<ITickEvent>? _pendingEffects;
-    internal IReadOnlyList<ITickEvent> PendingEffects
-        => (IReadOnlyList<ITickEvent>?)_pendingEffects ?? Array.Empty<ITickEvent>();
-    internal void ClearPendingEffects() => _pendingEffects?.Clear();
+    public Action<UnitEntity, DamageResult>? OnDamageDealt;
 
     public AbilityComponent(UnitEntity owner)
     {
@@ -331,13 +343,21 @@ public sealed class AbilityComponent
         switch (context.CastState)
         {
             case CastState.Instant:
-                _pendingEffects ??= new();
-                _pendingEffects.Clear();
-                CompleteCast(context, tick, _pendingEffects.Add);
+                if (CompleteCast(context, tick))
+                {
+                    OnCastCompleted?.Invoke(context);
+                    NotifyCooldown(context);
+                }
+                else
+                {
+                    OnCastFailed?.Invoke(context,
+                        context.FailureCode ?? AbilityFailure.Cancelled);
+                }
                 break;
 
             case CastState.Casting:
                 context.CastStartTime = tick;
+                OnCastConfirmed?.Invoke(context);
                 break;
 
             case CastState.Channeling:
@@ -346,6 +366,7 @@ public sealed class AbilityComponent
                     ? definition.ChannelInterval
                     : 1000;
                 NextChannelTick = tick + interval;
+                OnCastConfirmed?.Invoke(context);
                 break;
         }
 
@@ -358,10 +379,10 @@ public sealed class AbilityComponent
 
     /// <summary>
     /// Tick the active cast. Called once per region tick from <see cref="UnitEntity.Update"/>.
-    /// Emits <see cref="ITickEvent"/> instances through the <paramref name="emit"/> callback
-    /// when the cast completes, fails, or applies a cooldown.
+    /// Signals lifecycle transitions through domain callbacks (<see cref="OnCastCompleted"/>,
+    /// <see cref="OnCastFailed"/>, <see cref="OnCooldownApplied"/>).
     /// </summary>
-    public void Update(long tick, Action<ITickEvent> emit)
+    public void Update(long tick)
     {
         var context = ActiveCast;
         if (context is null)
@@ -371,17 +392,17 @@ public sealed class AbilityComponent
         {
             var reason = context.FailureCode ?? AbilityFailure.Cancelled;
             ClearCast();
-            emit(new AbilityCastFailed(_owner, context, reason));
+            OnCastFailed?.Invoke(context, reason);
             return;
         }
 
         switch (context.CastState)
         {
             case CastState.Casting:
-                UpdateCasting(context, tick, emit);
+                UpdateCasting(context, tick);
                 break;
             case CastState.Channeling:
-                UpdateChanneling(context, tick, emit);
+                UpdateChanneling(context, tick);
                 break;
             // Instant casts are fully handled in ConfirmCast — never in ActiveCast.
         }
@@ -442,9 +463,7 @@ public sealed class AbilityComponent
     /// Returns <c>true</c> if the cast completed successfully; <c>false</c> if it failed
     /// (e.g. caster died).
     /// </summary>
-    /// <param name="emit">Optional event callback. For instant casts, captured into
-    /// <see cref="_pendingEffects"/>; for cast-bar, the Phase 3 emit callback.</param>
-    internal bool CompleteCast(AbilityCastContext context, long tick, Action<ITickEvent>? emit = null)
+    internal bool CompleteCast(AbilityCastContext context, long tick)
     {
         var definition = context.Definition;
 
@@ -469,7 +488,7 @@ public sealed class AbilityComponent
             ApplyModifiers(context, ModifierStage.PostCast);
 
         // Execute commands
-        EffectExecutor?.ExecuteCommands(context, _owner, context.Target, emit);
+        EffectExecutor?.ExecuteCommands(context, _owner, context.Target, OnDamageDealt);
 
         // Apply cooldown
         ApplyCooldown(definition, context, tick);
@@ -484,7 +503,7 @@ public sealed class AbilityComponent
     //  UPDATE HELPERS
     // ═══════════════════════════════════════════════════════════════════
 
-    private void UpdateCasting(AbilityCastContext context, long tick, Action<ITickEvent> emit)
+    private void UpdateCasting(AbilityCastContext context, long tick)
     {
         var elapsed = tick - context.CastStartTime;
         var totalCastTime = context.CastTime + context.SetbackAccumulator;
@@ -498,7 +517,7 @@ public sealed class AbilityComponent
                 var rangeFailure = CheckRange(_owner, context.Target, context.Range, context.MinRange);
                 if (rangeFailure.HasValue)
                 {
-                    CancelCastInternal(context, rangeFailure.Value, emit);
+                    CancelCastInternal(context, rangeFailure.Value);
                     return;
                 }
             }
@@ -507,25 +526,25 @@ public sealed class AbilityComponent
         // Cast completion
         if (elapsed >= totalCastTime)
         {
-            if (CompleteCast(context, tick, emit))
+            if (CompleteCast(context, tick))
             {
-                emit(new AbilityCastCompleted(_owner, context));
-                EmitCooldown(context, emit);
+                OnCastCompleted?.Invoke(context);
+                NotifyCooldown(context);
             }
             else
             {
-                emit(new AbilityCastFailed(_owner, context,
-                    context.FailureCode ?? AbilityFailure.Cancelled));
+                OnCastFailed?.Invoke(context,
+                    context.FailureCode ?? AbilityFailure.Cancelled);
             }
         }
     }
 
-    private void UpdateChanneling(AbilityCastContext context, long tick, Action<ITickEvent> emit)
+    private void UpdateChanneling(AbilityCastContext context, long tick)
     {
         // Check target alive
         if (context.Target is not null && context.Target.Health.IsDead)
         {
-            CancelCastInternal(context, AbilityFailure.TargetDead, emit);
+            CancelCastInternal(context, AbilityFailure.TargetDead);
             return;
         }
 
@@ -533,8 +552,8 @@ public sealed class AbilityComponent
         if (tick - context.CastStartTime >= context.CastTime)
         {
             ClearCast();
-            emit(new AbilityCastCompleted(_owner, context));
-            EmitCooldown(context, emit);
+            OnCastCompleted?.Invoke(context);
+            NotifyCooldown(context);
             return;
         }
 
@@ -544,7 +563,7 @@ public sealed class AbilityComponent
             // Consume AP per tick (V1 behavior)
             if (context.ApCost > 0 && _owner.ActionPoints < (int)context.ApCost)
             {
-                CancelCastInternal(context, AbilityFailure.NotEnoughAp, emit);
+                CancelCastInternal(context, AbilityFailure.NotEnoughAp);
                 return;
             }
 
@@ -557,13 +576,13 @@ public sealed class AbilityComponent
                 var rangeFailure = CheckRange(_owner, context.Target, context.Range, context.MinRange);
                 if (rangeFailure.HasValue)
                 {
-                    CancelCastInternal(context, rangeFailure.Value, emit);
+                    CancelCastInternal(context, rangeFailure.Value);
                     return;
                 }
             }
 
             // Apply channel effects
-            EffectExecutor?.ExecuteCommands(context, _owner, context.Target, emit);
+            EffectExecutor?.ExecuteCommands(context, _owner, context.Target, OnDamageDealt);
 
             var interval = context.Definition.ChannelInterval > 0
                 ? context.Definition.ChannelInterval
@@ -573,9 +592,9 @@ public sealed class AbilityComponent
     }
 
     /// <summary>
-    /// Internal cancel used during Phase 3 ticking — emits the failure event directly.
+    /// Internal cancel used during Phase 3 ticking — signals the failure through the callback.
     /// </summary>
-    private void CancelCastInternal(AbilityCastContext context, AbilityFailure reason, Action<ITickEvent> emit)
+    private void CancelCastInternal(AbilityCastContext context, AbilityFailure reason)
     {
         context.Fail(reason);
 
@@ -583,7 +602,7 @@ public sealed class AbilityComponent
             ClearGlobalCooldown();
 
         ClearCast();
-        emit(new AbilityCastFailed(_owner, context, reason));
+        OnCastFailed?.Invoke(context, reason);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -619,8 +638,8 @@ public sealed class AbilityComponent
         SetCooldown(cdEntry, tick, cooldownMs);
     }
 
-    /// <summary>Emit a cooldown event if the context has a non-zero cooldown.</summary>
-    private void EmitCooldown(AbilityCastContext context, Action<ITickEvent> emit)
+    /// <summary>Signal a cooldown callback if the context has a non-zero cooldown.</summary>
+    private void NotifyCooldown(AbilityCastContext context)
     {
         var cooldownMs = (int)context.Cooldown;
         if (cooldownMs <= 0)
@@ -630,7 +649,7 @@ public sealed class AbilityComponent
             ? context.Definition.CooldownEntry
             : context.Definition.Entry;
 
-        emit(new AbilityCooldownApplied(_owner, cdEntry, cooldownMs));
+        OnCooldownApplied?.Invoke(cdEntry, cooldownMs);
     }
 
     // ═══════════════════════════════════════════════════════════════════

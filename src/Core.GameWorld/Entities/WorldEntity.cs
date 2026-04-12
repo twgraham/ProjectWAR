@@ -105,6 +105,28 @@ public abstract class WorldEntity
     /// </summary>
     internal bool StateDirty { get; set; }
 
+    // ── Event Emission ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Raised when the entity (or one of its components) emits a tick event.
+    /// <para>
+    /// The <see cref="Region"/> subscribes when the entity is added and unsubscribes
+    /// when it is removed. External code should only <c>+=</c> / <c>-=</c>; only the
+    /// entity hierarchy can invoke the event through <see cref="Emit"/>.
+    /// </para>
+    /// </summary>
+    public event Action<ITickEvent>? EventEmitted;
+
+    /// <summary>
+    /// Emits an <see cref="ITickEvent"/> through the <see cref="EventEmitted"/> event.
+    /// <para>
+    /// Only callable by this class and its subclasses (protected). Components signal
+    /// domain-level callbacks; the owning entity translates them into tick events via
+    /// this method.
+    /// </para>
+    /// </summary>
+    protected void Emit(ITickEvent evt) => EventEmitted?.Invoke(evt);
+
     /// <summary>
     /// Tick timestamp (ms) at which the next keepalive <c>F_OBJECT_STATE</c> broadcast
     /// should be sent, even if no state has changed. Reset after every broadcast via
@@ -222,7 +244,7 @@ public abstract class WorldEntity
     /// Ticks subclass-specific state (override in <see cref="UnitEntity"/> for health regen, etc.)
     /// then ticks all <see cref="ITickable"/> optional components.
     /// </summary>
-    public virtual void Update(long tick, Action<ITickEvent> emit)
+    public virtual void Update(long tick)
     {
         _tickableCache ??= BuildTickableCache();
 

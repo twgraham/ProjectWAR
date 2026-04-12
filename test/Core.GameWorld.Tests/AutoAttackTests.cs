@@ -8,14 +8,14 @@ using Shouldly;
 namespace Core.GameWorld.Tests;
 
 /// <summary>
-/// Unit tests for Step 8: Auto-attack system — timing, range checks, offhand proc,
+/// Unit tests for Step 8: Auto-attack system â€” timing, range checks, offhand proc,
 /// CC interrupts, ranged conditions, and damage integration.
 /// </summary>
 public class AutoAttackTests
 {
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Helpers
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     private static PlayerEntity MakeUnit(ushort id = 1, uint maxHealth = 10_000)
     {
@@ -90,9 +90,9 @@ public class AutoAttackTests
             random ?? FixedRandom(50)); // default: below 45 offhand threshold
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Basic State
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Starts_not_attacking()
@@ -122,9 +122,9 @@ public class AutoAttackTests
         comp.Target.ShouldBeNull();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Melee Swing Timing
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Melee_swing_deals_damage_at_tick_zero()
@@ -158,11 +158,11 @@ public class AutoAttackTests
 
         var hpAfterFirst = target.Health.Current;
 
-        // Too early for second swing (speed=200 → interval=2000ms)
+        // Too early for second swing (speed=200 â†’ interval=2000ms)
         comp.Update(1500);
         target.Health.Current.ShouldBe(hpAfterFirst); // no new swing
 
-        // Now at 2000ms — should swing
+        // Now at 2000ms â€” should swing
         comp.Update(2000);
         target.Health.Current.ShouldBeLessThan(hpAfterFirst);
     }
@@ -172,7 +172,7 @@ public class AutoAttackTests
     {
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
-        // 25% speed bonus → interval = 200*10 / (1 + 0.25) = 1600
+        // 25% speed bonus â†’ interval = 200*10 / (1 + 0.25) = 1600
         attacker.Stats.SetBase(StatId.AutoAttackSpeed, 25);
         attacker.Stats.Flush();
 
@@ -204,15 +204,15 @@ public class AutoAttackTests
         // No bonuses: 200 * 10 / 1.0 = 2000
         comp.ComputeAttackInterval(entity, 200).ShouldBe(2000);
 
-        // 50% bonus: 200 * 10 / 1.5 ≈ 1333
+        // 50% bonus: 200 * 10 / 1.5 â‰ˆ 1333
         entity.Stats.SetBase(StatId.AutoAttackSpeed, 50);
         entity.Stats.Flush();
         comp.ComputeAttackInterval(entity, 200).ShouldBe(1333);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Melee Range
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Melee_swing_at_boundary()
@@ -248,9 +248,9 @@ public class AutoAttackTests
         comp.IsAttacking.ShouldBeTrue(); // still trying
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Ranged Attacks
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Ranged_swing_when_out_of_melee()
@@ -328,7 +328,7 @@ public class AutoAttackTests
         attacker.Stats.SetBase(StatId.Range, 20); // 90 + 20 = 110
         attacker.Stats.Flush();
 
-        // Distance 100 → within 110 range
+        // Distance 100 â†’ within 110 range
         var comp = MakeComponent(
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(100f));
@@ -363,29 +363,29 @@ public class AutoAttackTests
         attacker.Attach(comp);
 
         comp.StartAttack(target);
-        comp.Update(0); // LOS fails → delay 1000ms
+        comp.Update(0); // LOS fails â†’ delay 1000ms
 
         target.Health.Current.ShouldBe(target.Health.Max); // no damage
 
-        // At 500ms — still delayed
+        // At 500ms â€” still delayed
         comp.Update(500);
         target.Health.Current.ShouldBe(target.Health.Max);
 
-        // At 1000ms — retry succeeds
+        // At 1000ms â€” retry succeeds
         comp.Update(1000);
         target.Health.Current.ShouldBeLessThan(target.Health.Max);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Offhand Proc
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Offhand_procs_on_melee_swing()
     {
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
-        // Random returns 30 → below 45 threshold → offhand fires
+        // Random returns 30 â†’ below 45 threshold â†’ offhand fires
         var comp = MakeComponent(
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
@@ -407,7 +407,7 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         int callCount = 0;
-        // Random returns 80 → above 45 → no offhand
+        // Random returns 80 â†’ above 45 â†’ no offhand
         var comp = MakeComponent(
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
@@ -426,7 +426,7 @@ public class AutoAttackTests
     {
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
-        // Roll=50, base=45, bonus=10 → threshold=55, 50≤55 → procs
+        // Roll=50, base=45, bonus=10 â†’ threshold=55, 50â‰¤55 â†’ procs
         attacker.Stats.SetBase(StatId.OffhandProcChance, 10);
         attacker.Stats.Flush();
 
@@ -450,7 +450,7 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         int hitCount = 0;
-        // Roll=30 → would proc, but offhand is a shield
+        // Roll=30 â†’ would proc, but offhand is a shield
         var comp = MakeComponent(
             weapons: SimpleWeapons(MeleeWeapon(), Shield()),
             distance: FixedDistance(3f),
@@ -461,7 +461,7 @@ public class AutoAttackTests
         comp.StartAttack(target);
         comp.Update(0);
 
-        hitCount.ShouldBe(1); // main only — shield blocks offhand
+        hitCount.ShouldBe(1); // main only â€” shield blocks offhand
     }
 
     [Fact]
@@ -472,7 +472,7 @@ public class AutoAttackTests
         int hitCount = 0;
         var comp = MakeComponent(
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon(), RangedWeapon()),
-            distance: FixedDistance(50f), // out of melee → ranged
+            distance: FixedDistance(50f), // out of melee â†’ ranged
             random: FixedRandom(30)); // would proc if melee
         attacker.Attach(comp);
         comp.OnHit = (_, _, _) => hitCount++;
@@ -483,9 +483,9 @@ public class AutoAttackTests
         hitCount.ShouldBe(1); // ranged only, no offhand
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  CC Interrupts
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Disarm_blocks_auto_attack()
@@ -510,7 +510,7 @@ public class AutoAttackTests
 
         comp.Update(0);
 
-        target.Health.Current.ShouldBe(target.Health.Max); // no damage — disarmed
+        target.Health.Current.ShouldBe(target.Health.Max); // no damage â€” disarmed
     }
 
     [Fact]
@@ -588,9 +588,9 @@ public class AutoAttackTests
         target.Health.Current.ShouldBeLessThan(target.Health.Max); // snare doesn't block
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Dead Target / Dead Attacker
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Stops_when_target_dies()
@@ -626,9 +626,9 @@ public class AutoAttackTests
         target.Health.Current.ShouldBe(target.Health.Max); // no damage dealt
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Facing Check
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Melee_swing_skipped_when_not_facing()
@@ -647,9 +647,9 @@ public class AutoAttackTests
         comp.IsAttacking.ShouldBeTrue(); // still trying
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Damage Context Flags
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Main_hand_context_has_auto_attack_flag()
@@ -726,7 +726,7 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         DamageContext? captured = null;
 
-        // speed=300 → CastTimeDamageMult = 300/100 = 3.0
+        // speed=300 â†’ CastTimeDamageMult = 300/100 = 3.0
         var comp = MakeComponent(
             weapons: SimpleWeapons(MeleeWeapon(dps: 80, speed: 300)),
             distance: FixedDistance(3f),
@@ -761,9 +761,9 @@ public class AutoAttackTests
         captured.StatCoefficient.ShouldBe(0.1f);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Entity Integration (ITickable via WorldEntity.Update)
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Component_ticked_by_entity_update()
@@ -778,21 +778,21 @@ public class AutoAttackTests
         comp.StartAttack(target);
 
         // Use entity update which ticks all ITickable components
-        attacker.Update(0, _ => { });
+        attacker.Update(0);
 
         target.Health.Current.ShouldBeLessThan(target.Health.Max);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  No Weapon Fallback
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void No_weapon_uses_default_speed()
     {
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
-        // No weapons at all — uses default weapon speed
+        // No weapons at all â€” uses default weapon speed
         var comp = MakeComponent(
             weapons: SimpleWeapons(null, null, null),
             distance: FixedDistance(3f));
@@ -802,14 +802,14 @@ public class AutoAttackTests
         comp.Update(0);
 
         // With null weapon DPS = 0, no damage but interval should use default (200)
-        // weaponDps=0 → WeaponDps=0 → ctx.Damage = 0 → FinalDamage = 0
+        // weaponDps=0 â†’ WeaponDps=0 â†’ ctx.Damage = 0 â†’ FinalDamage = 0
         // Attack should still complete without error
         comp.IsAttacking.ShouldBeTrue();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Offhand with OffhandDamage stat bonus
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Offhand_uses_lower_stat_coefficient()
@@ -832,9 +832,9 @@ public class AutoAttackTests
         lastCtx.StatCoefficient.ShouldBe(0.05f);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Multiple Swings
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Multiple_swings_accumulate_damage()
@@ -868,9 +868,9 @@ public class AutoAttackTests
         d3.ShouldBeGreaterThan(d2);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  OnHit callback
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void OnHit_fires_for_each_swing()

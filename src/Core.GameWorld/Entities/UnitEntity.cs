@@ -1,3 +1,4 @@
+using Core.GameWorld.Combat;
 using Core.GameWorld.Combat.Abilities;
 using Core.GameWorld.Combat.Buffs;
 using Core.GameWorld.Components;
@@ -13,6 +14,11 @@ namespace Core.GameWorld.Entities;
 /// <para>
 /// Combat systems can accept <c>UnitEntity</c> as a parameter type and be confident
 /// that health, level, abilities, and realm are always available.
+/// </para>
+/// <para>
+/// Component callbacks are wired at construction. Each component signals domain-level
+/// facts (e.g. "cast completed", "died"); the entity translates them into region-level
+/// <see cref="ITickEvent"/> instances via the protected <see cref="WorldEntity.Emit"/> method.
 /// </para>
 /// </summary>
 public abstract class UnitEntity : WorldEntity
@@ -35,6 +41,18 @@ public abstract class UnitEntity : WorldEntity
         Stats = new StatContainer();
         Buffs = new BuffContainer(this);
         Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
+
+        // ── Wire component callbacks → tick events ──────────────────
+        Health.OnDied = () => Emit(new EntityDied(this));
+
+        Abilities.OnCastConfirmed = ctx => Emit(new AbilityCastConfirmed(this, ctx));
+        Abilities.OnCastCompleted = ctx => Emit(new AbilityCastCompleted(this, ctx));
+        Abilities.OnCastFailed = (ctx, reason) => Emit(new AbilityCastFailed(this, ctx, reason));
+        Abilities.OnCooldownApplied = (entry, ms) => Emit(new AbilityCooldownApplied(this, entry, ms));
+        Abilities.OnDamageDealt = (caster, result) => Emit(new DamageDealt(
+            caster, result.Target, result.AbilityEntry, result.CommandIndex,
+            result.Damage, result.Mitigation, result.Absorption,
+            result.WasCritical, result.WasDefended, result.DefenseType));
     }
 
     /// <summary>Health pool — always present on units. Never null.</summary>
@@ -70,18 +88,18 @@ public abstract class UnitEntity : WorldEntity
     /// action execution.
     /// </para>
     /// </summary>
-    public ushort CurrentTargetOid { get; set; }
+    public ushort? CurrentTargetOid { get; set; }
 
     /// <summary>
     /// Override to tick unit-specific state (HP regen, combat timers) before
     /// optional component ticks.
     /// </summary>
-    public override void Update(long tick, Action<ITickEvent> emit)
+    public override void Update(long tick)
     {
         Buffs.Update(tick);
         Stats.Flush();
-        Abilities.Update(tick, emit);
+        Abilities.Update(tick);
         // TODO: HP regen, combat timers (System 4 — remaining steps)
-        base.Update(tick, emit);
+        base.Update(tick);
     }
 }

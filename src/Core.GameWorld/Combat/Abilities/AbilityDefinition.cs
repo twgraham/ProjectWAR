@@ -217,13 +217,13 @@ public sealed class AbilityCommandDefinition
     public CommandTargetType AoESource { get; init; }
 
     /// <summary>Effect radius in feet. 0 = single target.</summary>
-    public byte? EffectRadius { get; init; }
+    public byte EffectRadius { get; init; }
 
     /// <summary>Cone angle for directional AoE. 0 = full circle.</summary>
     public byte? EffectAngle { get; init; }
 
     /// <summary>Maximum targets for AoE. 0 defaults to 9.</summary>
-    public byte? MaxTargets { get; init; }
+    public byte MaxTargets { get; init; }
 
     /// <summary>Primary parameter (damage value, buff entry, resource amount, etc.).</summary>
     public int PrimaryValue { get; init; }

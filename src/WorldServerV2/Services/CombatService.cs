@@ -76,6 +76,15 @@ public sealed class CombatService
             return;
         }
 
+        var currentTarget = player.CurrentTargetOid;
+        if (currentTarget is null)
+        {
+            _logger.LogDebug(
+                "Player {Name} tried to cast {AbilityId} with no target",
+                player.Name, abilityId);
+            return;
+        }
+
         // 2. Movement check (handler thread — advisory, saves a round-trip to region)
         if (isMoving && !definition.CanCastWhileMoving && definition.CastTime > 0)
         {
@@ -86,7 +95,7 @@ public sealed class CombatService
                 abilityId,
                 player.ObjectId,
                 definition.EffectId,
-                player.CurrentTargetOid,
+                currentTarget.Value,
                 (byte)AbilityFailure.Moving,
                 castSequence: 0));
             return;
@@ -107,7 +116,7 @@ public sealed class CombatService
         //    resolve the target entity, and dispatch region events on success/failure.
         var action = new BeginCastAction(
             player.ObjectId,
-            player.CurrentTargetOid,
+            currentTarget.Value,
             definition);
 
         region.EnqueueAction(action);

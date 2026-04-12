@@ -8,14 +8,14 @@ using Shouldly;
 namespace Core.GameWorld.Tests;
 
 /// <summary>
-/// Unit tests for Step 7: Career Resource archetypes — each archetype's
+/// Unit tests for Step 7: Career Resource archetypes â€” each archetype's
 /// generate/consume/decay cycle plus AbilityComponent integration.
 /// </summary>
 public class CareerResourceTests
 {
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Helpers
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     private static PlayerEntity MakeUnit(ushort id = 1, uint maxHealth = 1000)
     {
@@ -32,9 +32,9 @@ public class CareerResourceTests
         entity.Attach(new CareerResourceComponent(resource));
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  ContinuousResource
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Continuous_starts_at_zero()
@@ -114,10 +114,10 @@ public class CareerResourceTests
         res.Generate(25);
         capturedLevel.ShouldBe((byte)1);
 
-        res.Generate(75); // now 100 → level 4
+        res.Generate(75); // now 100 â†’ level 4
         capturedLevel.ShouldBe((byte)4);
 
-        res.Consume(80); // now 20 → level 0
+        res.Consume(80); // now 20 â†’ level 0
         capturedLevel.ShouldBe((byte)0);
     }
 
@@ -135,7 +135,7 @@ public class CareerResourceTests
         res.Generate(100);
         res.NotifyAction(0);
 
-        // Before idle timeout — no decay
+        // Before idle timeout â€” no decay
         res.Update(4000);
         res.Current.ShouldBe((byte)100);
 
@@ -202,9 +202,9 @@ public class CareerResourceTests
         res.Current.ShouldBe((byte)100);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  ComboResource
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Combo_starts_at_zero()
@@ -340,9 +340,9 @@ public class CareerResourceTests
         res.Level.ShouldBe((byte)4);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  StanceResource
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Stance_starts_at_none()
@@ -388,13 +388,13 @@ public class CareerResourceTests
         });
 
         res.SetResource(1);
-        res.HasResource(4).ShouldBeTrue();  // 1 ∈ {1,2}
-        res.HasResource(5).ShouldBeFalse(); // 1 ∉ {2,3}
-        res.HasResource(7).ShouldBeTrue();  // 1 ∈ {1,2,3}
+        res.HasResource(4).ShouldBeTrue();  // 1 âˆˆ {1,2}
+        res.HasResource(5).ShouldBeFalse(); // 1 âˆ‰ {2,3}
+        res.HasResource(7).ShouldBeTrue();  // 1 âˆˆ {1,2,3}
 
         res.SetResource(3);
-        res.HasResource(4).ShouldBeFalse(); // 3 ∉ {1,2}
-        res.HasResource(5).ShouldBeTrue();  // 3 ∈ {2,3}
+        res.HasResource(4).ShouldBeFalse(); // 3 âˆ‰ {1,2}
+        res.HasResource(5).ShouldBeTrue();  // 3 âˆˆ {2,3}
     }
 
     [Fact]
@@ -403,7 +403,7 @@ public class CareerResourceTests
         var res = new StanceResource(new StanceResourceConfig { StanceCount = 3 });
         res.SetResource(2);
         res.Consume(2).ShouldBeTrue();
-        res.Current.ShouldBe((byte)2); // not consumed — stances persist
+        res.Current.ShouldBe((byte)2); // not consumed â€” stances persist
     }
 
     [Fact]
@@ -427,7 +427,7 @@ public class CareerResourceTests
         res.SetResource(2);
         captured.ShouldBe((byte)2);
 
-        res.SetResource(2); // same stance — no callback
+        res.SetResource(2); // same stance â€” no callback
         captured.ShouldBe((byte)2); // not re-fired
 
         res.SetResource(1);
@@ -442,16 +442,16 @@ public class CareerResourceTests
         res.Current.ShouldBe((byte)0); // unchanged
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  BalanceNeedleResource
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Needle_starts_at_center()
     {
         var res = new BalanceNeedleResource(new BalanceNeedleConfig { Max = 5 });
         res.Current.ShouldBe((byte)5); // center
-        res.Max.ShouldBe((byte)10);    // 2 × Max
+        res.Max.ShouldBe((byte)10);    // 2 Ã— Max
         res.Center.ShouldBe((byte)5);
         res.Level.ShouldBe((byte)0);   // distance from center = 0
         res.DamageSideDepth.ShouldBe((byte)0);
@@ -462,13 +462,13 @@ public class CareerResourceTests
     public void Needle_generate_pushes_damage_side()
     {
         var res = new BalanceNeedleResource(new BalanceNeedleConfig { Max = 5 });
-        res.Generate(1); // push toward damage (5 → 4)
+        res.Generate(1); // push toward damage (5 â†’ 4)
         res.Current.ShouldBe((byte)4);
         res.DamageSideDepth.ShouldBe((byte)1);
         res.HealSideDepth.ShouldBe((byte)0);
         res.Level.ShouldBe((byte)1);
 
-        res.Generate(1); // 4 → 3
+        res.Generate(1); // 4 â†’ 3
         res.Current.ShouldBe((byte)3);
         res.DamageSideDepth.ShouldBe((byte)2);
         res.Level.ShouldBe((byte)2);
@@ -478,7 +478,7 @@ public class CareerResourceTests
     public void Needle_consume_pushes_heal_side()
     {
         var res = new BalanceNeedleResource(new BalanceNeedleConfig { Max = 5 });
-        res.Consume(1); // center → 6 (heal side)
+        res.Consume(1); // center â†’ 6 (heal side)
         res.Current.ShouldBe((byte)6);
         res.HealSideDepth.ShouldBe((byte)1);
         res.DamageSideDepth.ShouldBe((byte)0);
@@ -498,7 +498,7 @@ public class CareerResourceTests
         // Reset to center, push all the way to heal side
         res.SetResource(5);
         for (int i = 0; i < 10; i++) res.Consume(1);
-        res.Current.ShouldBe((byte)10); // clamped at 2 × Max
+        res.Current.ShouldBe((byte)10); // clamped at 2 Ã— Max
         res.HealSideDepth.ShouldBe((byte)5);
     }
 
@@ -573,19 +573,19 @@ public class CareerResourceTests
             OnLevelChanged = (_, lvl) => capturedLevel = lvl
         });
 
-        res.Generate(1); // level 0→1
+        res.Generate(1); // level 0â†’1
         capturedLevel.ShouldBe((byte)1);
 
-        res.Generate(1); // level 1→2
+        res.Generate(1); // level 1â†’2
         capturedLevel.ShouldBe((byte)2);
 
         res.SetResource(5); // back to center, level 0
         capturedLevel.ShouldBe((byte)0);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  StancedContinuousResource
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void StancedContinuous_starts_at_initial_value()
@@ -713,10 +713,10 @@ public class CareerResourceTests
             LevelConversionFactor = 0.16f
         });
 
-        // 100 × 0.16 = 16
+        // 100 Ã— 0.16 = 16
         res.Level.ShouldBe((byte)16);
 
-        res.Consume(50); // 50 × 0.16 = 8
+        res.Consume(50); // 50 Ã— 0.16 = 8
         res.Level.ShouldBe((byte)8);
     }
 
@@ -735,7 +735,7 @@ public class CareerResourceTests
         // Initial level = 16 via constructor RecalcLevel
         captured.ShouldBe((byte)16);
 
-        res.Generate(50); // 150 × 0.16 = 24
+        res.Generate(50); // 150 Ã— 0.16 = 24
         captured.ShouldBe((byte)24);
     }
 
@@ -756,9 +756,9 @@ public class CareerResourceTests
         res.Current.ShouldBe((byte)100); // no drain
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  CareerResourceComponent
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Component_ticks_resource_via_entity_update()
@@ -776,7 +776,7 @@ public class CareerResourceTests
         AttachResource(unit, res);
 
         // Entity.Update ticks all ITickable components
-        unit.Update(1000, _ => { });
+        unit.Update(1000);
         res.Current.ShouldBe((byte)40); // decayed by 10
     }
 
@@ -792,9 +792,9 @@ public class CareerResourceTests
         comp.Resource.ShouldBeSameAs(res);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  AbilityComponent integration
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     private static AbilityDefinition MakeAbilityDef(
         ushort entry = 1000, byte apCost = 0, short specialCost = 0,
@@ -872,7 +872,7 @@ public class CareerResourceTests
         var ctx = comp.TryInitiate(def, null, 0, out _);
         ctx.ShouldNotBeNull();
 
-        comp.ConfirmCast(ctx, 0); // instant cast → CompleteCast
+        comp.ConfirmCast(ctx, 0); // instant cast â†’ CompleteCast
 
         res.Current.ShouldBe((byte)30); // 50 - 20
     }
@@ -881,7 +881,7 @@ public class CareerResourceTests
     public void Zero_special_cost_skips_resource_check()
     {
         var (caster, comp) = MakeCaster();
-        // No career resource attached, but SpecialCost = 0 → should pass
+        // No career resource attached, but SpecialCost = 0 â†’ should pass
         var def = MakeAbilityDef(specialCost: 0);
 
         var result = comp.TryInitiate(def, null, 0, out var failure);

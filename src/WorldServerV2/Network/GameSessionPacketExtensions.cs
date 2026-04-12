@@ -150,4 +150,20 @@ public static class GameSessionPacketExtensions
     /// <summary>Sends <c>F_CAST_PLAYER_EFFECT</c> (0xB3) — combat damage/heal/defense numbers.</summary>
     public static void SendCastPlayerEffect(this IGameSession session, CastPlayerEffectResponse response)
         => session.Send((byte)Opcodes.F_CAST_PLAYER_EFFECT, response);
+
+    // ── Targeting ────────────────────────────────────────────────────────
+
+    /// <summary>Sends <c>F_SET_TARGET</c> (0x5E) — acknowledges a target change.</summary>
+    public static void SendSetTarget(this IGameSession session, SetTargetResponse response)
+        => session.Send((byte)Opcodes.F_SET_TARGET, response);
+
+    /// <summary>Sends <c>F_HIT_PLAYER</c> (0x14) — health bar update after damage/heal.</summary>
+    public static void SendHitPlayer(this IGameSession session, HitPlayerResponse response)
+        => session.Send((byte)Opcodes.F_HIT_PLAYER, response);
+    
+    // ── Lifecycle ────────────────────────────────────────────────────────
+    
+    /// <summary>Sends <c>F_OBJECT_DEATH</c> (0x0A) — notifies client of an entity's death.</summary>
+    public static void SendObjectDeath(this IGameSession session, ObjectDeathResponse response)
+        => session.Send((byte)Opcodes.F_OBJECT_DEATH, response);
 }

@@ -13,9 +13,9 @@ namespace Core.GameWorld.Tests;
 /// </summary>
 public class AbilityComponentTests
 {
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Helpers
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     private static PlayerEntity MakeUnit(ushort id = 1, uint maxHealth = 1000)
     {
@@ -109,9 +109,9 @@ public class AbilityComponentTests
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  AbilityComponent — Cooldowns & GCD
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  AbilityComponent â€” Cooldowns & GCD
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Component_cooldown_tracks_expiry()
@@ -162,9 +162,9 @@ public class AbilityComponentTests
         comp.IsOnGlobalCooldown(0).ShouldBeFalse();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  TryInitiate — Validation Failures
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  TryInitiate â€” Validation Failures
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Initiate_fails_when_caster_is_dead()
@@ -415,9 +415,9 @@ public class AbilityComponentTests
         fail.ShouldBe(AbilityFailure.Knockdown);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Instant Cast — Integration
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  Instant Cast â€” Integration
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Instant_cast_deals_damage_and_consumes_ap()
@@ -435,8 +435,8 @@ public class AbilityComponentTests
 
         comp.ConfirmCast(ctx, 0).ShouldBeTrue();
 
-        target.Health.Current.ShouldBe(900u); // 1000 − 100
-        caster.ActionPoints.ShouldBe(225);    // 250 − 25
+        target.Health.Current.ShouldBe(900u); // 1000 âˆ’ 100
+        caster.ActionPoints.ShouldBe(225);    // 250 âˆ’ 25
         comp.HasActiveCast.ShouldBeFalse();   // cleared after instant
     }
 
@@ -530,9 +530,9 @@ public class AbilityComponentTests
         caster.Health.Current.ShouldBe(600u); // 500 + 100 healed
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Cast Bar (CastTime > 0)
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void CastBar_registers_pending_and_completes_on_tick()
@@ -553,12 +553,12 @@ public class AbilityComponentTests
         target.Health.Current.ShouldBe(1000u);
         caster.ActionPoints.ShouldBe(250); // AP not consumed yet
 
-        // Tick at 50% — still casting
-        comp.Update(1000, _ => { });
+        // Tick at 50% â€” still casting
+        comp.Update(1000);
         comp.HasActiveCast.ShouldBeTrue();
 
-        // Tick at 100% — cast completes
-        comp.Update(2000, _ => { });
+        // Tick at 100% â€” cast completes
+        comp.Update(2000);
         comp.HasActiveCast.ShouldBeFalse();
         target.Health.Current.ShouldBe(900u);
         caster.ActionPoints.ShouldBe(225); // AP consumed on completion
@@ -580,7 +580,7 @@ public class AbilityComponentTests
         PlaceAt(target, 100_000, 0);
 
         // Tick past 60% (1200ms)
-        comp.Update(1300, _ => { });
+        comp.Update(1300);
         comp.HasActiveCast.ShouldBeFalse(); // cancelled
     }
 
@@ -600,9 +600,9 @@ public class AbilityComponentTests
         comp.IsOnGlobalCooldown(0).ShouldBeFalse();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Channeling
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Channel_applies_effects_per_tick()
@@ -625,17 +625,17 @@ public class AbilityComponentTests
         target.Health.Current.ShouldBe(10_000u); // no tick yet
 
         // First tick at 1000ms
-        comp.Update(1000, _ => { });
-        target.Health.Current.ShouldBe(9_900u);     // −100 from first tick
-        caster.ActionPoints.ShouldBe(490);          // −10 AP per tick
+        comp.Update(1000);
+        target.Health.Current.ShouldBe(9_900u);     // âˆ’100 from first tick
+        caster.ActionPoints.ShouldBe(490);          // âˆ’10 AP per tick
 
         // Second tick at 2000ms
-        comp.Update(2000, _ => { });
+        comp.Update(2000);
         target.Health.Current.ShouldBe(9_800u);
         caster.ActionPoints.ShouldBe(480);
 
         // Channel ends at 3000ms
-        comp.Update(3000, _ => { });
+        comp.Update(3000);
         comp.HasActiveCast.ShouldBeFalse();
     }
 
@@ -656,11 +656,11 @@ public class AbilityComponentTests
         comp.ConfirmCast(ctx, 0);
 
         // First tick kills the target (100 > 50)
-        comp.Update(1000, _ => { });
+        comp.Update(1000);
         target.Health.IsDead.ShouldBeTrue();
 
         // Next tick should cancel the channel
-        comp.Update(2000, _ => { });
+        comp.Update(2000);
         comp.HasActiveCast.ShouldBeFalse();
     }
 
@@ -681,18 +681,18 @@ public class AbilityComponentTests
         var ctx = comp.TryInitiate(def, target, 0, out _)!;
         comp.ConfirmCast(ctx, 0);
 
-        // First tick: 15 ≥ 10 → OK
-        comp.Update(1000, _ => { });
+        // First tick: 15 â‰¥ 10 â†’ OK
+        comp.Update(1000);
         caster.ActionPoints.ShouldBe(5);
 
-        // Second tick: 5 < 10 → cancel
-        comp.Update(2000, _ => { });
+        // Second tick: 5 < 10 â†’ cancel
+        comp.Update(2000);
         comp.HasActiveCast.ShouldBeFalse();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Setback & Fragile
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Setback_extends_cast_time()
@@ -712,12 +712,12 @@ public class AbilityComponentTests
         comp.AddSetback(500);
         ctx.SetbackAccumulator.ShouldBe(500f);
 
-        // Tick at 2000ms — would normally complete, but now needs 2500ms
-        comp.Update(2000, _ => { });
+        // Tick at 2000ms â€” would normally complete, but now needs 2500ms
+        comp.Update(2000);
         comp.HasActiveCast.ShouldBeTrue();
 
-        // Tick at 2500ms — now completes
-        comp.Update(2500, _ => { });
+        // Tick at 2500ms â€” now completes
+        comp.Update(2500);
         comp.HasActiveCast.ShouldBeFalse();
         target.Health.Current.ShouldBe(900u);
     }
@@ -747,9 +747,9 @@ public class AbilityComponentTests
         comp.AddSetback(100); // should not crash
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  ConfirmCast — Re-validation
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  ConfirmCast â€” Re-validation
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void ConfirmCast_fails_if_target_died_since_initiation()
@@ -784,9 +784,9 @@ public class AbilityComponentTests
         ctx.FailureCode.ShouldBe(AbilityFailure.OutOfRange);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Modifier Pipeline
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void PreCast_modifier_reduces_ap_cost()
@@ -812,7 +812,7 @@ public class AbilityComponentTests
         ctx.ApCost.ShouldBe(10f); // modified from 50 to 10
 
         comp.ConfirmCast(ctx, 0);
-        caster.ActionPoints.ShouldBe(90); // 100 − 10 (not 50)
+        caster.ActionPoints.ShouldBe(90); // 100 âˆ’ 10 (not 50)
     }
 
     [Fact]
@@ -865,7 +865,7 @@ public class AbilityComponentTests
         var ctx = comp.TryInitiate(def, target, 0, out _)!;
         comp.ConfirmCast(ctx, 0);
 
-        // DamageBonus goes from 1.0 to 2.0, so raw damage 100 → pipeline applies bonus → 200
+        // DamageBonus goes from 1.0 to 2.0, so raw damage 100 â†’ pipeline applies bonus â†’ 200
         target.Health.Current.ShouldBe(800u);
     }
 
@@ -921,9 +921,9 @@ public class AbilityComponentTests
         ctx.ApCost.ShouldBe(50f); // condition not met, modifier skipped
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Cooldown Cap
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Cooldown_respects_cooldown_cap()
@@ -953,9 +953,9 @@ public class AbilityComponentTests
         comp.IsOnCooldown(1000, tick: 3000).ShouldBeFalse();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  ModifyActionPoints Effect
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void ModifyActionPoints_adds_ap_to_target()
@@ -999,9 +999,9 @@ public class AbilityComponentTests
         caster.ActionPoints.ShouldBe(0);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  NoAutoUse Commands
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void NoAutoUse_commands_are_skipped()
@@ -1028,12 +1028,12 @@ public class AbilityComponentTests
         var ctx = comp.TryInitiate(def, target, 0, out _)!;
         comp.ConfirmCast(ctx, 0);
 
-        target.Health.Current.ShouldBe(1000u); // no damage — command was skipped
+        target.Health.Current.ShouldBe(1000u); // no damage â€” command was skipped
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Self-Targeted Abilities
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Caster_targeted_command_resolves_to_self()
@@ -1058,12 +1058,12 @@ public class AbilityComponentTests
         var ctx = comp.TryInitiate(def, null, 0, out _)!;
         comp.ConfirmCast(ctx, 0);
 
-        caster.Health.Current.ShouldBe(750u); // 800 − 50
+        caster.Health.Current.ShouldBe(750u); // 800 âˆ’ 50
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Cancel Cast
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void CancelCast_clears_active_cast()
@@ -1090,15 +1090,15 @@ public class AbilityComponentTests
         entity.Abilities.CancelCast(AbilityFailure.Cancelled); // should not throw
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Update — Idle and Failed
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    //  Update â€” Idle and Failed
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Update_does_nothing_when_no_active_cast()
     {
         var (caster, comp) = MakeCaster();
-        comp.Update(1000, _ => { }); // should not throw
+        comp.Update(1000); // should not throw
     }
 
     [Fact]
@@ -1114,14 +1114,14 @@ public class AbilityComponentTests
         comp.ConfirmCast(ctx, 0);
 
         ctx.Fail(AbilityFailure.Interrupted);
-        comp.Update(100, _ => { });
+        comp.Update(100);
 
         comp.HasActiveCast.ShouldBeFalse();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  Multiple Casts in Sequence
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void Multiple_instant_casts_accumulate_damage()
@@ -1143,6 +1143,6 @@ public class AbilityComponentTests
             comp.ConfirmCast(ctx, i * 100);
         }
 
-        target.Health.Current.ShouldBe(500u); // 1000 − (5 × 100)
+        target.Health.Current.ShouldBe(500u); // 1000 âˆ’ (5 Ã— 100)
     }
 }

@@ -1,6 +1,5 @@
 using Core.GameWorld.Combat.Career;
 using Core.GameWorld.Entities;
-using Core.GameWorld.Events;
 using Core.GameWorld.Stats;
 
 namespace Core.GameWorld.Combat.Abilities;
@@ -36,11 +35,12 @@ public sealed class AbilityEffectExecutor
     /// <summary>
     /// Execute all non-<c>NoAutoUse</c> commands for the given ability context.
     /// </summary>
-    /// <param name="emit">Optional callback to emit <see cref="ITickEvent"/> instances
-    /// (e.g. <see cref="DamageDealt"/>) for dispatch by the region.</param>
+    /// <param name="onDamage">Optional callback invoked for each damage effect resolved.
+    /// The <see cref="AbilityComponent"/> passes its <see cref="AbilityComponent.OnDamageDealt"/>
+    /// callback here so damage results flow up to the entity.</param>
     public void ExecuteCommands(
         AbilityCastContext context, UnitEntity caster, UnitEntity? target,
-        Action<ITickEvent>? emit = null)
+        Action<UnitEntity, DamageResult>? onDamage = null)
     {
         var commands = context.Definition.Commands;
         for (var i = 0; i < commands.Count; i++)
@@ -50,28 +50,28 @@ public sealed class AbilityEffectExecutor
                 continue;
 
             var effectTarget = ResolveCommandTarget(cmd.TargetType, caster, target);
-            ExecuteCommand(context, cmd, (byte)i, caster, effectTarget, emit);
+            ExecuteCommand(context, cmd, (byte)i, caster, effectTarget, onDamage);
 
             // Chained sub-commands
             for (var j = 0; j < cmd.ChainedCommands.Count; j++)
-                ExecuteCommand(context, cmd.ChainedCommands[j], (byte)i, caster, effectTarget, emit);
+                ExecuteCommand(context, cmd.ChainedCommands[j], (byte)i, caster, effectTarget, onDamage);
         }
     }
 
     private void ExecuteCommand(
         AbilityCastContext context, AbilityCommandDefinition cmd, byte commandIndex,
-        UnitEntity caster, UnitEntity? target, Action<ITickEvent>? emit)
+        UnitEntity caster, UnitEntity? target, Action<UnitEntity, DamageResult>? onDamage)
     {
         switch (cmd.EffectType)
         {
             case AbilityEffectType.DealDamage:
                 if (target is not null && cmd.Damage is not null)
-                    ExecuteDealDamage(context, cmd, commandIndex, caster, target, emit);
+                    ExecuteDealDamage(context, cmd, commandIndex, caster, target, onDamage);
                 break;
 
             case AbilityEffectType.StealLife:
                 if (target is not null && cmd.Damage is not null)
-                    ExecuteStealLife(context, cmd, commandIndex, caster, target, emit);
+                    ExecuteStealLife(context, cmd, commandIndex, caster, target, onDamage);
                 break;
 
             case AbilityEffectType.InvokeBuff:
@@ -123,7 +123,7 @@ public sealed class AbilityEffectExecutor
 
     private void ExecuteDealDamage(
         AbilityCastContext context, AbilityCommandDefinition cmd, byte commandIndex,
-        UnitEntity caster, UnitEntity target, Action<ITickEvent>? emit)
+        UnitEntity caster, UnitEntity target, Action<UnitEntity, DamageResult>? onDamage)
     {
         var dmgCtx = BuildDamageContext(context, cmd.Damage!, caster, target);
 
@@ -132,25 +132,27 @@ public sealed class AbilityEffectExecutor
         DamagePipeline.Resolve(dmgCtx);
 
         target.Health.TakeDamage(dmgCtx.FinalDamage);
+        target.StateDirty = true;
 
-        emit?.Invoke(new DamageDealt(
-            caster, target, dmgCtx.AbilityEntry, commandIndex,
+        onDamage?.Invoke(caster, new DamageResult(
+            target, dmgCtx.AbilityEntry, commandIndex,
             dmgCtx.FinalDamage, dmgCtx.FinalMitigation, dmgCtx.FinalAbsorption,
             dmgCtx.WasCritical, dmgCtx.WasDefended, dmgCtx.DefenseType));
     }
 
     private void ExecuteStealLife(
         AbilityCastContext context, AbilityCommandDefinition cmd, byte commandIndex,
-        UnitEntity caster, UnitEntity target, Action<ITickEvent>? emit)
+        UnitEntity caster, UnitEntity target, Action<UnitEntity, DamageResult>? onDamage)
     {
         var dmgCtx = BuildDamageContext(context, cmd.Damage!, caster, target);
         DamagePipeline.Resolve(dmgCtx);
 
         var dealt = target.Health.TakeDamage(dmgCtx.FinalDamage);
+        target.StateDirty = true;
         caster.Health.Heal(dealt);
 
-        emit?.Invoke(new DamageDealt(
-            caster, target, dmgCtx.AbilityEntry, commandIndex,
+        onDamage?.Invoke(caster, new DamageResult(
+            target, dmgCtx.AbilityEntry, commandIndex,
             dmgCtx.FinalDamage, dmgCtx.FinalMitigation, dmgCtx.FinalAbsorption,
             dmgCtx.WasCritical, dmgCtx.WasDefended, dmgCtx.DefenseType));
     }

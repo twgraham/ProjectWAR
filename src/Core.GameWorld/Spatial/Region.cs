@@ -447,6 +447,8 @@ public sealed class Region : IDisposable
         entity.LastVisibilityCheckPosition = default;
         _movedEntities.Add(entity);
 
+        entity.EventEmitted += _emitEvent;
+
         placed?.TrySetResult(true);
     }
 
@@ -473,6 +475,8 @@ public sealed class Region : IDisposable
             other.Visibility.Remove(entity);
         }
         entity.Visibility.Clear();
+
+        entity.EventEmitted -= _emitEvent;
 
         // Remove from cell
         var (cellX, cellY) = entity.Position.CellIndex;
@@ -587,7 +591,7 @@ public sealed class Region : IDisposable
         {
             var entities = cell.Entities;
             for (var i = 0; i < entities.Count; i++)
-                entities[i].Update(tickMs, _emitEvent);
+                entities[i].Update(tickMs);
         }
 
         // Dispatch all events emitted during this tick

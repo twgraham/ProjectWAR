@@ -68,3 +68,11 @@ public readonly record struct DamageDealt(
     bool WasCritical,
     bool WasDefended,
     DefenseType DefenseType) : ITickEvent;
+
+// ── Entity lifecycle ─────────────────────────────────────────────────
+
+/// <summary>
+/// Fired when a unit's health reaches zero. Emitted by the entity when
+/// <see cref="Components.HealthComponent.TakeDamage"/> reduces HP to 0.
+/// </summary>
+public readonly record struct EntityDied(UnitEntity Entity) : ITickEvent;

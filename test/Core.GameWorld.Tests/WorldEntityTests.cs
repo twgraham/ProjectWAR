@@ -14,7 +14,7 @@ namespace Core.GameWorld.Tests;
 /// </summary>
 public class WorldEntityTests
 {
-    // ── Helper factory ──────────────────────────────────────────────────
+    // â”€â”€ Helper factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static PlayerEntity MakePlayer(ushort id = 1, uint maxHp = 1000, string name = "TestPlayer")
         => new(id, new Character { CharacterId = id, Name = name }, maxHp);
@@ -22,7 +22,7 @@ public class WorldEntityTests
     private static GameObjectEntity MakeGameObject(ushort id = 1, uint entry = 100, string name = "Chest")
         => new(id, new GameObjectSpawnDescriptor { Entry = entry, RegionId = 1, ZoneId = 100, Position = default, Interactable = true }, name);
 
-    // ── WorldEntity: Identity ───────────────────────────────────────────
+    // â”€â”€ WorldEntity: Identity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Entity_exposes_identity_set_at_construction()
@@ -67,7 +67,7 @@ public class WorldEntityTests
         entity.Position.ZoneId.ShouldBe((ushort)5);
     }
 
-    // ── WorldEntity: Optional Component Bag ─────────────────────────────
+    // â”€â”€ WorldEntity: Optional Component Bag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Attach_adds_component_and_sets_owner()
@@ -142,7 +142,7 @@ public class WorldEntityTests
         entity.ComponentCount.ShouldBe(1);
     }
 
-    // ── WorldEntity: Tick Dispatch ──────────────────────────────────────
+    // â”€â”€ WorldEntity: Tick Dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Update_ticks_only_tickable_components()
@@ -154,7 +154,7 @@ public class WorldEntityTests
         entity.Attach(tickable);
         entity.Attach(nonTickable);
 
-        entity.Update(1000, _ => { });
+        entity.Update(1000);
 
         tickable.LastTick.ShouldBe(1000L);
     }
@@ -166,18 +166,18 @@ public class WorldEntityTests
         entity.Attach(new StubComponent());
 
         // Should not throw
-        entity.Update(1000, _ => { });
+        entity.Update(1000);
     }
 
     [Fact]
     public void Tickable_cache_invalidates_on_attach()
     {
         var entity = MakePlayer();
-        entity.Update(100, _ => { }); // builds empty cache
+        entity.Update(100); // builds empty cache
 
         var tickable = new TickableStub();
         entity.Attach(tickable);
-        entity.Update(200, _ => { });
+        entity.Update(200);
 
         tickable.LastTick.ShouldBe(200L);
     }
@@ -188,17 +188,17 @@ public class WorldEntityTests
         var tickable = new TickableStub();
         var entity = MakePlayer();
         entity.Attach(tickable);
-        entity.Update(100, _ => { });
+        entity.Update(100);
         tickable.LastTick.ShouldBe(100L);
 
         entity.Detach<TickableStub>();
-        entity.Update(200, _ => { });
+        entity.Update(200);
 
-        // Should still be 100 — was detached before tick 200
+        // Should still be 100 â€” was detached before tick 200
         tickable.LastTick.ShouldBe(100L);
     }
 
-    // ── UnitEntity: Direct Health Field ─────────────────────────────────
+    // â”€â”€ UnitEntity: Direct Health Field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void UnitEntity_has_health_at_construction()
@@ -234,7 +234,7 @@ public class WorldEntityTests
         player.Faction.ShouldBe((byte)6);
     }
 
-    // ── HealthComponent ─────────────────────────────────────────────────
+    // â”€â”€ HealthComponent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Health_starts_at_max()
@@ -341,7 +341,7 @@ public class WorldEntityTests
         Should.Throw<ArgumentOutOfRangeException>(() => hp.Max = 0);
     }
 
-    // ── PlayerEntity ────────────────────────────────────────────────────
+    // â”€â”€ PlayerEntity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void PlayerEntity_exposes_character_data()
@@ -362,7 +362,7 @@ public class WorldEntityTests
         Should.Throw<ArgumentNullException>(() => new PlayerEntity(1, null!, 1000));
     }
 
-    // ── GameObjectEntity ────────────────────────────────────────────────
+    // â”€â”€ GameObjectEntity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void GameObjectEntity_has_no_health()
@@ -376,7 +376,7 @@ public class WorldEntityTests
         go.ShouldNotBeOfType<UnitEntity>();
     }
 
-    // ── Test Helpers ────────────────────────────────────────────────────
+    // â”€â”€ Test Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private sealed class StubComponent : ComponentBase;
 

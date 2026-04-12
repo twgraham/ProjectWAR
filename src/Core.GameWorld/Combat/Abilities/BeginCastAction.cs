@@ -16,8 +16,12 @@ namespace Core.GameWorld.Combat.Abilities;
 ///   <item>Resolve caster and target entities from OIDs</item>
 ///   <item>Call <see cref="AbilityComponent.TryInitiate"/> for read-only validation + context creation</item>
 ///   <item>Call <see cref="AbilityComponent.ConfirmCast"/> for mutations (GCD, register active cast)</item>
-///   <item>Dispatch appropriate region events (confirmed, completed, failed, cooldown)</item>
+///   <item>Component callbacks on the caster entity emit all success/effect events automatically</item>
 /// </list>
+/// </para>
+/// <para>
+/// The action only dispatches failure events that occur <em>before</em> the component
+/// callbacks can fire (TryInitiate or ConfirmCast re-validation failures).
 /// </para>
 /// </summary>
 public sealed class BeginCastAction : IRegionAction
@@ -57,7 +61,7 @@ public sealed class BeginCastAction : IRegionAction
 
         if (castContext is null)
         {
-            // Validation failed — dispatch failure event
+            // Validation failed before any component state changed — dispatch directly
             context.Dispatcher.Dispatch(new AbilityCastFailed(
                 caster,
                 new AbilityCastContext(_definition, caster, target) { FailureCode = failureCode },
@@ -66,48 +70,15 @@ public sealed class BeginCastAction : IRegionAction
         }
 
         // 4. Phase 2: ConfirmCast (mutations — GCD, register active cast, instant execution)
+        //    On success, component callbacks on the caster entity emit all relevant
+        //    events (confirmed/completed/failed/cooldown/damage) through EventEmitted.
         if (!abilities.ConfirmCast(castContext, tick))
         {
-            // Re-validation failed — dispatch failure event
+            // Re-validation failed — dispatch directly (component didn't fire callbacks)
             context.Dispatcher.Dispatch(new AbilityCastFailed(
                 caster,
                 castContext,
                 castContext.FailureCode ?? AbilityFailure.Cancelled));
-            return;
         }
-
-        // 5. Dispatch success events based on cast state
-        if (castContext.IsInstant)
-        {
-            // Instant casts are already completed by ConfirmCast
-            context.Dispatcher.Dispatch(new AbilityCastCompleted(caster, castContext));
-
-            // Dispatch effect events (damage, heals) collected during instant execution
-            var effects = abilities.PendingEffects;
-            for (var i = 0; i < effects.Count; i++)
-                context.Dispatcher.Dispatch(effects[i]);
-            abilities.ClearPendingEffects();
-
-            // Dispatch cooldown event if applicable
-            DispatchCooldown(context, caster, castContext);
-        }
-        else
-        {
-            // Cast-bar or channel started — notify observers
-            context.Dispatcher.Dispatch(new AbilityCastConfirmed(caster, castContext));
-        }
-    }
-
-    private static void DispatchCooldown(IRegionActionContext context, UnitEntity caster, AbilityCastContext castContext)
-    {
-        var cooldownMs = (int)castContext.Cooldown;
-        if (cooldownMs <= 0)
-            return;
-
-        var cdEntry = castContext.Definition.CooldownEntry != 0
-            ? castContext.Definition.CooldownEntry
-            : castContext.Definition.Entry;
-
-        context.Dispatcher.Dispatch(new AbilityCooldownApplied(caster, cdEntry, cooldownMs));
     }
 }

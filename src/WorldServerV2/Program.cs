@@ -88,7 +88,8 @@ try
                 .OnEvent<AbilityCastCompleted, CombatRegionHandler>()
                 .OnEvent<AbilityCastFailed, CombatRegionHandler>()
                 .OnEvent<AbilityCooldownApplied, CombatRegionHandler>()
-                .OnEvent<DamageDealt, CombatRegionHandler>();
+                .OnEvent<DamageDealt, CombatRegionHandler>()
+                .OnEvent<EntityDied, CombatRegionHandler>();
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)

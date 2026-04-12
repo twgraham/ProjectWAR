@@ -29,7 +29,8 @@ public class CombatRegionHandler :
     IRegionEventHandler<AbilityCastCompleted>,
     IRegionEventHandler<AbilityCastFailed>,
     IRegionEventHandler<AbilityCooldownApplied>,
-    IRegionEventHandler<DamageDealt>
+    IRegionEventHandler<DamageDealt>,
+    IRegionEventHandler<EntityDied>
 {
     private readonly ISessionResolver<PlayerEntity> _sessionResolver;
 
@@ -177,7 +178,10 @@ public class CombatRegionHandler :
 
     /// <summary>
     /// An ability dealt damage (or was fully defended). Broadcasts
-    /// <c>F_CAST_PLAYER_EFFECT</c> (0xB3) to the target and all nearby players.
+    /// <c>F_CAST_PLAYER_EFFECT</c> (0xB3) to the target and all nearby players,
+    /// then sends <c>F_HIT_PLAYER</c> (0x14) to update health bars.
+    /// If the target is a player, also sends <c>F_PLAYER_HEALTH</c> (0x05)
+    /// so their own HP/AP display updates.
     /// </summary>
     public void Handle(DamageDealt @event)
     {
@@ -213,7 +217,59 @@ public class CombatRegionHandler :
 
         // Broadcast to all players near the target (includes caster if in range)
         BroadcastToNearbyPlayers(@event.Target, packet);
+
+        // ── Health bar updates ───────────────────────────────────────
+
+        // Build F_HIT_PLAYER — tells clients to update the target's health bar.
+        // Health was already reduced by AbilityEffectExecutor before this event
+        // was emitted, so Target.Health reflects the post-damage state.
+        var hitPlayer = new HitPlayerResponse
+        {
+            CasterOid = @event.Caster.ObjectId,
+            TargetOid = @event.Target.ObjectId,
+            Health = (ushort)Math.Min(@event.Target.Health.Current, ushort.MaxValue),
+            PctHealth = @event.Target.Health.Percent,
+        };
+
+        // Send F_HIT_PLAYER to the target themselves
+        if (@event.Target is PlayerEntity hitTarget)
+        {
+            var targetSession = _sessionResolver.GetSession(hitTarget);
+            if (targetSession is not null)
+            {
+                targetSession.SendHitPlayer(hitPlayer);
+
+                // Also send F_PLAYER_HEALTH so the player's own HP bar updates
+                targetSession.SendPlayerHealth(new PlayerHealthResponse
+                {
+                    Health = @event.Target.Health.Current,
+                    MaxHealth = @event.Target.Health.Max,
+                    ActionPoints = (ushort)Math.Max(0, hitTarget.ActionPoints),
+                    MaxActionPoints = 250, // TODO: derive from stats
+                });
+            }
+        }
+
+        // Broadcast F_HIT_PLAYER to all nearby players (observers update
+        // the target's nameplate / target-frame health bar)
+        BroadcastToNearbyPlayers(@event.Target, hitPlayer);
     }
+    
+    public void Handle(EntityDied @event)
+    {
+        // If the entity that died is a player, send them a death notification.
+        foreach (var entity in @event.Entity.Visibility.Entities)
+        {
+            if (entity is not PlayerEntity observer)
+                continue;
+            
+            var session = _sessionResolver.GetSession(observer);
+            session?.SendObjectDeath(new ObjectDeathResponse
+            {
+                ObjectId = @event.Entity.ObjectId
+            });
+        }
+    } 
 
     // ═══════════════════════════════════════════════════════════════════
     //  HELPERS
@@ -254,6 +310,25 @@ public class CombatRegionHandler :
 
             var session = _sessionResolver.GetSession(observer);
             session?.SendCastPlayerEffect(response);
+        }
+    }
+
+    /// <summary>
+    /// Sends a <see cref="HitPlayerResponse"/> to all players in the
+    /// <paramref name="origin"/> entity's visibility set, excluding the origin itself.
+    /// </summary>
+    private void BroadcastToNearbyPlayers(UnitEntity origin, HitPlayerResponse response)
+    {
+        foreach (var entity in origin.Visibility.Entities)
+        {
+            if (entity == origin)
+                continue;
+
+            if (entity is not PlayerEntity observer)
+                continue;
+
+            var session = _sessionResolver.GetSession(observer);
+            session?.SendHitPlayer(response);
         }
     }
 }

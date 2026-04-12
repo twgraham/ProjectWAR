@@ -13,6 +13,12 @@ public sealed class HealthComponent
     private uint _current;
     private uint _max;
 
+    /// <summary>
+    /// Invoked when health reaches zero. The owning entity subscribes to this
+    /// and translates it into a region-level death event.
+    /// </summary>
+    public Action? OnDied;
+
     public HealthComponent(uint maxHealth)
     {
         ArgumentOutOfRangeException.ThrowIfZero(maxHealth);
@@ -62,6 +68,10 @@ public sealed class HealthComponent
 
         var actual = Math.Min(amount, _current);
         _current -= actual;
+
+        if (_current == 0)
+            OnDied?.Invoke();
+
         return actual;
     }
 
