@@ -567,7 +567,7 @@ public class PlayerInitPipelineTests
 
         player.Level.ShouldBe((byte)40);
         player.Realm.ShouldBe((byte)1);
-        player.Faction.ShouldBe((byte)1);
+        player.Faction.ShouldBe((byte)6);
     }
 
     [Fact]

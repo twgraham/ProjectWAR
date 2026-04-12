@@ -1,5 +1,9 @@
 using System.Net;
 using Core.Domain.Entities;
+using Core.GameWorld;
+using Core.GameWorld.DataStore;
+using Core.GameWorld.DataStore.Models;
+using Core.GameWorld.Telemetry;
 using Core.Infrastructure.Network;
 using Core.Infrastructure.Network.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +12,7 @@ using WorldServerV2.Data.Models;
 using WorldServerV2.Network;
 using Core.Session;
 using WorldServerV2.Services;
+using WorldServerV2.Telemetry;
 
 namespace WorldServerV2.Tests.Integration;
 
@@ -84,7 +89,12 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
             .WithPacketDispatcher(dispatcher);
 
         // Session + player services + lifecycle hosted service
+        services.AddSingleton<IGameDataStore, StubGameDataStore>();
+        services.AddWorldTopology();
+        services.AddSingleton<PlayerService>();
+        services.AddSingleton<WorldService>();
         services.AddGameSessions();
+        services.AddSingleton<IWorldServerMetrics, WorldServerMetrics>();
 
         var serviceProvider = services.BuildServiceProvider();
 
@@ -180,5 +190,16 @@ internal sealed class GameServerTestHarness : IAsyncDisposable
 
         public Task DeleteCharacterAsync(Character character)
             => Task.CompletedTask;
+    }
+
+    private sealed class StubGameDataStore : IGameDataStore
+    {
+        public ClassData Classes { get; }
+        public ItemData Items { get; }
+        public CreatureData Creatures { get; }
+        public ZoneData Zones { get; }
+        public CareerStatData CareerStats { get; }
+        public AbilityData Abilities { get; }
+        public SpawnData Spawns { get; }
     }
 }
