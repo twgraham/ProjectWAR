@@ -1,7 +1,6 @@
+using Core.Domain.Entities;
+using Core.GameWorld.Entities;
 using Core.Infrastructure.Network.Serialization.Attributes;
-using WorldServerV2.Data.Domain;
-using WorldServerV2.Data.Entities;
-using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.Network.Dtos;
 
@@ -200,14 +199,12 @@ public sealed class CreateMonsterResponse
     /// its template, the zone it resides in, and an optional per-player quest state byte.
     /// </summary>
     /// <param name="entity">The creature entity (Oid must be assigned).</param>
-    /// <param name="proto">The creature's prototype data.</param>
     /// <param name="zone">Zone info used to convert region-absolute → zone-local coordinates.</param>
     /// <param name="questState">
     /// Optional client-visible quest indicator (0 = none/merchant, see <c>CreatureState</c> enum).
     /// </param>
     public static CreateMonsterResponse From(
         CreatureEntity entity,
-        CreatureProto proto,
         ZoneInfo zone,
         byte questState = 0)
     {
@@ -216,7 +213,7 @@ public sealed class CreateMonsterResponse
         var (localX, localY) = entity.Position.ToZoneLocal(zone.OffX, zone.OffY);
 
         // Build the combined states blob: proto states + optional quest-state byte
-        var protoStates   = proto.States ?? Array.Empty<byte>();
+        var protoStates   = entity.Proto.States ?? Array.Empty<byte>();
         var statesArray   = questState != 0
             ? [..protoStates, questState]
             : protoStates;
@@ -242,16 +239,16 @@ public sealed class CreateMonsterResponse
             Level       = entity.Level,
             Faction     = (CreatureFlags)entity.Faction,
             Emote       = entity.Emote,
-            Unk1        = proto.Unk1,
-            Unk2        = proto.Unk2,
-            Unk3        = proto.Unk3,
-            Unk4        = proto.Unk4,
-            Unk5        = proto.Unk5,
-            Unk6        = proto.Unk6,
-            Title       = proto.Title,
+            Unk1        = entity.Proto.Unk1,
+            Unk2        = entity.Proto.Unk2,
+            Unk3        = entity.Proto.Unk3,
+            Unk4        = entity.Proto.Unk4,
+            Unk5        = entity.Proto.Unk5,
+            Unk6        = entity.Proto.Unk6,
+            Title       = entity.Proto.Title,
             States      = statesArray,
-            Name        = proto.Name,
-            PostNameBlob = proto.FigLeafData ?? Array.Empty<byte>(),
+            Name        = entity.Proto.Name,
+            PostNameBlob = entity.Proto.FigLeafData ?? [],
             OwnerOid    = 0,
             ObjStateLen = ObjStateLenStationary,
             // Movement state (stationary)

@@ -260,7 +260,7 @@ namespace RpcSourceGenerator
                 if (conditionalInfo != null)
                 {
                     var (siblingName, values) = conditionalInfo.Value;
-                    var conditions = string.Join(" || ", values.Select(v => $"local_{siblingName} == {v}"));
+                    var conditions = BuildConditionalExpression(type, $"local_", siblingName, values);
 
                     if (prop.SetMethod != null)
                     {
@@ -352,7 +352,7 @@ namespace RpcSourceGenerator
                 if (conditionalInfo != null)
                 {
                     var (siblingName, values) = conditionalInfo.Value;
-                    var conditions = string.Join(" || ", values.Select(v => $"obj.{siblingName} == {v}"));
+                    var conditions = BuildConditionalExpression(type, "obj.", siblingName, values);
                     w.OpenBlock($"if ({conditions})");
                     GenerateSerializeProperty(w, prop, $"obj.{prop.Name}");
                     w.CloseBlock();
@@ -443,6 +443,39 @@ namespace RpcSourceGenerator
             property.GetAttributes()
                 .Any(a => a.AttributeClass?.Name == "NullPrefixedAttribute" &&
                           (a.AttributeClass?.ContainingNamespace?.ToDisplayString().StartsWith("Core.Infrastructure.Network") ?? false));
+
+        /// <summary>
+        /// Builds the C# condition expression for a <c>[ConditionalOn]</c> guard.
+        /// When the sibling property is a <c>[Flags]</c> enum, emits bitwise AND checks;
+        /// otherwise emits simple equality checks.
+        /// </summary>
+        /// <param name="containingType">The type that contains both the sibling and the guarded property.</param>
+        /// <param name="prefix">The variable prefix — <c>"local_"</c> for deserialization, <c>"obj."</c> for serialization.</param>
+        /// <param name="siblingName">The name of the sibling property to compare against.</param>
+        /// <param name="values">The set of values that activate the guarded property.</param>
+        private static string BuildConditionalExpression(INamedTypeSymbol containingType, string prefix, string siblingName, long[] values)
+        {
+            var sibling = containingType.GetMembers().OfType<IPropertySymbol>()
+                .FirstOrDefault(p => p.Name == siblingName);
+
+            var siblingType = sibling?.Type;
+
+            // Unwrap Nullable<T>
+            if (siblingType is INamedTypeSymbol { IsGenericType: true } nt &&
+                nt.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T)
+                siblingType = nt.TypeArguments[0];
+
+            var isFlagsEnum = siblingType is { TypeKind: TypeKind.Enum } &&
+                              siblingType.GetAttributes().Any(a => a.AttributeClass?.Name == "FlagsAttribute");
+
+            if (isFlagsEnum)
+            {
+                var castType = siblingType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return string.Join(" || ", values.Select(v => $"({prefix}{siblingName} & ({castType}){v}) != 0"));
+            }
+
+            return string.Join(" || ", values.Select(v => $"{prefix}{siblingName} == {v}"));
+        }
 
         /// <summary>
         /// Returns the (PropertyName, Values[]) from a [ConditionalOn] attribute, or null if absent.

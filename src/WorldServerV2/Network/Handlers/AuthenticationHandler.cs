@@ -1,9 +1,10 @@
 using System.Diagnostics;
+using Core.GameWorld.Entities;
 using Core.Infrastructure.Network;
+using Core.Session;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
-using WorldServerV2.World.Entities;
 using IPacketHandler = Core.Infrastructure.Network.IPacketHandler;
 
 namespace WorldServerV2.Network.Handlers;
@@ -107,7 +108,7 @@ public class AuthenticationHandler : IPacketHandler
 
         // Disconnect any existing sessions for this account (e.g. if they logged in from another location while we were processing)
         sessionRegistry.FindByAccountId(context.Account.Id)?.Disconnect("New session started for account");
-        sessionRegistry.SetSessionAccount(context.Session, context.Account);
+        sessionRegistry.SetSessionAccount(context.Session, context.Account.Id);
 
         // Check if ip is banned. (they may have been just banned so launcher server wouldnt have picked it up)
         if (_accountMgrClient.IsIpBanned(new IsIpBannedRequest { IpAddress = context.RemoteAddress?.Split(':')[0] })
@@ -117,9 +118,6 @@ public class AuthenticationHandler : IPacketHandler
             context.Disconnect("Banned by IP");
             return RpcResult<ConnectResponse>.NoResponse;
         }
-
-        // Load characters into the session before responding
-        context.Session.Characters = await _characterService.GetCharactersForAccountAsync(context.Account.Id);
 
         return new ConnectResponse
         {
@@ -187,17 +185,19 @@ public class AuthenticationHandler : IPacketHandler
     [Rpc((int)Opcodes.F_REQUEST_CHAR, (int)Opcodes.F_REQUEST_CHAR_RESPONSE)]
     public async Task<RpcResult<RequestCharacterResponse>> F_REQUEST_CHAR(RequestCharacterRequest request, IConnectionContext context)
     {
-        context.Session.State = ClientState.CharScreen;
+        context.Session.MoveToCharacterScreen();
         
         if (request.Operation == 0x2D58)
         {
             context.SendResponse((byte)Opcodes.F_REQUEST_CHAR_ERROR, new RequestCharacterErrorResponse
             {
-               RealmType = context.Session.Realm
+               RealmType = (byte)_realmInfo.RealmId
             });
             return RpcResult<RequestCharacterResponse>.NoResponse;
         }
+        
+        var characters = await _characterService.GetCharactersForAccountAsync(context.Account.Id);
 
-        return new RequestCharacterResponse(context.Session);
+        return new RequestCharacterResponse(context.Account, characters.ToList());
     }
 }

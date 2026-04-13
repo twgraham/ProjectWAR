@@ -1,8 +1,9 @@
+using Core.GameWorld.Entities;
+using Core.GameWorld.Spatial;
+using Core.Session;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network;
 using WorldServerV2.Network.Dtos;
-using WorldServerV2.World.Entities;
-using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Services;
 
@@ -28,12 +29,12 @@ namespace WorldServerV2.Services;
 public sealed class WorldService
 {
     private readonly RegionManager _regionManager;
-    private readonly ISessionResolver _sessionResolver;
+    private readonly ISessionResolver<PlayerEntity> _sessionResolver;
     private readonly ILogger<WorldService> _logger;
 
     public WorldService(
         RegionManager regionManager,
-        ISessionResolver sessionResolver,
+        ISessionResolver<PlayerEntity> sessionResolver,
         ILogger<WorldService> logger)
     {
         _regionManager = regionManager ?? throw new ArgumentNullException(nameof(regionManager));

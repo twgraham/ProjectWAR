@@ -25,6 +25,7 @@ public static class SerializerCodeGenRuleRegistry
         new PascalStringCodeGen(),
         new CStringCodeGen(),
         new LittleEndianCodeGen(),
+        new ZigZagCodeGen(),
         new EnumCodeGen(),
         new RawBytesCodeGen(),
         CollectionRule,

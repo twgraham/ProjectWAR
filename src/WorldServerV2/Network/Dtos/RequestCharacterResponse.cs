@@ -1,5 +1,6 @@
-using Core.Infrastructure.Network;
+using Core.Domain.Entities;
 using Core.Infrastructure.Network.Serialization.Attributes;
+using Core.Session;
 
 namespace WorldServerV2.Network.Dtos;
 
@@ -24,14 +25,14 @@ public class RequestCharacterResponse
     {
     }
 
-    public RequestCharacterResponse(GameSession session)
+    public RequestCharacterResponse(AccountInfo accountInfo, List<Character> characters)
     {
-        ArgumentNullException.ThrowIfNull(session.Account);
+        ArgumentNullException.ThrowIfNull(accountInfo);
         
-        AccountUsername = session.Account.Username;
+        AccountUsername = accountInfo.Username;
         Characters = Enumerable.Repeat(0, 20)
-            .Select((_, idx) => session.Characters.Count > idx
-                ? new CharacterDto(session.Characters[idx])
+            .Select((_, idx) => characters.Count > idx
+                ? new CharacterDto(characters[idx])
                 : new CharacterDto()).ToArray();
     }
 }

@@ -1,10 +1,10 @@
+using Core.GameWorld.DataStore;
+using Core.GameWorld.Entities;
+using Core.GameWorld.Spatial;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
-using WorldServerV2.Data;
 using WorldServerV2.Network.Dtos;
 using WorldServerV2.Services;
-using WorldServerV2.World.Entities;
-using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Network.Handlers;
 
@@ -34,9 +34,10 @@ public class CharacterScreenHandler : IPacketHandler
     /// to the session via <see cref="PlayerService"/>, and respond with F_WORLD_ENTER.
     /// </summary>
     [Rpc((int)Opcodes.F_DUMP_ARENAS_LARGE, (int)Opcodes.F_WORLD_ENTER)]
-    public RpcResult<WorldEnterResponse> F_DUMP_ARENAS_LARGE(
+    public async Task<RpcResult<WorldEnterResponse>> F_DUMP_ARENAS_LARGE(
         DumpArenasLargeRequest request,
         IConnectionContext context,
+        [FromServices] ICharacterService characterService,
         [FromServices] PlayerService playerService)
     {
         if (context.Account == null)
@@ -45,7 +46,8 @@ public class CharacterScreenHandler : IPacketHandler
             return RpcResult<WorldEnterResponse>.NoResponse;
         }
 
-        var character = context.Session.GetCharacterBySlot(request.CharacterSlot);
+        var characters = await characterService.GetCharactersForAccountAsync(context.Account.Id);
+        var character = characters.FirstOrDefault(c => c.SlotId == request.CharacterSlot);
         if (character == null)
         {
             _logger.LogError("Character not found on slot {Slot} for account {AccountId}",
@@ -100,8 +102,6 @@ public class CharacterScreenHandler : IPacketHandler
             await characterService.CreateCharacterAsync(context.Account.Id, (ushort)realmInfo.RealmId,
                 request.ToNewCharacterModel());
             
-            context.Session.Characters = await characterService.GetCharactersForAccountAsync(context.Account.Id);
-
             return new AccountCharacterModifiedResponse
             {
                 AccountUsername = request.Name
@@ -126,15 +126,14 @@ public class CharacterScreenHandler : IPacketHandler
         IConnectionContext context, [FromServices] ICharacterService characterService)
     {
         // A users characters should be available on the session
-        var character = context.Session.Characters.FirstOrDefault(x => x.SlotId == request.SlotId);
+        var characters = await characterService.GetCharactersForAccountAsync(context.Account.Id);
+        var character = characters.FirstOrDefault(x => x.SlotId == request.SlotId);
         
         if (character == null)
             return RpcResult<AccountCharacterModifiedResponse>.NoResponse;
         
         await characterService.DeleteCharacterAsync(character);
-
-        context.Session.Characters = await characterService.GetCharactersForAccountAsync(context.Account.Id);
-
+        
         return new AccountCharacterModifiedResponse
         {
             AccountUsername = context.Account.Username
@@ -180,7 +179,7 @@ public class CharacterScreenHandler : IPacketHandler
         using var reservation = region.ReserveOid();
         try
         {
-            player.AssignOid(reservation.Oid);
+            player.AssignOid(reservation);
 
             // ── Phase B + C run here, on the handler thread ─────────────
             // The client is on a loading screen and cannot interact.
@@ -208,7 +207,7 @@ public class CharacterScreenHandler : IPacketHandler
         {
             Oid = player.ObjectId,
         });
-        session.State = ClientState.WorldEnter;
+        session.MoveToWorldEnter();
 
         _logger.LogInformation(
             "Player {Name} ({CharId}, OID {Oid}) initialization complete — session {SessionId} → WorldEnter",

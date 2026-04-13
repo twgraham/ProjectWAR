@@ -1,17 +1,19 @@
 ﻿using System.Net;
+using Core.GameWorld;
 using Core.Infrastructure.Network;
 using Core.Infrastructure.Network.Serialization;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging;
 using Npgsql;
 using WorldServerV2.Config;
-using WorldServerV2.Data;
+using WorldServerV2.Extensions;
 using WorldServerV2.Network;
 using WorldServerV2.Services;
 using WorldServerV2.Telemetry;
-using WorldServerV2.World;
 
 try
 {
@@ -25,6 +27,13 @@ try
         })
         .ConfigureServices((ctx, s) =>
         {
+            s.AddLogging(builder =>
+            {
+                builder.ClearProviders()
+                    .SetMinimumLevel(LogLevel.Trace)
+                    .AddNLog();
+            });
+            
             var accountCacherConfig = ctx.Configuration.GetSection("accountService").Get<AccountCacherConfig>()
                 ?? throw new ConfigurationException("Missing or invalid accountService configuration section.");
 
@@ -78,12 +87,18 @@ try
 
             s.AddWorldServerTelemetry(ctx.Configuration);
 
-            s.AddWorldTopology();
+            s.AddWorldTopology()
+                .RegisterHandlers();
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
                 .WithPacketSerializer<BinaryPacketSerializer>(ServiceLifetime.Scoped)
                 .AddDefaultPacketHandlers();
+
+            s.AddSingleton<PlayerService>();
+            s.AddSingleton<WorldService>();
+            s.AddSingleton<CombatService>();
+            s.AddHostedService<WorldHostedService>();
         });
 
     var host = builder.Build();
@@ -91,7 +106,7 @@ try
     // Populate the lightweight character directory before accepting connections
     var characterService = host.Services.GetRequiredService<ICharacterService>();
     await characterService.LoadDirectoryAsync();
-
+    
     await host.RunAsync();
 }
 catch (Exception ex)

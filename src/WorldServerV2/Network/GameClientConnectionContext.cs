@@ -1,5 +1,5 @@
-using System;
 using Core.Infrastructure.Network;
+using Core.Session;
 
 namespace WorldServerV2.Network;
 
@@ -10,11 +10,11 @@ public static class GameClientConnectionContext
         public string ClientId => context.Get<string>("ClientId") ?? "UnknownClient";
 
         /// <summary>
-        /// The <see cref="WorldServerV2.Network.GameSession"/> for this connection, or <c>null</c> if not yet created.
-        /// Set automatically by <see cref="WorldServerV2.Network.SessionLifecycleService"/> on connect.
+        /// The <see cref="GameSession"/> for this connection, or <c>null</c> if not yet created.
+        /// Set automatically by <see cref="SessionLifecycleService"/> on connect.
         /// </summary>
         public GameSession Session
-            => context.TryGetValue<GameSession>(GameSession.ItemKey, out var session)
+            => context.TryGetValue<GameSession>(SessionRegistry.ConnectionItemKey, out var session)
                 ? session
                 : throw new InvalidOperationException("GameSession not found in connection context. Ensure SessionLifecycleService is properly configured.");
 

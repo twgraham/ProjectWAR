@@ -1,3 +1,4 @@
+using Core.GameWorld.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Exporter;
@@ -26,7 +27,7 @@ public static class TelemetryServiceExtensions
         IConfiguration configuration)
     {
         // Custom metrics singleton — consumed by RegionManager → Region.
-        services.AddSingleton<WorldServerMetrics>();
+        services.AddSingleton<IWorldServerMetrics, WorldServerMetrics>();
 
         var otlpSection = configuration.GetSection("openTelemetry:otlp");
 

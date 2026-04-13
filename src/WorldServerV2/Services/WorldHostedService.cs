@@ -1,6 +1,6 @@
+using Core.GameWorld.Spatial;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using WorldServerV2.World.Spatial;
 
 namespace WorldServerV2.Services;
 

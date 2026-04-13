@@ -1,3 +1,4 @@
+using Core.Domain.ValueObjects;
 using Core.Infrastructure.Network.Serialization.Attributes;
 using WorldServerV2.Data.Models;
 

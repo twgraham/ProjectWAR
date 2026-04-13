@@ -1,6 +1,6 @@
-using WorldServerV2.Data.Domain;
-using WorldServerV2.World.Abilities;
-using WorldServerV2.World.Combat.Abilities;
+using Core.GameWorld.Abilities;
+using Core.GameWorld.Combat.Abilities;
+using Core.GameWorld.DataStore.Models;
 
 namespace WorldServerV2.Services;
 
@@ -95,6 +95,12 @@ public sealed class AbilityResolver
         }
 
         return result;
+    }
+
+    public AbilityDefinition? GetAbilityById(ushort abilityId)
+    {
+        _abilityData.ByEntry.TryGetValue(abilityId, out var def);
+        return def;
     }
 
     /// <summary>

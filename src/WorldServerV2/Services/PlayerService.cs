@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
+using Core.GameWorld.Entities;
+using Core.Session;
 using Microsoft.Extensions.Logging;
-using WorldServerV2.Network;
-using WorldServerV2.World.Entities;
 
 namespace WorldServerV2.Services;
 
@@ -18,7 +18,7 @@ namespace WorldServerV2.Services;
 /// </para>
 /// Registered as a <b>singleton</b> in the DI container.
 /// </summary>
-public sealed class PlayerService : ISessionResolver
+public sealed class PlayerService : ISessionResolver<PlayerEntity>
 {
     private readonly ConcurrentDictionary<ushort, PlayerEntity> _bySessionId = new();
     private readonly ConcurrentDictionary<uint, PlayerEntity> _byCharacterId = new();
@@ -129,13 +129,13 @@ public sealed class PlayerService : ISessionResolver
     /// the session has no active player (pre-world, char screen, etc.).
     /// </summary>
     public PlayerEntity? GetPlayer(GameSession session)
-        => _bySessionId.TryGetValue(session.Id, out var player) ? player : null;
+        => _bySessionId.GetValueOrDefault(session.Id);
 
     /// <summary>
     /// Gets the <see cref="PlayerEntity"/> by character ID, or <c>null</c> if not in world.
     /// </summary>
     public PlayerEntity? GetPlayerByCharacterId(uint characterId)
-        => _byCharacterId.TryGetValue(characterId, out var player) ? player : null;
+        => _byCharacterId.GetValueOrDefault(characterId);
 
     /// <summary>
     /// Gets the <see cref="PlayerEntity"/> by character name (case-insensitive linear scan).
@@ -154,7 +154,7 @@ public sealed class PlayerService : ISessionResolver
 
     /// <inheritdoc />
     public GameSession? GetSession(PlayerEntity player)
-        => _sessionByCharId.TryGetValue(player.CharacterId, out var session) ? session : null;
+        => _sessionByCharId.GetValueOrDefault(player.CharacterId);
 
     /// <summary>The number of players currently in the world.</summary>
     public int Count => _bySessionId.Count;

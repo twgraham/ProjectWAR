@@ -1,4 +1,4 @@
-using WorldServerV2.Data.Entities;
+using Core.Domain.Entities;
 using WorldServerV2.Data.Models;
 
 namespace WorldServerV2.Services;
