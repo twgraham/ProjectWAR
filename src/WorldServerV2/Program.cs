@@ -1,17 +1,17 @@
 ﻿using System.Net;
 using Core.GameWorld;
-using Core.GameWorld.Combat.Abilities;
-using Core.GameWorld.Events;
 using Core.Infrastructure.Network;
 using Core.Infrastructure.Network.Serialization;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging;
 using Npgsql;
 using WorldServerV2.Config;
+using WorldServerV2.Extensions;
 using WorldServerV2.Network;
-using WorldServerV2.RegionHandlers;
 using WorldServerV2.Services;
 using WorldServerV2.Telemetry;
 
@@ -27,6 +27,13 @@ try
         })
         .ConfigureServices((ctx, s) =>
         {
+            s.AddLogging(builder =>
+            {
+                builder.ClearProviders()
+                    .SetMinimumLevel(LogLevel.Trace)
+                    .AddNLog();
+            });
+            
             var accountCacherConfig = ctx.Configuration.GetSection("accountService").Get<AccountCacherConfig>()
                 ?? throw new ConfigurationException("Missing or invalid accountService configuration section.");
 
@@ -81,15 +88,7 @@ try
             s.AddWorldServerTelemetry(ctx.Configuration);
 
             s.AddWorldTopology()
-                .OnEvent<EntityBecameVisible, VisibilityHandler>()
-                .OnEvent<EntityStateChanged, VisibilityHandler>()
-                .OnEvent<EntityLeftVisibility, VisibilityHandler>()
-                .OnEvent<AbilityCastConfirmed, CombatRegionHandler>()
-                .OnEvent<AbilityCastCompleted, CombatRegionHandler>()
-                .OnEvent<AbilityCastFailed, CombatRegionHandler>()
-                .OnEvent<AbilityCooldownApplied, CombatRegionHandler>()
-                .OnEvent<DamageDealt, CombatRegionHandler>()
-                .OnEvent<EntityDied, CombatRegionHandler>();
+                .RegisterHandlers();
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)

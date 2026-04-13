@@ -979,6 +979,32 @@ public class BinaryPacketSerializer : IPacketSerializer
             _position += remaining;
             return array;
         }
+
+        /// <summary>
+        /// Reads a WAR-protocol ZigZag-encoded variable-length signed 32-bit integer.
+        /// First byte: bit 0 = sign, bits 1-6 = 6 data bits, bit 7 = continuation.
+        /// Subsequent bytes: bits 0-6 = 7 data bits, bit 7 = continuation.
+        /// </summary>
+        public int ReadZigZagInt32()
+        {
+            var first = ReadByte();
+            var sign = (first & 1) != 0;
+            var value = (first >> 1) & 0x3F;
+            var shift = 6;
+
+            if ((first & 0x80) != 0)
+            {
+                byte b;
+                do
+                {
+                    b = ReadByte();
+                    value |= (b & 0x7F) << shift;
+                    shift += 7;
+                } while ((b & 0x80) != 0);
+            }
+
+            return sign ? -(value + 1) : value;
+        }
     }
 
     /// <summary>
@@ -1268,6 +1294,28 @@ public class BinaryPacketSerializer : IPacketSerializer
             var span = _writer.GetSpan(value.Length);
             value.CopyTo(span);
             _writer.Advance(value.Length);
+        }
+
+        /// <summary>
+        /// Writes a WAR-protocol ZigZag-encoded variable-length signed 32-bit integer.
+        /// First byte: bit 0 = sign, bits 1-6 = 6 data bits, bit 7 = continuation.
+        /// Subsequent bytes: bits 0-6 = 7 data bits, bit 7 = continuation.
+        /// </summary>
+        public void WriteZigZagInt32(int value)
+        {
+            byte sign = (byte)(value < 0 ? 1 : 0);
+            if (sign == 1)
+                value++;
+            value = Math.Abs(value);
+
+            WriteByte((byte)(((value << 1) & 0x7F) | (value > 0x3F ? 0x80 : 0x00) | sign));
+            value >>= 6;
+
+            while (value > 0)
+            {
+                WriteByte((byte)((value & 0x7F) | (value > 0x7F ? 0x80 : 0x00)));
+                value >>= 7;
+            }
         }
     }
 }

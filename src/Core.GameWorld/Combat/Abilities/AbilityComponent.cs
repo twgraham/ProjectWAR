@@ -343,6 +343,7 @@ public sealed class AbilityComponent
         switch (context.CastState)
         {
             case CastState.Instant:
+                OnCastConfirmed?.Invoke(context);
                 if (CompleteCast(context, tick))
                 {
                     OnCastCompleted?.Invoke(context);

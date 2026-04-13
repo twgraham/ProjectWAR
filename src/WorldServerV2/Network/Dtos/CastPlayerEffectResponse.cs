@@ -28,9 +28,28 @@ namespace WorldServerV2.Network.Dtos;
 /// </summary>
 public class CastPlayerEffectResponse
 {
+    public ushort CasterId { get; set; }
+    public ushort TargetId { get; set; }
+    public ushort AbilityId { get; set; }
+    public byte CommandIndex { get; set; }
+    public CombatEvent Event { get; set; }
+    public CombatFlags Flags { get; set; }
+    
+    [ZigZag]
+    [ConditionalOn(nameof(Flags), CombatFlags.HasDamageData)]
+    public int DamageAmount { get; set; }
+    
+    [ZigZag]
+    [ConditionalOn(nameof(Flags), CombatFlags.HasDamageData)]
+    public int MitigationAmount { get; set; }
+    
+    [ZigZag]
+    [ConditionalOn(nameof(Flags), CombatFlags.HasAbsorptionData)]
+    public int AbsorptionAmount { get; set; }
+
     /// <summary>Pre-built raw packet payload.</summary>
     [RawBytes]
-    public required byte[] Data { get; set; }
+    public byte[] Data { get; set; } = [];
 
     // ═══════════════════════════════════════════════════════════════════
     //  FACTORY METHODS
@@ -49,13 +68,50 @@ public class CastPlayerEffectResponse
         uint absorption,
         bool wasCritical)
     {
-        byte damageEvent = wasCritical ? (byte)9 : (byte)1; // ABILITY_CRITICAL or ABILITY_HIT
-        byte flags = absorption > 0 ? (byte)0x2A : (byte)0x07;
+        var flags = CombatFlags.HasDamageData;
+        if (absorption > 0)
+            flags |= CombatFlags.HasAbsorptionData | CombatFlags.SkipEffectLogic;
 
-        return Build(casterOid, targetOid, abilityEntry, subIndex, damageEvent, flags,
-            -(int)(ushort)damage,
-            mitigation > 0 ? (int)(ushort)mitigation : null,
-            absorption > 0 ? (int)(ushort)absorption : null);
+        return new CastPlayerEffectResponse
+        {
+            CasterId = casterOid,
+            TargetId = targetOid,
+            AbilityId = abilityEntry,
+            CommandIndex = subIndex,
+            Event = wasCritical ? CombatEvent.AbilityCritical : CombatEvent.AbilityHit,
+            Flags = flags,
+            DamageAmount = -(int)damage,
+            MitigationAmount = (int)mitigation,
+            AbsorptionAmount = (int)absorption
+        };
+    }
+
+    /// <summary>
+    /// Cast animation trigger — sent on ability execution to drive the client-side VFX.
+    /// No damage is associated. The low byte of <paramref name="effectId"/> is passed as the
+    /// sub-command index; the client uses it to look up and play the correct particle effect.
+    /// <para>
+    /// Wire layout: casterOid, targetOid, abilityEntry, (byte)effectId, combatEvent=0, flags=1, terminator=0.
+    /// </para>
+    /// </summary>
+    /// <param name="targetOid">
+    /// OID of the target. Pass the caster's OID for self-targeted or AoE abilities with no explicit target.
+    /// </param>
+    public static CastPlayerEffectResponse CastAnimation(
+        ushort casterOid,
+        ushort targetOid,
+        ushort abilityEntry,
+        ushort effectId)
+    {
+        return new CastPlayerEffectResponse
+        {
+            CasterId = casterOid,
+            TargetId = targetOid,
+            AbilityId = abilityEntry,
+            CommandIndex = (byte)effectId,
+            Event = CombatEvent.Hit,
+            Flags = CombatFlags.SelfTarget
+        };
     }
 
     /// <summary>
@@ -67,92 +123,50 @@ public class CastPlayerEffectResponse
         ushort abilityEntry,
         DefenseType defenseType)
     {
-        byte damageEvent = defenseType switch
+        var damageEvent = defenseType switch
         {
-            DefenseType.Block => 4,   // COMBATEVENT_BLOCK
-            DefenseType.Parry => 5,   // COMBATEVENT_PARRY
-            DefenseType.Evade => 6,   // COMBATEVENT_EVADE
-            DefenseType.Disrupt => 7, // COMBATEVENT_DISRUPT
-            _ => 0,
+            DefenseType.Block => CombatEvent.Block,
+            DefenseType.Parry => CombatEvent.Parry,
+            DefenseType.Evade => CombatEvent.Evade,
+            DefenseType.Disrupt => CombatEvent.Disrupt,
+            _ => CombatEvent.Hit
         };
 
-        var data = new byte[10];
-        WriteBigEndianU16(data, 0, casterOid);
-        WriteBigEndianU16(data, 2, targetOid);
-        WriteBigEndianU16(data, 4, abilityEntry);
-        data[6] = 0;             // subIndex
-        data[7] = damageEvent;
-        data[8] = 0x05;          // flags = ability defense
-        data[9] = 0;             // terminator
-
-        return new CastPlayerEffectResponse { Data = data };
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  PACKET BUILDER
-    // ═══════════════════════════════════════════════════════════════════
-
-    private static CastPlayerEffectResponse Build(
-        ushort casterOid, ushort targetOid, ushort abilityEntry,
-        byte subIndex, byte damageEvent, byte flags,
-        int damageZigZag, int? mitigationZigZag, int? absorptionZigZag)
-    {
-        // Header: 9 bytes  +  zigzag values  +  1 terminator
-        // Worst-case zigzag per value: 5 bytes. Max 3 values = 15.
-        // So max total = 9 + 15 + 1 = 25 bytes.
-        Span<byte> buf = stackalloc byte[25];
-        var pos = 0;
-
-        WriteBigEndianU16(buf, 0, casterOid); pos += 2;
-        WriteBigEndianU16(buf, 2, targetOid); pos += 2;
-        WriteBigEndianU16(buf, 4, abilityEntry); pos += 2;
-        buf[pos++] = subIndex;
-        buf[pos++] = damageEvent;
-        buf[pos++] = flags;
-
-        pos += WriteZigZag(buf[pos..], damageZigZag);
-        if (mitigationZigZag.HasValue)
-            pos += WriteZigZag(buf[pos..], mitigationZigZag.Value);
-        if (absorptionZigZag.HasValue)
-            pos += WriteZigZag(buf[pos..], absorptionZigZag.Value);
-
-        buf[pos++] = 0; // terminator
-
-        return new CastPlayerEffectResponse { Data = buf[..pos].ToArray() };
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  ENCODING HELPERS
-    // ═══════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// WAR-protocol ZigZag encoding: variable-length signed integer.
-    /// First byte carries sign (bit 0), 6 data bits (bits 1-6), continuation flag (bit 7).
-    /// Subsequent bytes carry 7 data bits each with continuation flag.
-    /// </summary>
-    internal static int WriteZigZag(Span<byte> dest, int val)
-    {
-        byte sign = (byte)(val < 0 ? 1 : 0);
-        if (sign == 1)
-            val++;
-        val = Math.Abs(val);
-
-        var pos = 0;
-        dest[pos++] = (byte)(((val << 1) & 0x7F) | (val > 0x3F ? 0x80 : 0x00) | sign);
-        val >>= 6;
-
-        while (val > 0)
+        return new CastPlayerEffectResponse
         {
-            dest[pos++] = (byte)((val & 0x7F) | (val > 0x7F ? 0x80 : 0x00));
-            val >>= 7;
-        }
-
-        return pos;
+            CasterId = casterOid,
+            TargetId = targetOid,
+            AbilityId = abilityEntry,
+            CommandIndex = 0,
+            Event = damageEvent,
+            Flags = CombatFlags.SelfTarget | CombatFlags.ShowVisual
+        };
     }
+}
 
-    private static void WriteBigEndianU16(Span<byte> dest, int offset, ushort value)
-    {
-        dest[offset] = (byte)(value >> 8);
-        dest[offset + 1] = (byte)value;
-    }
+public enum CombatEvent
+{
+    Hit = 0,
+    AbilityHit = 1,
+    Critical = 2,
+    Block = 4,
+    Parry = 5,
+    Evade = 6,
+    Disrupt = 7,
+    Absorb = 8,
+    AbilityCritical = 9,
+    Immune = 10,
+    FallDamage = 11
+}
+
+[Flags]
+public enum CombatFlags : byte
+{
+    SelfTarget = 1 << 0,
+    HasDamageData = 1 << 1,
+    ShowVisual = 1 << 2,
+    SkipEffectLogic = 1 << 3,
+    UseAlternateAbility = 1 << 4,
+    HasAbsorptionData = 1 << 5,
+    HasExtendedData = 1 << 6
 }

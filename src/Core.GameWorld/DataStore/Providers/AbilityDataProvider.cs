@@ -77,6 +77,7 @@ public class AbilityDataProvider(
                 Range = (ushort)(row.Range ?? 0),
                 MinRange = (byte)(row.MinRange ?? 0),
                 Commands = commands,
+                EffectId = (ushort)row.EffectId,
             };
 
             definitions[entry] = def;

@@ -53,9 +53,15 @@ public class CombatRegionHandler :
         var caster = @event.Caster;
         var ctx = @event.Context;
         var def = ctx.Definition;
-        var targetOid = ctx.Target?.ObjectId ?? 0;
 
-        // Build the F_USE_ABILITY (started) packet — sent to caster + observers
+        // Mirror V1 target-OID resolution: use the caster's own OID for self-targeted
+        // (Range == 0) abilities when no explicit target entity is present.
+        var targetOid = ctx.Target?.ObjectId
+            ?? (def.Range == 0 ? caster.ObjectId : (ushort)0);
+
+        // Build the F_USE_ABILITY (started) packet — sent to caster + observers.
+        // For instant casts CastTime == 0; the client plays the start-of-cast animation
+        // gesture immediately and expects state=2 to follow.
         var useAbility = UseAbilityResponse.CastStarted(
             def.Entry,
             caster.ObjectId,
@@ -73,12 +79,14 @@ public class CombatRegionHandler :
             {
                 casterSession.SendUseAbility(useAbility);
 
-                // Send cast-bar timer to caster only
-                casterSession.SendCastBarTimer(
-                    CastBarTimerResponse.CastBar(
-                        def.Entry,
-                        (ushort)ctx.CastTime,
-                        ctx.CastSequence));
+                // Cast-bar timer: only relevant when CastTime > 0. Sending a
+                // zero-duration timer for instants confuses the client UI.
+                if (ctx.CastTime > 0)
+                    casterSession.SendCastBarTimer(
+                        CastBarTimerResponse.CastBar(
+                            def.Entry,
+                            (ushort)ctx.CastTime,
+                            ctx.CastSequence));
             }
         }
 
@@ -92,14 +100,17 @@ public class CombatRegionHandler :
 
     /// <summary>
     /// A cast completed execution (instant or cast-bar finished). Broadcasts
-    /// <c>F_USE_ABILITY</c> (state=completed) to nearby players.
+    /// <c>F_USE_ABILITY</c> (state=completed) and <c>F_CAST_PLAYER_EFFECT</c>
+    /// (animation trigger) to the caster and all nearby players.
     /// </summary>
     public void Handle(AbilityCastCompleted @event)
     {
         var caster = @event.Caster;
         var ctx = @event.Context;
         var def = ctx.Definition;
-        var targetOid = ctx.Target?.ObjectId ?? 0;
+        // For the animation packet, default the targetOid to the caster's own OID when
+        // there is no explicit target (AoE, self-cast) so the client has a valid anchor.
+        var targetOid = ctx.Target?.ObjectId ?? caster.ObjectId;
 
         var useAbility = UseAbilityResponse.CastCompleted(
             def.Entry,
@@ -109,15 +120,29 @@ public class CombatRegionHandler :
             (byte)def.Origin,
             ctx.CastSequence);
 
+        // The animation packet triggers the ability VFX on the client side (particle
+        // effects, character animation, projectile flight). It must be sent alongside
+        // F_USE_ABILITY; the state=2 packet alone does not drive visuals.
+        var animation = CastPlayerEffectResponse.CastAnimation(
+            caster.ObjectId,
+            targetOid,
+            def.Entry,
+            def.EffectId);
+
         // Send to caster
         if (caster is PlayerEntity casterPlayer)
         {
             var casterSession = _sessionResolver.GetSession(casterPlayer);
-            casterSession?.SendUseAbility(useAbility);
+            if (casterSession is not null)
+            {
+                casterSession.SendUseAbility(useAbility);
+                casterSession.SendCastPlayerEffect(animation);
+            }
         }
 
         // Broadcast to nearby players
         BroadcastToVisiblePlayers(caster, useAbility);
+        BroadcastToNearbyPlayers(caster, animation);
     }
 
     // ═══════════════════════════════════════════════════════════════════

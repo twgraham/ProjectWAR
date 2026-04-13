@@ -64,6 +64,9 @@ namespace Core.Infrastructure.Network
         public object[] Values { get; }
         public ConditionalOnAttribute(string propertyName, params object[] values) { PropertyName = propertyName; Values = values; }
     }
+
+    [System.AttributeUsage(System.AttributeTargets.Property)]
+    public class ZigZagAttribute : System.Attribute { }
 }";
 
     [Fact]
@@ -1095,6 +1098,166 @@ namespace TestNamespace
 
         // Deserialize: returns array, which satisfies IEnumerable<T>
         code.ShouldContain("return array;");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithZigZagAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class CombatPacket
+    {
+        public byte Header { get; set; }
+
+        [ZigZag]
+        public int Damage { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(CombatPacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: reads ZigZag int32
+        code.ShouldContain("reader.ReadZigZagInt32()");
+
+        // Serialize: writes ZigZag int32
+        code.ShouldContain("writer.WriteZigZagInt32(");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithNullableZigZagAttribute()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public class CombatPacket
+    {
+        public byte Header { get; set; }
+
+        [ZigZag]
+        public int? OptionalDamage { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(CombatPacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: nullable guard wrapping ZigZag read
+        code.ShouldContain("reader.IsAtEnd() ? (int?)null : reader.ReadZigZagInt32()");
+
+        // Serialize: null-check before write
+        code.ShouldContain("WriteZigZagInt32(");
+        code.ShouldContain(".Value");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithConditionalOnFlagsEnum()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    [System.Flags]
+    public enum CombatFlags : byte
+    {
+        None = 0,
+        HasDamage = 1,
+        HasMitigation = 2,
+        HasAbsorption = 4,
+    }
+
+    public class CombatPacket
+    {
+        public CombatFlags Flags { get; set; }
+
+        [ConditionalOn(""Flags"", 1)]
+        public int Damage { get; set; }
+
+        [ConditionalOn(""Flags"", 2)]
+        public int Mitigation { get; set; }
+
+        [ConditionalOn(""Flags"", 4)]
+        public int Absorption { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(CombatPacket))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Deserialize: flags-based bitwise AND checks
+        code.ShouldContain("(local_Flags & (global::TestNamespace.CombatFlags)1) != 0");
+        code.ShouldContain("(local_Flags & (global::TestNamespace.CombatFlags)2) != 0");
+        code.ShouldContain("(local_Flags & (global::TestNamespace.CombatFlags)4) != 0");
+
+        // Serialize: flags-based bitwise AND checks on obj
+        code.ShouldContain("(obj.Flags & (global::TestNamespace.CombatFlags)1) != 0");
+        code.ShouldContain("(obj.Flags & (global::TestNamespace.CombatFlags)2) != 0");
+        code.ShouldContain("(obj.Flags & (global::TestNamespace.CombatFlags)4) != 0");
+    }
+
+    [Fact]
+    public void GeneratesSerializer_WithConditionalOnNonFlagsEnum_UsesEquality()
+    {
+        var source = @"
+using Core.Infrastructure.Network;
+
+namespace TestNamespace
+{
+    public enum PacketType : byte
+    {
+        A = 1,
+        B = 2,
+    }
+
+    public class Packet
+    {
+        public PacketType Type { get; set; }
+
+        [ConditionalOn(""Type"", 1)]
+        public int Extra { get; set; }
+    }
+
+    [PacketSerializerContext(typeof(Packet))]
+    public partial class TestContext
+    {
+    }
+}";
+
+        var result = RunGenerator(source);
+
+        result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ShouldBeEmpty();
+        var code = result.GeneratedTrees[0].ToString();
+
+        // Non-flags enum: should use equality, not bitwise AND
+        code.ShouldContain("local_Type == 1");
+        code.ShouldContain("obj.Type == 1");
     }
 
     private GeneratorTestResult RunGenerator(string source)
