@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Core guild record, mapped to the <c>guild_info</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class GuildInfo
 {
     public uint GuildId { get; set; }

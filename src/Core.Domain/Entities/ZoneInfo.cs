@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Zone definition loaded from the <c>zone_infos</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// </summary>
 public sealed class ZoneInfo
 {
     public ushort ZoneId { get; set; }

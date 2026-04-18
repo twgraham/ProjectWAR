@@ -1,13 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Persistent character record mapped to the <c>characters</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// <para>
-/// This replaces the legacy <c>Common.Character</c> class — no ORM base class
-/// or FrameWork dependency.
-/// </para>
-/// </summary>
 public sealed class Character
 {
     public uint CharacterId { get; set; }

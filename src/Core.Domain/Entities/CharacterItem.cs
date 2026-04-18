@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// An item owned by a character, mapped to the <c>characters_items</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class CharacterItem
 {
     /// <summary>Surrogate UUID primary key.</summary>

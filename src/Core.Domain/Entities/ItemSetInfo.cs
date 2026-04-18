@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Item set definition loaded from the <c>item_sets</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// </summary>
 public sealed class ItemSetInfo
 {
     public uint Entry { get; set; }

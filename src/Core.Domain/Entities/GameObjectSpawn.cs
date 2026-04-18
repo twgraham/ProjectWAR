@@ -1,34 +1,24 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Game object spawn point loaded from the <c>gameobject_spawns</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// <para>
-/// Column types are kept in their natural Npgsql → C# mappings (bigint → long,
-/// integer → int, smallint → short) to avoid EF Core type-mismatch errors.
-/// Narrowing casts to game-domain types (uint, byte, ushort) are done in the
-/// <see cref="WorldServerV2.Data.Providers.SpawnDescriptorFactory"/>.
-/// </para>
-/// </summary>
 public sealed class GameObjectSpawn
 {
-    public long  Guid      { get; set; }  // bigint PK, identity
-    public long  Entry     { get; set; }  // bigint
-    public int   ZoneId    { get; set; }  // integer
-    public int   WorldX    { get; set; }  // integer
-    public int   WorldY    { get; set; }  // integer
-    public int   WorldZ    { get; set; }  // integer
-    public int   WorldO    { get; set; }  // integer
-    public long  DisplayId { get; set; }  // bigint
-    public short Unk1      { get; set; }  // smallint
-    public short Unk2      { get; set; }  // smallint
-    public long     Unk3      { get; set; }  // bigint
-    public long     Unk4      { get; set; }  // bigint
-    public ushort[]? Unks    { get; set; }  // text, space-separated ushort[6] values
-    public long? DoorId      { get; set; }  // bigint nullable
-    public long  VfxState    { get; set; }  // bigint
+    public long Guid { get; set; }
+    public long Entry { get; set; }
+    public int ZoneId { get; set; }
+    public int WorldX { get; set; }
+    public int WorldY { get; set; }
+    public int WorldZ { get; set; }
+    public int WorldO { get; set; }
+    public long DisplayId { get; set; }
+    public short Unk1 { get; set; }
+    public short Unk2 { get; set; }
+    public long Unk3 { get; set; }
+    public long Unk4 { get; set; }
+    public ushort[]? Unks { get; set; }
+    public long? DoorId { get; set; }
+    public long VfxState { get; set; }
 
-    // ── Computed helpers ─────────────────────────────────────────────────
+    // Computed helpers
 
     /// <summary>
     /// Whether this object can be interacted with.

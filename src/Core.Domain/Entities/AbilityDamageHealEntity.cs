@@ -1,10 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// EF Core entity mapped to the <c>ability_damage_heals</c> table in the World database.
-/// Read-only — loaded once at startup and converted into
-/// <c>DamageDefinition</c> attached to the parent <c>AbilityCommandDefinition</c>.
-/// </summary>
 public sealed class AbilityDamageHealEntity
 {
     public int Entry { get; set; }

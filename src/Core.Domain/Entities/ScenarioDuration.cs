@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// A recorded scenario run duration, mapped to the <c>scenario_durations</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class ScenarioDuration
 {
     /// <summary>Auto-generated identity PK.</summary>

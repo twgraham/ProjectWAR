@@ -5,10 +5,6 @@ namespace Core.Domain;
 
 /// <summary>
 /// EF Core context for the World database (static/read-only game data).
-/// <para>
-/// Uses Npgsql (PostgreSQL). Table and column names are configured to match the
-/// existing schema for seamless data migration from the legacy MySQL database.
-/// </para>
 /// </summary>
 public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     : DbContext(options)

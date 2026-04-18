@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Creature spawn point loaded from the <c>creature_spawns</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// </summary>
 public sealed class CreatureSpawn
 {
     public uint Guid { get; set; }
@@ -22,7 +18,7 @@ public sealed class CreatureSpawn
     public uint Oid { get; set; }
     public byte Enabled { get; set; }
 
-    // ── Navigation (not a DB column — populated by provider cross-linking) ──
+    // Navigation properties
 
     /// <summary>
     /// Resolved from <see cref="Entry"/> → <see cref="CreatureProto.Entry"/>.

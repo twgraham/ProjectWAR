@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Item definition loaded from the <c>item_infos</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// </summary>
 public sealed class ItemInfo
 {
     private static readonly byte[] Unk27Default =

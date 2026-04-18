@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Zone travel (jump) point loaded from the <c>zone_jumps</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="WorldDbContext"/>.
-/// </summary>
 public sealed class ZoneJump
 {
     public uint Entry { get; set; }

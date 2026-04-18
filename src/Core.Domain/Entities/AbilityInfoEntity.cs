@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// EF Core entity mapped to the <c>abilities</c> table in the World database.
-/// Read-only — loaded once at startup and converted into <see cref="WorldServerV2.World.Combat.Abilities.AbilityDefinition"/>.
-/// </summary>
 public sealed class AbilityInfoEntity
 {
     public int Entry { get; set; }

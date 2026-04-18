@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// A character's active or completed quest, mapped to the <c>characters_quests</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class CharacterQuest
 {
     public uint CharacterId { get; set; }

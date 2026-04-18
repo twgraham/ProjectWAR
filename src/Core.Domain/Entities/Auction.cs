@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// An auction house listing, mapped to the <c>auctions</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class Auction
 {
     public long AuctionId { get; set; }

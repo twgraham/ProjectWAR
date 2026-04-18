@@ -1,10 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// EF Core entity mapped to the <c>ability_commands</c> table in the World database.
-/// Read-only — loaded once at startup and converted into
-/// <c>AbilityCommandDefinition</c>.
-/// </summary>
 public sealed class AbilityCommandEntity
 {
     public int Entry { get; set; }

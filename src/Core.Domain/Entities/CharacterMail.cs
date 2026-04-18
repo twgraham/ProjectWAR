@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// An in-game mail message, mapped to the <c>characters_mails</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class CharacterMail
 {
     /// <summary>Auto-generated identity PK.</summary>

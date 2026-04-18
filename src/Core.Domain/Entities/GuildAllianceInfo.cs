@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// An alliance between guilds, mapped to the <c>guild_alliance_info</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class GuildAllianceInfo
 {
     public uint AllianceId { get; set; }

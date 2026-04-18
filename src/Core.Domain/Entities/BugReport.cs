@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// A player-submitted bug report, mapped to the <c>bug_report</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class BugReport
 {
     /// <summary>Surrogate UUID primary key.</summary>

@@ -5,11 +5,6 @@ namespace Core.Domain;
 
 /// <summary>
 /// EF Core context for the Characters database (per-account and per-character mutable data).
-/// <para>
-/// Uses Npgsql (PostgreSQL). Column names are configured to match the PascalCase column names
-/// defined in <c>war_characters_pg.sql</c>, preserving the legacy MySQL naming convention that
-/// was carried forward into the PostgreSQL migration.
-/// </para>
 /// </summary>
 public sealed class CharacterDbContext(DbContextOptions<CharacterDbContext> options)
     : DbContext(options)

@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// A scheduled guild event, mapped to the <c>guild_event</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class GuildEvent
 {
     /// <summary>Surrogate UUID primary key.</summary>

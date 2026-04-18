@@ -1,9 +1,5 @@
 namespace Core.Domain.Entities;
 
-/// <summary>
-/// Runtime mutable state for a character, mapped to the <c>characters_value</c> table.
-/// Pure POCO — all DB column mapping is handled by <see cref="CharacterDbContext"/>.
-/// </summary>
 public sealed class CharacterValue
 {
     public uint CharacterId { get; set; }
