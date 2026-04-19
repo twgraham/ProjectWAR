@@ -1,5 +1,6 @@
 using Core.GameWorld.Combat;
 using Core.GameWorld.Combat.Abilities;
+using Core.GameWorld.Combat.AutoAttack;
 using Core.GameWorld.Combat.Buffs;
 using Core.GameWorld.Components;
 using Core.GameWorld.Events;
@@ -40,6 +41,38 @@ public abstract class UnitEntity : WorldEntity
         Abilities = new AbilityComponent(this) { EffectExecutor = SharedEffectExecutor };
         Stats = new StatContainer();
         Buffs = new BuffContainer(this);
+        CombatState = new CombatStateTracker();
+
+        // ── Stub delegates for auto-attack ──────────────────────────
+        // TODO: Replace with real equipment queries once the item/equip system
+        //       is wired. The stub returns a generic 50-DPS, 2.0s weapon.
+        WeaponQuery stubWeapon = static (_, _) => new WeaponInfo(50f, 200);
+
+        // TODO: Replace with WorldPosition.DistanceSquared2D or spatial query
+        //       once movement / position updates are flowing.
+        DistanceFunc stubDistance = static (a, b) =>
+        {
+            var dx = a.Position.X - b.Position.X;
+            var dy = a.Position.Y - b.Position.Y;
+            return (float)Math.Sqrt(dx * dx + dy * dy) / 10;
+        };
+
+        // TODO: Wire real LOS via Core.Spatial raycasting when zone
+        //       heightmap data is loaded.
+        LosFunc stubLos = static (_, _) => true;
+
+        // TODO: Implement facing-arc check using entity heading.
+        FacingFunc stubFacing = static (_, _) => true;
+
+        AutoAttack = new AutoAttackComponent(
+            this,
+            new AutoAttackConfig(),
+            stubWeapon,
+            stubDistance,
+            stubLos,
+            stubFacing,
+            Random.Shared.Next);
+
         Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
 
         // ── Wire component callbacks → tick events ──────────────────
@@ -53,6 +86,23 @@ public abstract class UnitEntity : WorldEntity
             caster, result.Target, result.AbilityEntry, result.CommandIndex,
             result.Damage, result.Mitigation, result.Absorption,
             result.WasCritical, result.WasDefended, result.DefenseType));
+
+        // ── Auto-attack callbacks → tick events ─────────────────────
+        AutoAttack.OnSwing = (caster, target) =>
+            Emit(new AutoAttackSwing(caster, target));
+
+        AutoAttack.OnDamageDealt = (caster, ctx) =>
+        {
+            // Target is the current auto-attack target at the time damage was dealt
+            var target = AutoAttack.Target;
+            if (target is not null)
+                Emit(new AutoAttackDamageDealt(caster, target, ctx));
+            CombatState.RefreshCombat(0); // tick will be corrected by next Update
+        };
+
+        // ── Combat state callbacks → tick events ────────────────────
+        CombatState.OnCombatStateChanged = entered =>
+            Emit(new CombatStateChanged(this, entered));
     }
 
     /// <summary>Health pool — always present on units. Never null.</summary>
@@ -66,6 +116,19 @@ public abstract class UnitEntity : WorldEntity
 
     /// <summary>Buff container — always present on units. Never null.</summary>
     public BuffContainer Buffs { get; }
+
+    /// <summary>
+    /// Auto-attack state (timing, target, melee/ranged/offhand) — always present on units.
+    /// For creatures, <see cref="AutoAttackComponent.IsAttacking"/> starts <c>false</c>
+    /// and is activated by the AI system.
+    /// </summary>
+    public AutoAttackComponent AutoAttack { get; }
+
+    /// <summary>
+    /// Combat-state tracker (in/out of combat, 10s timeout) — always present on units.
+    /// Transitions emit <see cref="CombatStateChanged"/> for <c>F_UPDATE_STATE</c> packets.
+    /// </summary>
+    public CombatStateTracker CombatState { get; }
 
     /// <summary>Unit level (1–40 for players, variable for creatures).</summary>
     public byte Level { get; set; }
@@ -99,7 +162,8 @@ public abstract class UnitEntity : WorldEntity
         Buffs.Update(tick);
         Stats.Flush();
         Abilities.Update(tick);
-        // TODO: HP regen, combat timers (System 4 — remaining steps)
+        AutoAttack.Update(tick);
+        CombatState.Update(tick);
         base.Update(tick);
     }
 }

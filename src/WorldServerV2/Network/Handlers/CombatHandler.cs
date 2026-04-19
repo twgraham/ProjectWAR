@@ -1,4 +1,5 @@
 using Core.Domain.ValueObjects;
+using Core.GameWorld.Combat.AutoAttack;
 using Core.Infrastructure.Network;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Network.Dtos;
@@ -87,5 +88,39 @@ public class CombatHandler : IPacketHandler
         // TODO: Send F_INIT_EFFECTS (target buff list) when buff system
         // is fully wired. Requires reading target entity's BuffContainer
         // on the region thread via an enqueued action.
+    }
+
+    /// <summary>
+    /// Handles <c>F_SWITCH_ATTACK_MODE</c> (0xDC) — client auto-attack toggle.
+    /// <para>
+    /// Enqueues a <see cref="ToggleAutoAttackAction"/> to the region thread, which
+    /// resolves the target and toggles <see cref="AutoAttackComponent.IsAttacking"/>.
+    /// Matches V1 behaviour: each packet inverts the current state.
+    /// </para>
+    /// </summary>
+    [Rpc((int)Opcodes.F_SWITCH_ATTACK_MODE)]
+    public void F_SWITCH_ATTACK_MODE(
+        SwitchAttackModeRequest request,
+        IConnectionContext context,
+        [FromServices] PlayerService playerService,
+        [FromServices] WorldService worldService)
+    {
+        var player = playerService.GetPlayer(context.Session);
+        if (player is null)
+            return;
+
+        if (!player.IsActive)
+            return;
+
+        var region = worldService.Regions.Get(player.Position.RegionId);
+        if (region is null)
+        {
+            _logger.LogWarning(
+                "Player {Name} sent F_SWITCH_ATTACK_MODE but region {RegionId} not found",
+                player.Name, player.Position.RegionId);
+            return;
+        }
+
+        region.EnqueueAction(new ToggleAutoAttackAction(player.ObjectId));
     }
 }

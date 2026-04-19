@@ -74,6 +74,7 @@ public class AutoAttackTests
     }
 
     private static AutoAttackComponent MakeComponent(
+        UnitEntity? owner = null,
         AutoAttackConfig? config = null,
         WeaponQuery? weapons = null,
         DistanceFunc? distance = null,
@@ -82,6 +83,7 @@ public class AutoAttackTests
         Func<int, int, int>? random = null)
     {
         return new AutoAttackComponent(
+            owner ?? MakeUnit(99),
             config ?? new AutoAttackConfig(),
             weapons ?? SimpleWeapons(MeleeWeapon()),
             distance ?? FixedDistance(3f), // defaults to melee range
@@ -132,9 +134,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(dps: 80, speed: 200)),
             distance: FixedDistance(3f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -149,9 +151,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(dps: 80, speed: 200)),
             distance: FixedDistance(3f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0); // first swing
@@ -177,9 +179,9 @@ public class AutoAttackTests
         attacker.Stats.Flush();
 
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(dps: 80, speed: 200)),
             distance: FixedDistance(3f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0); // first swing
@@ -199,15 +201,14 @@ public class AutoAttackTests
     {
         var entity = MakeUnit();
         var comp = MakeComponent();
-        entity.Attach(comp);
 
         // No bonuses: 200 * 10 / 1.0 = 2000
-        comp.ComputeAttackInterval(entity, 200).ShouldBe(2000);
+        AutoAttackComponent.ComputeAttackInterval(entity, 200).ShouldBe(2000);
 
         // 50% bonus: 200 * 10 / 1.5 â‰ˆ 1333
         entity.Stats.SetBase(StatId.AutoAttackSpeed, 50);
         entity.Stats.Flush();
-        comp.ComputeAttackInterval(entity, 200).ShouldBe(1333);
+        AutoAttackComponent.ComputeAttackInterval(entity, 200).ShouldBe(1333);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -220,9 +221,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon()),
             distance: FixedDistance(5f)); // exactly at melee range
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -237,9 +238,9 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         // Out of melee (6 > 5), no ranged weapon
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, null),
             distance: FixedDistance(6f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -258,9 +259,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(50f)); // out of melee, in ranged
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -274,9 +275,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(50f));
-        attacker.Attach(comp);
         comp.IsMoving = true;
 
         comp.StartAttack(target);
@@ -291,9 +292,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(50f));
-        attacker.Attach(comp);
         comp.IsMoving = true;
         comp.MoveAndShoot = true;
 
@@ -310,9 +311,9 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         // base ranged range = 90, distance = 91
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(91f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -330,9 +331,9 @@ public class AutoAttackTests
 
         // Distance 100 â†’ within 110 range
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(100f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -357,10 +358,10 @@ public class AutoAttackTests
         }
 
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(50f),
             los: LosCheck);
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0); // LOS fails â†’ delay 1000ms
@@ -387,10 +388,10 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         // Random returns 30 â†’ below 45 threshold â†’ offhand fires
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
             random: FixedRandom(30));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -409,10 +410,10 @@ public class AutoAttackTests
         int callCount = 0;
         // Random returns 80 â†’ above 45 â†’ no offhand
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
             random: FixedRandom(80));
-        attacker.Attach(comp);
         comp.OnHit = (_, _, _) => callCount++;
 
         comp.StartAttack(target);
@@ -432,10 +433,10 @@ public class AutoAttackTests
 
         int hitCount = 0;
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
             random: FixedRandom(50));
-        attacker.Attach(comp);
         comp.OnHit = (_, _, _) => hitCount++;
 
         comp.StartAttack(target);
@@ -452,10 +453,10 @@ public class AutoAttackTests
         int hitCount = 0;
         // Roll=30 â†’ would proc, but offhand is a shield
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), Shield()),
             distance: FixedDistance(3f),
             random: FixedRandom(30));
-        attacker.Attach(comp);
         comp.OnHit = (_, _, _) => hitCount++;
 
         comp.StartAttack(target);
@@ -471,10 +472,10 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         int hitCount = 0;
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon(), RangedWeapon()),
-            distance: FixedDistance(50f), // out of melee â†’ ranged
+            distance: FixedDistance(50f), // out of melee â†' ranged
             random: FixedRandom(30)); // would proc if melee
-        attacker.Attach(comp);
         comp.OnHit = (_, _, _) => hitCount++;
 
         comp.StartAttack(target);
@@ -504,8 +505,7 @@ public class AutoAttackTests
         }, attacker);
         attacker.Buffs.Update(0);
 
-        var comp = MakeComponent(distance: FixedDistance(3f));
-        attacker.Attach(comp);
+        var comp = MakeComponent(owner: attacker, distance: FixedDistance(3f));
         comp.StartAttack(target);
 
         comp.Update(0);
@@ -529,8 +529,7 @@ public class AutoAttackTests
         }, attacker);
         attacker.Buffs.Update(0);
 
-        var comp = MakeComponent(distance: FixedDistance(3f));
-        attacker.Attach(comp);
+        var comp = MakeComponent(owner: attacker, distance: FixedDistance(3f));
         comp.StartAttack(target);
 
         comp.Update(0);
@@ -554,8 +553,7 @@ public class AutoAttackTests
         }, attacker);
         attacker.Buffs.Update(0);
 
-        var comp = MakeComponent(distance: FixedDistance(3f));
-        attacker.Attach(comp);
+        var comp = MakeComponent(owner: attacker, distance: FixedDistance(3f));
         comp.StartAttack(target);
 
         comp.Update(0);
@@ -579,8 +577,7 @@ public class AutoAttackTests
         }, attacker);
         attacker.Buffs.Update(0);
 
-        var comp = MakeComponent(distance: FixedDistance(3f));
-        attacker.Attach(comp);
+        var comp = MakeComponent(owner: attacker, distance: FixedDistance(3f));
         comp.StartAttack(target);
 
         comp.Update(0);
@@ -599,8 +596,7 @@ public class AutoAttackTests
         var target = MakeUnit(2, maxHealth: 1); // will die on first hit
         target.Health.TakeDamage(1); // kill target
 
-        var comp = MakeComponent(distance: FixedDistance(3f));
-        attacker.Attach(comp);
+        var comp = MakeComponent(owner: attacker, distance: FixedDistance(3f));
         comp.StartAttack(target);
 
         comp.Update(0);
@@ -616,8 +612,7 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         attacker.Health.TakeDamage(1); // kill attacker
 
-        var comp = MakeComponent(distance: FixedDistance(3f));
-        attacker.Attach(comp);
+        var comp = MakeComponent(owner: attacker, distance: FixedDistance(3f));
         comp.StartAttack(target);
 
         comp.Update(0);
@@ -636,9 +631,9 @@ public class AutoAttackTests
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
         var comp = MakeComponent(
+            owner: attacker,
             distance: FixedDistance(3f),
             facing: NeverFacing);
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -659,9 +654,9 @@ public class AutoAttackTests
         DamageContext? captured = null;
 
         var comp = MakeComponent(
+            owner: attacker,
             distance: FixedDistance(3f),
             random: FixedRandom(80)); // no offhand
-        attacker.Attach(comp);
         comp.OnHit = (_, _, ctx) => captured = ctx;
 
         comp.StartAttack(target);
@@ -681,10 +676,10 @@ public class AutoAttackTests
         DamageContext? lastCtx = null;
 
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
             random: FixedRandom(30)); // offhand procs
-        attacker.Attach(comp);
         comp.OnHit = (_, _, ctx) => lastCtx = ctx;
 
         comp.StartAttack(target);
@@ -706,10 +701,10 @@ public class AutoAttackTests
 
         DamageContext? captured = null;
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), null, RangedWeapon()),
             distance: FixedDistance(50f),
             random: FixedRandom(80));
-        attacker.Attach(comp);
         comp.OnHit = (_, _, ctx) => captured = ctx;
 
         comp.StartAttack(target);
@@ -728,10 +723,10 @@ public class AutoAttackTests
 
         // speed=300 â†’ CastTimeDamageMult = 300/100 = 3.0
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(dps: 80, speed: 300)),
             distance: FixedDistance(3f),
             random: FixedRandom(80));
-        attacker.Attach(comp);
         comp.OnHit = (_, _, ctx) => captured = ctx;
 
         comp.StartAttack(target);
@@ -749,9 +744,9 @@ public class AutoAttackTests
         DamageContext? captured = null;
 
         var comp = MakeComponent(
+            owner: attacker,
             distance: FixedDistance(3f),
             random: FixedRandom(80));
-        attacker.Attach(comp);
         comp.OnHit = (_, _, ctx) => captured = ctx;
 
         comp.StartAttack(target);
@@ -770,14 +765,10 @@ public class AutoAttackTests
     {
         var attacker = MakeUnit(1);
         var target = MakeUnit(2);
-        var comp = MakeComponent(
-            weapons: SimpleWeapons(MeleeWeapon()),
-            distance: FixedDistance(3f));
-        attacker.Attach(comp);
 
-        comp.StartAttack(target);
+        attacker.AutoAttack.StartAttack(target);
 
-        // Use entity update which ticks all ITickable components
+        // Entity.Update ticks AutoAttack as a direct field
         attacker.Update(0);
 
         target.Health.Current.ShouldBeLessThan(target.Health.Max);
@@ -794,9 +785,9 @@ public class AutoAttackTests
         var target = MakeUnit(2);
         // No weapons at all â€” uses default weapon speed
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(null, null, null),
             distance: FixedDistance(3f));
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
         comp.Update(0);
@@ -819,10 +810,10 @@ public class AutoAttackTests
         DamageContext? lastCtx = null;
 
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(), OffhandWeapon()),
             distance: FixedDistance(3f),
             random: FixedRandom(30)); // offhand procs
-        attacker.Attach(comp);
         comp.OnHit = (_, _, ctx) => lastCtx = ctx;
 
         comp.StartAttack(target);
@@ -846,10 +837,10 @@ public class AutoAttackTests
         attacker.Health.Heal(100_000); // heal to full since Wounds changed max
 
         var comp = MakeComponent(
+            owner: attacker,
             weapons: SimpleWeapons(MeleeWeapon(dps: 80, speed: 200)),
             distance: FixedDistance(3f),
             random: FixedRandom(80)); // no offhand
-        attacker.Attach(comp);
 
         comp.StartAttack(target);
 
@@ -880,9 +871,9 @@ public class AutoAttackTests
         int hitCount = 0;
 
         var comp = MakeComponent(
+            owner: attacker,
             distance: FixedDistance(3f),
             random: FixedRandom(80)); // no offhand
-        attacker.Attach(comp);
         comp.OnHit = (a, t, _) =>
         {
             a.ShouldBeSameAs(attacker);

@@ -1,3 +1,4 @@
+using Core.GameWorld.Combat;
 using Core.GameWorld.Combat.Abilities;
 using Core.GameWorld.Entities;
 using Core.GameWorld.Events;
@@ -30,7 +31,10 @@ public class CombatRegionHandler :
     IRegionEventHandler<AbilityCastFailed>,
     IRegionEventHandler<AbilityCooldownApplied>,
     IRegionEventHandler<DamageDealt>,
-    IRegionEventHandler<EntityDied>
+    IRegionEventHandler<EntityDied>,
+    IRegionEventHandler<AutoAttackSwing>,
+    IRegionEventHandler<AutoAttackDamageDealt>,
+    IRegionEventHandler<CombatStateChanged>
 {
     private readonly ISessionResolver<PlayerEntity> _sessionResolver;
 
@@ -297,6 +301,134 @@ public class CombatRegionHandler :
     } 
 
     // ═══════════════════════════════════════════════════════════════════
+    //  AUTO-ATTACK SWING (animation)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// An auto-attack swing occurred. Broadcasts <c>F_USE_ABILITY</c> with
+    /// <c>abilityEntry = 0</c> (state = completed) to trigger the melee/ranged
+    /// swing animation on nearby clients. Matches V1 behaviour.
+    /// </summary>
+    public void Handle(AutoAttackSwing @event)
+    {
+        var response = UseAbilityResponse.CastCompleted(
+            abilityEntry: 0,
+            casterOid: @event.Caster.ObjectId,
+            effectId: 0,
+            targetOid: @event.Target.ObjectId,
+            origin: 0,
+            castSequence: 0);
+
+        // Send to caster if player
+        if (@event.Caster is PlayerEntity casterPlayer)
+        {
+            var session = _sessionResolver.GetSession(casterPlayer);
+            session?.SendUseAbility(response);
+        }
+
+        // Broadcast to nearby players
+        BroadcastToVisiblePlayers(@event.Caster, response);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  AUTO-ATTACK DAMAGE
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Auto-attack damage was resolved. Broadcasts <c>F_CAST_PLAYER_EFFECT</c>
+    /// and <c>F_HIT_PLAYER</c> with <c>abilityEntry = 0</c>, mirroring the
+    /// ability-damage packet flow.
+    /// </summary>
+    public void Handle(AutoAttackDamageDealt @event)
+    {
+        var ctx = @event.Context;
+
+        CastPlayerEffectResponse packet;
+        if (ctx.WasDefended)
+        {
+            packet = CastPlayerEffectResponse.Defense(
+                @event.Caster.ObjectId,
+                @event.Target.ObjectId,
+                abilityEntry: 0,
+                ctx.DefenseType);
+        }
+        else
+        {
+            packet = CastPlayerEffectResponse.Damage(
+                @event.Caster.ObjectId,
+                @event.Target.ObjectId,
+                abilityEntry: 0,
+                subIndex: 0,
+                ctx.FinalDamage,
+                ctx.FinalMitigation,
+                ctx.FinalAbsorption,
+                ctx.WasCritical);
+        }
+
+        // Send to target
+        if (@event.Target is PlayerEntity targetPlayer)
+        {
+            var targetSession = _sessionResolver.GetSession(targetPlayer);
+            targetSession?.SendCastPlayerEffect(packet);
+        }
+
+        // Broadcast to nearby players
+        BroadcastToNearbyPlayers(@event.Target, packet);
+
+        // ── Health bar updates ───────────────────────────────────────
+        var hitPlayer = new HitPlayerResponse
+        {
+            CasterOid = @event.Caster.ObjectId,
+            TargetOid = @event.Target.ObjectId,
+            Health = (ushort)Math.Min(@event.Target.Health.Current, ushort.MaxValue),
+            PctHealth = @event.Target.Health.Percent,
+        };
+
+        if (@event.Target is PlayerEntity hitTarget)
+        {
+            var targetSession = _sessionResolver.GetSession(hitTarget);
+            if (targetSession is not null)
+            {
+                targetSession.SendHitPlayer(hitPlayer);
+                targetSession.SendPlayerHealth(new PlayerHealthResponse
+                {
+                    Health = @event.Target.Health.Current,
+                    MaxHealth = @event.Target.Health.Max,
+                    ActionPoints = (ushort)Math.Max(0, hitTarget.ActionPoints),
+                    MaxActionPoints = 250, // TODO: derive from stats
+                });
+            }
+        }
+
+        BroadcastToNearbyPlayers(@event.Target, hitPlayer);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  COMBAT STATE CHANGED
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A unit entered or left combat. Broadcasts <c>F_UPDATE_STATE</c>
+    /// (StateOpcode 0x1A) to the entity (if player) and all nearby players.
+    /// </summary>
+    public void Handle(CombatStateChanged @event)
+    {
+        var response = UpdateStateResponse.Combat(
+            @event.Entity.ObjectId,
+            @event.InCombat);
+
+        // Send to self if player
+        if (@event.Entity is PlayerEntity player)
+        {
+            var session = _sessionResolver.GetSession(player);
+            session?.SendUpdateState(response);
+        }
+
+        // Broadcast to nearby players
+        BroadcastToNearbyPlayers(@event.Entity, response);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════════════════════════════
 
@@ -354,6 +486,25 @@ public class CombatRegionHandler :
 
             var session = _sessionResolver.GetSession(observer);
             session?.SendHitPlayer(response);
+        }
+    }
+
+    /// <summary>
+    /// Sends an <see cref="UpdateStateResponse"/> to all players in the
+    /// <paramref name="origin"/> entity's visibility set, excluding the origin itself.
+    /// </summary>
+    private void BroadcastToNearbyPlayers(UnitEntity origin, UpdateStateResponse response)
+    {
+        foreach (var entity in origin.Visibility.Entities)
+        {
+            if (entity == origin)
+                continue;
+
+            if (entity is not PlayerEntity observer)
+                continue;
+
+            var session = _sessionResolver.GetSession(observer);
+            session?.SendUpdateState(response);
         }
     }
 }
