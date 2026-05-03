@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
-using FrameWork;
+using LauncherServer.Utils;
 
 namespace LauncherServer.Server
 {
@@ -158,7 +158,7 @@ namespace LauncherServer.Server
         public bool CreateUpload(PatchAsset asset, byte[] data, FileCompressionMode compress, FileType type)
         {
             Close();
-            _fileHash = Utils.Adler32(0, data, (ulong)data.Length);
+            _fileHash = Adler32.Compute(0, data, (ulong)data.Length);
             _filename = asset.Name;
             _fileSize = (ulong)data.Length;
             _filenameHash = asset.Hash;
@@ -195,7 +195,7 @@ namespace LauncherServer.Server
         public bool CreateUpload(string destination, byte[] data, FileCompressionMode compress, FileType type)
         {
             Close();
-            _fileHash = Utils.Adler32(0, data, (ulong)data.Length);
+            _fileHash = Adler32.Compute(0, data, (ulong)data.Length);
             _filename = destination;
             _fileSize = (ulong)data.Length;
 
@@ -240,7 +240,7 @@ namespace LauncherServer.Server
             _closed = false;
             _file = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (hash == 0)
-                _fileHash = Utils.Adler32(_file, _file.Length);
+                _fileHash = Adler32.Compute(_file, _file.Length);
             else
                 _fileHash = hash;
             _filename = destination;

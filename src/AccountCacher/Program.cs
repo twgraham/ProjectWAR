@@ -1,46 +1,41 @@
-﻿using FrameWork;
-using System;
 using AccountCacher;
 using AccountCacher.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NLog;
+using NLog.Extensions.Logging;
+using NLog.Web;
 
 try
 {
-    Log.Info("", "-------------------- Account Cacher  -------------------");
-
-    // Loading all configs files
-    // ConfigMgr.LoadConfigs();
-    // var configuration = ConfigMgr.GetConfig<AccountConfig>();
-    var configuration = new AccountConfig
-    {
-        IConfiguredTheFile = true,
-        AccountDB = new DatabaseInfo
-        {
-            Server = "127.0.0.1",
-            Port = "3306",
-            Database = "war_accounts",
-            Username = "root",
-            Password = "admin",
-            Custom = "Treat Tiny As Boolean=False",
-            MultipleActiveResultSets = false,
-            ConnectionType = ConnectionType.DATABASE_MYSQL
-        },
-        EnableCache = true,
-        MaxCacheSize = 10000
-    };
-
-    // Loading log level from file
-    if (!Log.InitLog(configuration.LogLevel, "AccountCacher"))
-        ConsoleMgr.WaitAndExit(2000);
-
     var builder = Host.CreateDefaultBuilder()
-        .ConfigureWebHostDefaults(builder =>
+        .ConfigureAppConfiguration((ctx, config) =>
         {
-            builder.ConfigureKestrel(opts =>
+            config
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddJsonFile($"appsettings.{ctx.HostingEnvironment.EnvironmentName}.json", optional: true)
+                .AddUserSecrets<Program>(optional: true);
+        })
+        .ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+            logging.AddNLog();
+        })
+        .UseNLog()
+        .ConfigureWebHostDefaults(webBuilder =>
+        {
+            webBuilder.ConfigureKestrel(opts =>
                     opts.ListenLocalhost(6800, o => { o.UseHttps(); }))
-                .ConfigureServices(s => s.ConfigureServices(configuration))
+                .ConfigureServices((ctx, s) =>
+                {
+                    var config = ctx.Configuration.GetSection("accountCacher").Get<AccountConfig>()
+                        ?? new AccountConfig();
+                    s.ConfigureServices(config);
+                })
                 .Configure(app =>
                 {
                     app.UseRouting();
@@ -53,5 +48,10 @@ try
 }
 catch (Exception ex)
 {
-    Console.WriteLine(ex.Message);
+    Console.Error.WriteLine($"[FATAL] {ex.Message}");
 }
+finally
+{
+    LogManager.Shutdown();
+}
+

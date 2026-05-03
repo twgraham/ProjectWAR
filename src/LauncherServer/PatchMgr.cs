@@ -1,11 +1,11 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Common.Database.Account;
-using FrameWork;
 using LauncherServer.Config;
 using LauncherServer.Dtos;
 using LauncherServer.Server;
+using LauncherServer.Utils;
+using Microsoft.Extensions.Logging;
 using Opcodes = LauncherServer.Server.Opcodes;
 
 namespace LauncherServer
@@ -42,31 +42,41 @@ namespace LauncherServer
         public FileCompressionMode Compress;
     };
 
+    public class PatchMYP
+    {
+        public string Name;
+        public int Id;
+        public int CRC32;
+        public ulong ExtractedSize { get; set; }
+        public uint AssetCount { get; set; }
+    }
+
     internal class PatchMgr
     {
         public static uint VersionHash;
-        
+
         private readonly LauncherConfig _config;
-        
-        public PatchMgr(LauncherConfig config)
+        private readonly ILogger<PatchMgr> _logger;
+
+        public PatchMgr(LauncherConfig config, ILogger<PatchMgr> logger)
         {
             _config = config;
+            _logger = logger;
         }
 
         #region MYP Files
 
         public static List<PatchFile> _Patch_Files;
-        public static Dictionary<Patch_MYP, List<PatchAsset>> _Patch_Assets;
+        public static Dictionary<PatchMYP, List<PatchAsset>> _Patch_Assets;
         public static readonly bool use_cache = false;
 
-        [LoadingFunction(true)]
         public void LoadPatch_Files()
         {
-            Log.Debug("PatchMgr", "Loading Patch_Files...");
+            _logger.LogDebug("PatchMgr: loading patch files");
 
             _Patch_Files = LoadFilesFromDisk();
 
-            Log.Success("LoadPatch_Files", "Loaded " + _Patch_Files.Count + " Launcher_File");
+            _logger.LogInformation("LoadPatch_Files: loaded {Count} launcher files", _Patch_Files.Count);
         }
 
         public List<PatchFile> LoadFilesFromDisk()
@@ -87,7 +97,7 @@ namespace LauncherServer
                 {
                     PatchFile pfile = new PatchFile();
                     pfile.Name = file.FullName.Remove(0, d.FullName.Length + 1).Replace('\\', '/');
-                    pfile.CRC32 = Utils.Adler32(fs, fs.Length);
+                    pfile.CRC32 = Adler32.Compute(fs, fs.Length);
                     pfile.Size = fs.Length;
                     patch_files.Add(pfile);
 
@@ -101,19 +111,18 @@ namespace LauncherServer
             return patch_files;
         }
 
-        [LoadingFunction(true)]
         public void LoadPatch_Assets()
         {
-            Log.Debug("PatchMgr", "Loading Patch_Assets...");
+            _logger.LogDebug("PatchMgr: loading patch assets");
 
             _Patch_Assets = LoadAssetsFromDisk();
 
-            Log.Success("LoadPatch_Assets", "Loaded " + _Patch_Assets.Count + " MYPs");
+            _logger.LogInformation("LoadPatch_Assets: loaded {Count} MYPs", _Patch_Assets.Count);
         }
 
-        public Dictionary<Patch_MYP, List<PatchAsset>> LoadAssetsFromDisk()
+        public Dictionary<PatchMYP, List<PatchAsset>> LoadAssetsFromDisk()
         {
-            Dictionary<Patch_MYP, List<PatchAsset>> patch_assets = new Dictionary<Patch_MYP, List<PatchAsset>>();
+            Dictionary<PatchMYP, List<PatchAsset>> patch_assets = new Dictionary<PatchMYP, List<PatchAsset>>();
 
             DirectoryInfo d = new DirectoryInfo(_config.PatcherFilesPath);
 #if DEBUG
@@ -125,7 +134,7 @@ namespace LauncherServer
 
             foreach (var myp in myps)
             {
-                Patch_MYP pMYP = new Patch_MYP();
+                PatchMYP pMYP = new PatchMYP();
                 pMYP.Name = myp.Name.Replace(".MYP", "");
                 pMYP.Id = (int)strToArchive(myp.Name);
 
@@ -139,7 +148,7 @@ namespace LauncherServer
                     using (var fs = File.OpenRead(file.FullName))
                     {
                         PatchAsset pAsset = new PatchAsset();
-                        pAsset.CRC32 = Utils.Adler32(fs, fs.Length);
+                        pAsset.CRC32 = Adler32.Compute(fs, fs.Length);
                         pAsset.File = (myp.Name + "\\" + file.FullName.Remove(0, myp.FullName.Length + 1));
                         pAsset.Name = file.FullName.Remove(0, myp.FullName.Length + 1).Replace('\\', '/');
                         pAsset.Size = fs.Length;
@@ -158,19 +167,6 @@ namespace LauncherServer
         }
 
         #endregion MYP Files
-
-        // TODO: REPAIR AFTER NETWORK MANAGER REWRITE
-        // public void SetServerState(ServerState state)
-        // {
-        //     _config.ServerState = state;
-        //     ConfigMgr.SaveConfig(_config);
-        //
-        //     PacketOut Out = new PacketOut(Opcodes.LCR_SERVER_STATUS);
-        //     Out.WriteUInt32((uint)state);
-        //
-        //     
-        //     // Core.Server.DispatchPatcket(Out);
-        // }
 
         #region Utils
 

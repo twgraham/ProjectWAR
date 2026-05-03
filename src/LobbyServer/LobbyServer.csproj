@@ -4,6 +4,9 @@
         <OutputType>Exe</OutputType>
         <RootNamespace>LobbyServer</RootNamespace>
         <AssemblyName>LobbyServer</AssemblyName>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>lobbyserver-secrets</UserSecretsId>
     </PropertyGroup>
     <PropertyGroup>
         <ApplicationIcon>lobby.ico</ApplicationIcon>
@@ -17,17 +20,27 @@
         <Protobuf Include="..\..\protos\LobbyServer.proto" GrpcServices="Server" ProtoRoot="..\..\protos" />
     </ItemGroup>
     <ItemGroup>
-      <ProjectReference Include="..\Common\Common.csproj" />
-      <ProjectReference Include="..\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
-      <ProjectReference Include="..\Core.Infrastructure.Network.RpcSourceGenerators\Core.Infrastructure.Network.RpcSourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\Core.Infrastructure.Network\Core.Infrastructure.Network.csproj" />
+        <ProjectReference Include="..\Core.Infrastructure.Network.RpcSourceGenerators\Core.Infrastructure.Network.RpcSourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
     <ItemGroup>
-      <PackageReference Include="Grpc.Net.Client" Version="2.71.0">
-      </PackageReference>
-      <PackageReference Include="Grpc.Tools" Version="2.72.0">
-          <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+        <PackageReference Include="Google.Protobuf" Version="3.32.1" />
+        <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.72.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+        <PackageReference Include="NLog" Version="6.1.2" />
+        <PackageReference Include="NLog.Extensions.Logging" Version="6.1.2" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="appsettings.*.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 </Project>
