@@ -255,8 +255,13 @@ public static class DamagePipeline
 
         if (ctx.IsAutoAttack)
         {
-            // Auto-attack: weapon DPS IS the base damage
-            ctx.Damage = ctx.WeaponDps * ctx.CastTimeDamageMult;
+            // Auto-attack: weapon DPS IS the base damage; apply ±variance here
+            // because ComputeBaseDamage (which normally handles variance) uses
+            // MinDamage/MaxDamage, which are both 0 for auto-attacks.
+            float damage = ctx.WeaponDps * ctx.CastTimeDamageMult;
+            if (ctx.DamageVariance > 0)
+                damage *= 1f + ctx.DamageVarianceRoll * ctx.DamageVariance * 0.01f;
+            ctx.Damage = damage;
         }
         else if (ctx.PriStatMultiplier > 0)
         {

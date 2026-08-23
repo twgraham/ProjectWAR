@@ -1,3 +1,4 @@
+using Core.GameWorld.Combat.AutoAttack;
 using Core.GameWorld.Combat.Career;
 using Core.GameWorld.Entities;
 using Core.GameWorld.Stats;
@@ -225,7 +226,9 @@ public sealed class AbilityEffectExecutor
             NoCrits = dmg.NoCrits,
             DamageBonus = cast.DamageBonus,
             DamageReduction = cast.DamageReduction,
-
+            // ── Weapon (— used by weapon-damage abilities) ───────────────────────
+            WeaponDps = caster.GetWeaponInfo(WeaponSlot.MainHand)?.Dps ?? 0f,
+            WeaponDamageScale = dmg.WeaponDamageScale,
             // ── Attacker stat snapshots ──────────────────────────────
             AttackerPrimaryStat = dmg.StatUsed > 0
                 ? casterStats.GetTotal((StatId)dmg.StatUsed)

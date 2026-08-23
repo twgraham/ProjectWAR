@@ -11,9 +11,10 @@ namespace WorldServerV2.Network.Dtos;
 /// wire format for each state:
 /// </para>
 /// <list type="bullet">
-///   <item><c>0</c> — Cast cancelled / failed (17 bytes)</item>
+///   <item><c>0</c> — Cast cancelled / failed (20 bytes)</item>
 ///   <item><c>1</c> — Cast started (20 bytes)</item>
 ///   <item><c>2</c> — Cast completed (20 bytes)</item>
+///   <item><c>6</c> — Projectile in flight (20 bytes)</item>
 /// </list>
 /// <para>
 /// Property declaration order determines wire serialization order. Do not reorder properties.
@@ -44,10 +45,10 @@ public class UseAbilityResponse
     /// </summary>
     public byte State { get; set; }
 
-    // ── State 1 & 2: Origin byte ─────────────────────────────────────
+    // ── State 1, 2 & 6: Origin byte ────────────────────────────────────
 
-    /// <summary>Ability origin (morale tier, career line, etc.) — states 1 and 2 only.</summary>
-    [ConditionalOn(nameof(State), 1, 2)]
+    /// <summary>Ability origin (morale tier, career line, etc.) — states 1, 2, and 6.</summary>
+    [ConditionalOn(nameof(State), 1, 2, 6)]
     public byte Origin { get; set; }
 
     // ── State 1: Cast started fields ─────────────────────────────────
@@ -84,19 +85,31 @@ public class UseAbilityResponse
     [ConditionalOn(nameof(State), 0)]
     public ushort Elapsed { get; set; }
 
+    // ── State 6: Projectile flight time fields ────────────────────────
+
+    /// <summary>Padding byte 1 — state 6 (projectile) only.</summary>
+    [ConditionalOn(nameof(State), 6)]
+    public byte FlightTimePad1 { get; set; }
+
+    /// <summary>Padding byte 2 — state 6 (projectile) only.</summary>
+    [ConditionalOn(nameof(State), 6)]
+    public byte FlightTimePad2 { get; set; }
+
+    /// <summary>Projectile flight time in milliseconds — state 6 only.</summary>
+    [ConditionalOn(nameof(State), 6)]
+    public ushort FlightTimeMs { get; set; }
+
     // ── Common tail (all states) ─────────────────────────────────────
 
     /// <summary>Cast sequence number matching the client request.</summary>
     public byte CastSequence { get; set; }
 
-    // ── State 1 & 2: Trailing padding ────────────────────────────────
+    // ── Trailing padding (all states — V1 always writes 3 trailing bytes) ─
 
-    /// <summary>Trailing padding — states 1 and 2 only (u16).</summary>
-    [ConditionalOn(nameof(State), 1, 2)]
+    /// <summary>Trailing padding — all states (u16).</summary>
     public ushort TrailingPad1 { get; set; }
 
-    /// <summary>Trailing padding — states 1 and 2 only (u8).</summary>
-    [ConditionalOn(nameof(State), 1, 2)]
+    /// <summary>Trailing padding — all states (u8).</summary>
     public byte TrailingPad2 { get; set; }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -171,6 +184,32 @@ public class UseAbilityResponse
             State = 0,
             CancelFlag = 1,
             FailCode = failCode,
+            CastSequence = castSequence,
+        };
+    }
+
+    /// <summary>
+    /// Projectile in flight — sent when a ranged ability fires a projectile.
+    /// State 6 tells the client how long the projectile takes to reach the target.
+    /// Damage is applied server-side after <paramref name="flightTimeMs"/> elapses.
+    /// </summary>
+    public static UseAbilityResponse ProjectileFlight(
+        ushort abilityEntry,
+        ushort casterOid,
+        ushort effectId,
+        ushort targetOid,
+        ushort flightTimeMs,
+        byte castSequence)
+    {
+        return new UseAbilityResponse
+        {
+            AbilityEntry = abilityEntry,
+            CasterOid = casterOid,
+            EffectId = effectId,
+            TargetOid = targetOid,
+            State = 6,
+            Origin = 1,
+            FlightTimeMs = flightTimeMs,
             CastSequence = castSequence,
         };
     }

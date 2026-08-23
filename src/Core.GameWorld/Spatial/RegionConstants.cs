@@ -47,6 +47,22 @@ public static class RegionConstants
     /// <summary>Conversion factor: 12 game units = 1 foot.</summary>
     public const int UnitsPerFoot = 12;
 
+    /// <summary>
+    /// Height offset (game units) added to the ray origin/target Z when checking line of sight.
+    /// Approximates head-height so ground-level positions don't immediately occlude.
+    /// 72 game units = 6 feet (matches V1 CHARACTER_HEIGHT).
+    /// </summary>
+    public const float CharacterHeight = 72f;
+
+    /// <summary>Default base radius in feet for entities without proto data.</summary>
+    public const float DefaultBaseRadiusFeet = 4.5f;
+
+    /// <summary>
+    /// Default heading arc (in degrees) for the "in-front" check used by melee range
+    /// gating and defense rolls. 140° means ±70° from the observer's heading.
+    /// </summary>
+    public const float DefaultFrontArcDegrees = 140f;
+
     /// <summary>Maximum assignable OID value (ushort.MaxValue). OID 0 is reserved.</summary>
     public const ushort MaxOid = ushort.MaxValue;
 }

@@ -29,15 +29,18 @@ public sealed class BeginCastAction : IRegionAction
     private readonly ushort _casterOid;
     private readonly ushort _targetOid;
     private readonly AbilityDefinition _definition;
+    private readonly byte _castSequence;
 
     public BeginCastAction(
         ushort casterOid,
         ushort targetOid,
-        AbilityDefinition definition)
+        AbilityDefinition definition,
+        byte castSequence)
     {
         _casterOid = casterOid;
         _targetOid = targetOid;
         _definition = definition;
+        _castSequence = castSequence;
     }
 
     /// <inheritdoc />
@@ -64,10 +67,16 @@ public sealed class BeginCastAction : IRegionAction
             // Validation failed before any component state changed — dispatch directly
             context.Dispatcher.Dispatch(new AbilityCastFailed(
                 caster,
-                new AbilityCastContext(_definition, caster, target) { FailureCode = failureCode },
+                new AbilityCastContext(_definition, caster, target)
+                {
+                    CastSequence = _castSequence,
+                    FailureCode = failureCode,
+                },
                 failureCode));
             return;
         }
+
+        castContext.CastSequence = _castSequence;
 
         // 4. Phase 2: ConfirmCast (mutations — GCD, register active cast, instant execution)
         //    On success, component callbacks on the caster entity emit all relevant

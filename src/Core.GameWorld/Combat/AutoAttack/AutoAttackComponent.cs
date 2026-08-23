@@ -1,4 +1,5 @@
 using Core.GameWorld.Entities;
+using Core.GameWorld.Spatial;
 using Core.GameWorld.Stats;
 
 namespace Core.GameWorld.Combat.AutoAttack;
@@ -15,6 +16,7 @@ namespace Core.GameWorld.Combat.AutoAttack;
 /// <param name="OffhandStatCoefficient">Stat coefficient for offhand swings (V1: 0.05).</param>
 /// <param name="RetryIntervalMs">Back-off delay when attack conditions fail (V1: 100ms).</param>
 /// <param name="RangedLosRetryMs">Extra delay when LOS check fails for ranged (V1: 1000ms).</param>
+/// <param name="DamageVariance">Weapon damage variance ±N% (V1: 25 = ±25%).</param>
 public sealed record AutoAttackConfig(
     uint MeleeRange = 5,
     uint BaseRangedRange = 90,
@@ -24,7 +26,8 @@ public sealed record AutoAttackConfig(
     float AutoAttackStatCoefficient = 0.1f,
     float OffhandStatCoefficient = 0.05f,
     long RetryIntervalMs = 100,
-    long RangedLosRetryMs = 1000);
+    long RangedLosRetryMs = 1000,
+    ushort DamageVariance = 25);
 
 /// <summary>
 /// Slot identity for weapon lookup.
@@ -47,29 +50,6 @@ public sealed record WeaponInfo(
     bool IsCharm = false);
 
 /// <summary>
-/// Delegate for querying equipped weapon information.
-/// Returns <c>null</c> if the slot is empty.
-/// </summary>
-public delegate WeaponInfo? WeaponQuery(UnitEntity entity, WeaponSlot slot);
-
-/// <summary>
-/// Delegate for checking distance between two entities.
-/// Returns squared distance or actual distance — the component uses ≤ comparison.
-/// </summary>
-public delegate float DistanceFunc(UnitEntity a, UnitEntity b);
-
-/// <summary>
-/// Delegate for line-of-sight check. Returns <c>true</c> if clear LOS.
-/// </summary>
-public delegate bool LosFunc(UnitEntity attacker, UnitEntity target);
-
-/// <summary>
-/// Delegate for facing check. Returns <c>true</c> if <paramref name="target"/>
-/// is within the attacker's front arc.
-/// </summary>
-public delegate bool FacingFunc(UnitEntity attacker, UnitEntity target);
-
-/// <summary>
 /// Callback invoked when auto-attack deals damage (main-hand, offhand, ranged).
 /// Useful for career resource generation, threat management, etc.
 /// </summary>
@@ -90,18 +70,13 @@ public delegate void OnAutoAttackHit(UnitEntity attacker, UnitEntity target, Dam
 /// <b>Ability interaction (matches V1):</b> Auto-attacks are blocked while
 /// <see cref="UnitEntity.Abilities"/> has an active cast (cast-bar or channel).
 /// Instant casts complete within a single tick and do not block. When blocked,
-/// the timer advances by <see cref="AutoAttackConfig.RetryIntervalMs"/> (100ms),
-/// so auto-attacks resume within one retry tick of the cast completing.
+/// the scheduled swing remains due and fires on the update that the cast completes.
 /// </para>
 /// </summary>
 public sealed class AutoAttackComponent
 {
     private readonly UnitEntity _owner;
     private readonly AutoAttackConfig _config;
-    private readonly WeaponQuery _weaponQuery;
-    private readonly DistanceFunc _distanceFunc;
-    private readonly LosFunc _losFunc;
-    private readonly FacingFunc _facingFunc;
     private readonly Func<int, int, int> _random;
 
     private long _nextAttackTime;
@@ -139,26 +114,14 @@ public sealed class AutoAttackComponent
     /// </summary>
     /// <param name="owner">The unit that owns this auto-attack state.</param>
     /// <param name="config">Tuning parameters.</param>
-    /// <param name="weaponQuery">Equipment lookup delegate.</param>
-    /// <param name="distanceFunc">Distance check delegate.</param>
-    /// <param name="losFunc">Line-of-sight delegate.</param>
-    /// <param name="facingFunc">Facing-arc delegate.</param>
     /// <param name="random">RNG returning int in [min, max) — for offhand proc and rolls.</param>
     public AutoAttackComponent(
         UnitEntity owner,
         AutoAttackConfig config,
-        WeaponQuery weaponQuery,
-        DistanceFunc distanceFunc,
-        LosFunc losFunc,
-        FacingFunc facingFunc,
         Func<int, int, int> random)
     {
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _config = config;
-        _weaponQuery = weaponQuery;
-        _distanceFunc = distanceFunc;
-        _losFunc = losFunc;
-        _facingFunc = facingFunc;
         _random = random;
     }
 
@@ -186,10 +149,7 @@ public sealed class AutoAttackComponent
         //    tick they start, so they don't block. Cast-bar and channel abilities
         //    keep ActiveCast non-null for their full duration.
         if (caster.Abilities.HasActiveCast)
-        {
-            _nextAttackTime = tick + _config.RetryIntervalMs;
             return;
-        }
 
         // 4. Must be actively attacking with a target
         if (!IsAttacking || Target is null)
@@ -209,12 +169,12 @@ public sealed class AutoAttackComponent
             return;
         }
 
-        // 6. Check melee range first
-        float distance = _distanceFunc(caster, target);
+        // 6. Check melee range first (edge-to-edge distance in feet)
+        float distance = caster.DistanceTo(target);
         if (distance <= _config.MeleeRange)
         {
             // 6a. Facing check — skip swing if target not in front arc
-            if (!_facingFunc(caster, target))
+            if (!caster.IsInFrontArc(target))
             {
                 _nextAttackTime = tick + _config.RetryIntervalMs;
                 return;
@@ -234,7 +194,7 @@ public sealed class AutoAttackComponent
 
     private void PerformMeleeSwing(UnitEntity caster, UnitEntity target, long tick)
     {
-        var weapon = _weaponQuery(caster, WeaponSlot.MainHand);
+        var weapon = caster.GetWeaponInfo(WeaponSlot.MainHand);
         var weaponDps = weapon?.Dps ?? 0f;
         var weaponSpeed = weapon?.Speed ?? _config.DefaultWeaponSpeed;
 
@@ -271,7 +231,7 @@ public sealed class AutoAttackComponent
         }
 
         // Must have ranged weapon
-        var weapon = _weaponQuery(caster, WeaponSlot.Ranged);
+        var weapon = caster.GetWeaponInfo(WeaponSlot.Ranged);
         if (weapon is null)
         {
             _nextAttackTime = tick + _config.RetryIntervalMs;
@@ -287,8 +247,8 @@ public sealed class AutoAttackComponent
             return;
         }
 
-        // LOS check
-        if (!_losFunc(caster, target))
+        // LOS check (uses region occlusion provider; clear when unavailable)
+        if (!caster.HasLineOfSight(target))
         {
             _nextAttackTime = tick + _config.RangedLosRetryMs;
             return;
@@ -318,7 +278,7 @@ public sealed class AutoAttackComponent
 
     private void TryOffhandSwing(UnitEntity caster, UnitEntity target)
     {
-        var offhand = _weaponQuery(caster, WeaponSlot.OffHand);
+        var offhand = caster.GetWeaponInfo(WeaponSlot.OffHand);
         if (offhand is null || offhand.IsShield || offhand.IsCharm)
             return;
 
@@ -328,7 +288,7 @@ public sealed class AutoAttackComponent
             return;
 
         // Offhand swing uses main-hand speed for scaling (matches V1)
-        var mainWeapon = _weaponQuery(caster, WeaponSlot.MainHand);
+        var mainWeapon = caster.GetWeaponInfo(WeaponSlot.MainHand);
         var mhSpeed = mainWeapon?.Speed ?? _config.DefaultWeaponSpeed;
 
         var ctx = BuildAutoAttackContext(caster, target, offhand.Dps, mhSpeed,
@@ -378,13 +338,15 @@ public sealed class AutoAttackComponent
             TargetInitiative = target.Stats.GetTotal(StatId.Initiative),
 
             // Target facing / shield for defense rolls
-            TargetIsFacing = _facingFunc(target, attacker),
+            TargetIsFacing = target.IsInFrontArc(attacker),
             TargetHasShield = HasShield(target),
 
             // Random rolls
             DefenseRoll = _random(0, 100),
             CritRoll = _random(0, 100),
-            CritVarianceRoll = _random(0, 21) / 100f, // [0.0, 0.2]
+            CritVarianceRoll = _random(0, 21) / 100f,  // [0.0, 0.2]
+            DamageVariance = _config.DamageVariance,
+            DamageVarianceRoll = _random(-100, 101) / 100f, // [-1.0, 1.0]
         };
 
         return ctx;
@@ -417,9 +379,9 @@ public sealed class AutoAttackComponent
             target.Health.TakeDamage(ctx.FinalDamage);
     }
 
-    private bool HasShield(UnitEntity entity)
+    private static bool HasShield(UnitEntity entity)
     {
-        var offhand = _weaponQuery(entity, WeaponSlot.OffHand);
+        var offhand = entity.GetWeaponInfo(WeaponSlot.OffHand);
         return offhand is { IsShield: true };
     }
 

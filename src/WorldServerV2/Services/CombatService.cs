@@ -96,8 +96,10 @@ public sealed class CombatService
                 player.ObjectId,
                 definition.EffectId,
                 currentTarget.Value,
-                (byte)AbilityFailure.Moving,
-                castSequence: 0));
+                (byte)AbilityFailure.Interrupted,
+                castSequence: abilityGroup));
+            session.SendCastCompletion(CastCompletionResponse.Create(
+                player.ObjectId, definition.Entry));
             return;
         }
 
@@ -117,12 +119,28 @@ public sealed class CombatService
         var action = new BeginCastAction(
             player.ObjectId,
             currentTarget.Value,
-            definition);
+            definition,
+            abilityGroup);
 
         region.EnqueueAction(action);
 
         _logger.LogDebug(
             "Enqueued BeginCastAction for {Name} — ability {AbilityId} → region {RegionId}",
             player.Name, abilityId, region.RegionId);
+    }
+
+    /// <summary>
+    /// Cancels the player's active cast if they start moving and the ability cannot
+    /// be cast while moving.
+    /// <para>
+    /// Called on the handler thread from the movement handler on every position-update
+    /// packet. The actual cancellation runs on the region thread via
+    /// <see cref="CancelCastOnMoveAction"/>.
+    /// </para>
+    /// </summary>
+    public void CancelCastOnMove(PlayerEntity player, WorldPosition newPosition)
+    {
+        var region = _worldService.Regions.Get(player.Position.RegionId);
+        region?.EnqueueAction(new CancelCastOnMoveAction(player.ObjectId, newPosition));
     }
 }

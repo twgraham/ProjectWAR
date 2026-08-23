@@ -100,6 +100,12 @@ public sealed class PlayerInitPipeline
         foreach (var entry in baseStats)
             player.Stats.SetBase(entry.Stat, entry.Value);
 
+        // Populate inventory and apply equipment bonuses before flushing stats so that
+        // item-granted Wounds (and other bonuses) are included in the first MaxHealth
+        // computation.
+        PopulateInventory(player);
+        player.ApplyEquipmentStats();
+
         // Flush computes derived stats (MaxHealth = Wounds × 10) and fires
         // OnMaxHealthChanged → HealthComponent.Max is updated.
         player.Stats.Flush();
@@ -108,9 +114,6 @@ public sealed class PlayerInitPipeline
         // Use Heal (not Resurrect) because the entity is already alive and its
         // current HP was initialized to the pre-flush max; Flush() may raise Max.
         player.Health.Heal(player.Health.Max);
-
-        // Populate inventory from DB character items.
-        PopulateInventory(player);
 
         var speed = charValue.Speed > 0 ? (ushort)charValue.Speed : (ushort)100;
 
@@ -245,7 +248,11 @@ public sealed class PlayerInitPipeline
         // Stats 10–13: derived display skills (Block, Parry, Evade, Disrupt).
         // Computed from primary stats and effective level using V1 formulas.
         response.SetStat(9, (byte)StatId.BlockSkill,
-            DerivedStatFormulas.BlockSkill(0, level)); // shield armor deferred — 0 for now
+            DerivedStatFormulas.BlockSkill(
+                player.Inventory.GetItem(11) is { Info.IsShield: true } shield
+                    ? shield.Info.Armor
+                    : 0,
+                level));
         response.SetStat(10, (byte)StatId.ParrySkill,
             DerivedStatFormulas.ParrySkill(stats.GetTotal(StatId.WeaponSkill), level));
         response.SetStat(11, (byte)StatId.EvadeSkill,

@@ -69,12 +69,26 @@ public class CombatHandler : IPacketHandler
     /// </para>
     /// </summary>
     [Rpc((int)Opcodes.F_PLAYER_INFO)]
-    public void F_PLAYER_INFO(PlayerInfoRequest request, IConnectionContext context, [FromServices] PlayerService playerService)
+    public void F_PLAYER_INFO(
+        PlayerInfoRequest request,
+        IConnectionContext context,
+        [FromServices] PlayerService playerService,
+        [FromServices] WorldService worldService)
     {
         var player = playerService.GetPlayer(context.Session);
         if (player is null)
             return;
-        
+
+        // Matches V1 CombatInterface_Player.SetTarget: any enemy-target change stops
+        // auto-attack. The stop runs on the region thread to avoid races with the
+        // auto-attack component. We only enqueue if the target actually changed.
+        if (request.TargetType is TargetType.Enemy or TargetType.None
+            && player.CurrentTargetOid != request.Oid)
+        {
+            var region = worldService.Regions.Get(player.Position.RegionId);
+            region?.EnqueueAction(new StopAutoAttackAction(player.ObjectId));
+        }
+
         player.CurrentTargetOid = request.Oid;
 
         // Send F_SET_TARGET acknowledgement to the client

@@ -30,6 +30,7 @@ public class CombatRegionHandler :
     IRegionEventHandler<AbilityCastCompleted>,
     IRegionEventHandler<AbilityCastFailed>,
     IRegionEventHandler<AbilityCooldownApplied>,
+    IRegionEventHandler<AbilityProjectileFired>,
     IRegionEventHandler<DamageDealt>,
     IRegionEventHandler<EntityDied>,
     IRegionEventHandler<AutoAttackSwing>,
@@ -81,16 +82,18 @@ public class CombatRegionHandler :
             var casterSession = _sessionResolver.GetSession(casterPlayer);
             if (casterSession is not null)
             {
-                casterSession.SendUseAbility(useAbility);
-
                 // Cast-bar timer: only relevant when CastTime > 0. Sending a
                 // zero-duration timer for instants confuses the client UI.
+                // V1 sends this before F_USE_ABILITY(state=1), which initializes
+                // the client cast-bar state before the cast animation begins.
                 if (ctx.CastTime > 0)
                     casterSession.SendCastBarTimer(
                         CastBarTimerResponse.CastBar(
                             def.Entry,
                             (ushort)ctx.CastTime,
                             ctx.CastSequence));
+
+                casterSession.SendUseAbility(useAbility);
             }
         }
 
@@ -104,8 +107,12 @@ public class CombatRegionHandler :
 
     /// <summary>
     /// A cast completed execution (instant or cast-bar finished). Broadcasts
-    /// <c>F_USE_ABILITY</c> (state=completed) and <c>F_CAST_PLAYER_EFFECT</c>
-    /// (animation trigger) to the caster and all nearby players.
+    /// <c>F_USE_ABILITY</c> (state=completed) to the caster and all nearby players.
+    /// <para>
+    /// The <c>EffectId</c> in the <c>F_USE_ABILITY</c> packet drives all client-side
+    /// VFX and character animations. The subsequent <c>F_CAST_PLAYER_EFFECT</c> damage
+    /// or defense packet's <c>ShowVisual</c> flag drives the target hit-flash.
+    /// </para>
     /// </summary>
     public void Handle(AbilityCastCompleted @event)
     {
@@ -124,29 +131,15 @@ public class CombatRegionHandler :
             (byte)def.Origin,
             ctx.CastSequence);
 
-        // The animation packet triggers the ability VFX on the client side (particle
-        // effects, character animation, projectile flight). It must be sent alongside
-        // F_USE_ABILITY; the state=2 packet alone does not drive visuals.
-        var animation = CastPlayerEffectResponse.CastAnimation(
-            caster.ObjectId,
-            targetOid,
-            def.Entry,
-            def.EffectId);
-
         // Send to caster
         if (caster is PlayerEntity casterPlayer)
         {
             var casterSession = _sessionResolver.GetSession(casterPlayer);
-            if (casterSession is not null)
-            {
-                casterSession.SendUseAbility(useAbility);
-                casterSession.SendCastPlayerEffect(animation);
-            }
+            casterSession?.SendUseAbility(useAbility);
         }
 
         // Broadcast to nearby players
         BroadcastToVisiblePlayers(caster, useAbility);
-        BroadcastToNearbyPlayers(caster, animation);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -177,6 +170,9 @@ public class CombatRegionHandler :
         {
             var casterSession = _sessionResolver.GetSession(casterPlayer);
             casterSession?.SendUseAbility(useAbility);
+            // Release the caster's animation pose (V1: SetCastCompleted on forced cancel)
+            casterSession?.SendCastCompletion(CastCompletionResponse.Create(
+                caster.ObjectId, def.Entry));
         }
 
         // Broadcast to nearby players (so cast-bar animation stops for observers)
@@ -199,6 +195,39 @@ public class CombatRegionHandler :
         var session = _sessionResolver.GetSession(casterPlayer);
         session?.SendCooldownTimer(
             CooldownTimerResponse.Cooldown(@event.AbilityEntry, (uint)@event.CooldownMs));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  PROJECTILE FIRED
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// An ability fired a projectile (<c>EffectDelay != 0</c>). Sends
+    /// <c>F_USE_ABILITY</c> state=6 to the caster and nearby players so the client
+    /// plays the projectile flight animation. Damage is applied after
+    /// <see cref="AbilityProjectileFired.FlightTimeMs"/> elapses on the server.
+    /// </summary>
+    public void Handle(AbilityProjectileFired @event)
+    {
+        var caster = @event.Caster;
+        var ctx = @event.Context;
+        var def = ctx.Definition;
+
+        var packet = UseAbilityResponse.ProjectileFlight(
+            def.Entry,
+            caster.ObjectId,
+            def.EffectId,
+            ctx.Target?.ObjectId ?? 0,
+            @event.FlightTimeMs,
+            ctx.CastSequence);
+
+        if (caster is PlayerEntity casterPlayer)
+        {
+            var casterSession = _sessionResolver.GetSession(casterPlayer);
+            casterSession?.SendUseAbility(packet);
+        }
+
+        BroadcastToVisiblePlayers(caster, packet);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -237,6 +266,13 @@ public class CombatRegionHandler :
                 @event.WasCritical);
         }
 
+        // Send to caster (direct — caster always needs to see their own damage numbers)
+        if (@event.Caster is PlayerEntity casterPlayer)
+        {
+            var casterSession = _sessionResolver.GetSession(casterPlayer);
+            casterSession?.SendCastPlayerEffect(packet);
+        }
+
         // Send to target (always — they need to see the damage number)
         if (@event.Target is PlayerEntity targetPlayer)
         {
@@ -244,8 +280,9 @@ public class CombatRegionHandler :
             targetSession?.SendCastPlayerEffect(packet);
         }
 
-        // Broadcast to all players near the target (includes caster if in range)
-        BroadcastToNearbyPlayers(@event.Target, packet);
+        // Broadcast to all players near the target (includes caster if in range),
+        // skipping the caster to avoid a duplicate from the direct send above.
+        BroadcastToNearbyPlayers(@event.Target, packet, skip: @event.Caster);
 
         // ── Health bar updates ───────────────────────────────────────
 
@@ -354,26 +391,31 @@ public class CombatRegionHandler :
         }
         else
         {
-            packet = CastPlayerEffectResponse.Damage(
+            packet = CastPlayerEffectResponse.AutoAttackDamage(
                 @event.Caster.ObjectId,
                 @event.Target.ObjectId,
-                abilityEntry: 0,
-                subIndex: 0,
                 ctx.FinalDamage,
                 ctx.FinalMitigation,
                 ctx.FinalAbsorption,
                 ctx.WasCritical);
         }
 
+        // Send to caster (direct — caster always needs to see their own damage numbers)
+        if (@event.Caster is PlayerEntity casterPlayer)
+        {
+            var casterSession = _sessionResolver.GetSession(casterPlayer);
+            casterSession?.SendCastPlayerEffect(packet);
+        }
+
         // Send to target
-        if (@event.Target is PlayerEntity targetPlayer)
+        if (@event.Target is PlayerEntity targetPlayer && @event.Target != @event.Caster)
         {
             var targetSession = _sessionResolver.GetSession(targetPlayer);
             targetSession?.SendCastPlayerEffect(packet);
         }
 
-        // Broadcast to nearby players
-        BroadcastToNearbyPlayers(@event.Target, packet);
+        // Broadcast to nearby players, skipping the caster who already received direct.
+        BroadcastToNearbyPlayers(@event.Target, packet, skip: @event.Caster);
 
         // ── Health bar updates ───────────────────────────────────────
         var hitPlayer = new HitPlayerResponse
@@ -455,11 +497,12 @@ public class CombatRegionHandler :
     /// Sends a <see cref="CastPlayerEffectResponse"/> to all players in the
     /// <paramref name="origin"/> entity's visibility set, excluding the origin itself.
     /// </summary>
-    private void BroadcastToNearbyPlayers(UnitEntity origin, CastPlayerEffectResponse response)
+    private void BroadcastToNearbyPlayers(UnitEntity origin, CastPlayerEffectResponse response,
+        UnitEntity? skip = null)
     {
         foreach (var entity in origin.Visibility.Entities)
         {
-            if (entity == origin)
+            if (entity == origin || entity == skip)
                 continue;
 
             if (entity is not PlayerEntity observer)

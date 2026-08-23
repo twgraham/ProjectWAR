@@ -4,6 +4,7 @@ using Core.GameWorld.Combat.AutoAttack;
 using Core.GameWorld.Combat.Buffs;
 using Core.GameWorld.Components;
 using Core.GameWorld.Events;
+using Core.GameWorld.Spatial;
 using Core.GameWorld.Stats;
 
 namespace Core.GameWorld.Entities;
@@ -43,34 +44,10 @@ public abstract class UnitEntity : WorldEntity
         Buffs = new BuffContainer(this);
         CombatState = new CombatStateTracker();
 
-        // ── Stub delegates for auto-attack ──────────────────────────
-        // TODO: Replace with real equipment queries once the item/equip system
-        //       is wired. The stub returns a generic 50-DPS, 2.0s weapon.
-        WeaponQuery stubWeapon = static (_, _) => new WeaponInfo(50f, 200);
-
-        // TODO: Replace with WorldPosition.DistanceSquared2D or spatial query
-        //       once movement / position updates are flowing.
-        DistanceFunc stubDistance = static (a, b) =>
-        {
-            var dx = a.Position.X - b.Position.X;
-            var dy = a.Position.Y - b.Position.Y;
-            return (float)Math.Sqrt(dx * dx + dy * dy) / 10;
-        };
-
-        // TODO: Wire real LOS via Core.Spatial raycasting when zone
-        //       heightmap data is loaded.
-        LosFunc stubLos = static (_, _) => true;
-
-        // TODO: Implement facing-arc check using entity heading.
-        FacingFunc stubFacing = static (_, _) => true;
-
+        // ── Auto-attack ─────────────────────────────────────────────
         AutoAttack = new AutoAttackComponent(
             this,
             new AutoAttackConfig(),
-            stubWeapon,
-            stubDistance,
-            stubLos,
-            stubFacing,
             Random.Shared.Next);
 
         Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
@@ -82,10 +59,22 @@ public abstract class UnitEntity : WorldEntity
         Abilities.OnCastCompleted = ctx => Emit(new AbilityCastCompleted(this, ctx));
         Abilities.OnCastFailed = (ctx, reason) => Emit(new AbilityCastFailed(this, ctx, reason));
         Abilities.OnCooldownApplied = (entry, ms) => Emit(new AbilityCooldownApplied(this, entry, ms));
-        Abilities.OnDamageDealt = (caster, result) => Emit(new DamageDealt(
-            caster, result.Target, result.AbilityEntry, result.CommandIndex,
-            result.Damage, result.Mitigation, result.Absorption,
-            result.WasCritical, result.WasDefended, result.DefenseType));
+        Abilities.OnProjectileFlight = (ctx, flightMs) => Emit(new AbilityProjectileFired(this, ctx, flightMs));
+        Abilities.OnDamageDealt = (caster, result) =>
+        {
+            Emit(new DamageDealt(
+                caster, result.Target, result.AbilityEntry, result.CommandIndex,
+                result.Damage, result.Mitigation, result.Absorption,
+                result.WasCritical, result.WasDefended, result.DefenseType));
+
+            // Ability damage starts auto-attack if not already attacking (V1 parity:
+            // CombatManager.InflictDamage sets caster.CbtInterface.IsAttacking = true).
+            if (!AutoAttack.IsAttacking)
+                AutoAttack.StartAttack(result.Target);
+
+            CombatState.RefreshCombat(0);              // caster enters/stays in combat
+            result.Target.CombatState.RefreshCombat(0); // target enters/stays in combat
+        };
 
         // ── Auto-attack callbacks → tick events ─────────────────────
         AutoAttack.OnSwing = (caster, target) =>
@@ -96,7 +85,10 @@ public abstract class UnitEntity : WorldEntity
             // Target is the current auto-attack target at the time damage was dealt
             var target = AutoAttack.Target;
             if (target is not null)
+            {
                 Emit(new AutoAttackDamageDealt(caster, target, ctx));
+                target.CombatState.RefreshCombat(0); // target enters/stays in combat
+            }
             CombatState.RefreshCombat(0); // tick will be corrected by next Update
         };
 
@@ -138,6 +130,21 @@ public abstract class UnitEntity : WorldEntity
 
     /// <summary>Raw faction value used for aggression rules.</summary>
     public byte Faction { get; set; }
+
+    /// <summary>
+    /// Collision / hit-box radius in feet. Used by <see cref="Spatial.UnitEntitySpatialExtensions.DistanceTo"/>
+    /// to compute edge-to-edge distance and by <see cref="Spatial.UnitEntitySpatialExtensions.IsInRange"/> for
+    /// range gating. Matches V1's <c>Object.BaseRadius</c>.
+    /// <para>Default: 4.5 feet. Creatures override this from proto data × scale.</para>
+    /// </summary>
+    public float BaseRadius { get; set; } = RegionConstants.DefaultBaseRadiusFeet;
+
+    /// <summary>
+    /// Returns the weapon equipped in the given slot, or <c>null</c> if the slot is empty.
+    /// Override in concrete entity types to provide real equipment data.
+    /// The base implementation always returns <c>null</c> (unarmed).
+    /// </summary>
+    public virtual WeaponInfo? GetWeaponInfo(WeaponSlot slot) => null;
 
     /// <summary>Current action points. Consumed by ability casts, regenerated by tick systems.</summary>
     public int ActionPoints { get; set; }

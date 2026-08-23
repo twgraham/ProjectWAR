@@ -50,6 +50,16 @@ public readonly record struct AbilityCooldownApplied(
     ushort AbilityEntry,
     int CooldownMs) : ITickEvent;
 
+/// <summary>
+/// Fired when an ability with a positive <c>EffectDelay</c> launches a projectile.
+/// Handlers send <c>F_USE_ABILITY</c> (state=6) to the caster and nearby players.
+/// Damage is applied server-side after <see cref="FlightTimeMs"/> elapses.
+/// </summary>
+public readonly record struct AbilityProjectileFired(
+    UnitEntity Caster,
+    AbilityCastContext Context,
+    ushort FlightTimeMs) : ITickEvent;
+
 // ── Combat damage ────────────────────────────────────────────────────
 
 /// <summary>

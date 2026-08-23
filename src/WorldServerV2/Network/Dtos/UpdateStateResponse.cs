@@ -52,4 +52,22 @@ public class UpdateStateResponse
             StateOpcode = 0x1A,
             Value1 = enterCombat ? (byte)1 : (byte)0,
         };
+
+    /// <summary>
+    /// Cast completion — sent to forcibly release the caster's animation pose after an
+    /// interrupt or forced cancel (V1: <c>SetCastCompleted</c>, opcode 0x1B).
+    /// <para>
+    /// Wire: OID(u16) | 0x1B(u8) | 0x0000(u16) | 0x00(u8) | abilityEntry(u16) | 0x00 0x00
+    /// </para>
+    /// </summary>
+    public static UpdateStateResponse CastCompletion(ushort objectId, ushort abilityEntry)
+        => new()
+        {
+            ObjectId = objectId,
+            StateOpcode = 0x1B,
+            Value1 = 0,
+            Value2 = 0,
+            Value3 = 0,
+            Padding = [(byte)(abilityEntry >> 8), (byte)(abilityEntry & 0xFF), 0, 0, 0],
+        };
 }

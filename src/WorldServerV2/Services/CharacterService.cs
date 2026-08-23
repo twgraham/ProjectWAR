@@ -3,6 +3,7 @@ using Core.Domain;
 using Core.Domain.Entities;
 using Core.GameWorld.DataStore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WorldServerV2.Data;
 using WorldServerV2.Data.Models;
@@ -26,7 +27,7 @@ namespace WorldServerV2.Services;
 /// of full entities — the session owns its own character state.
 /// </para>
 /// </summary>
-internal sealed class CharacterService : ICharacterService
+internal sealed class CharacterService : ICharacterService, IHostedService
 {
     private readonly IDbContextFactory<CharacterDbContext> _dbContextFactory;
     private readonly GameDataStore _gameDataStore;
@@ -120,5 +121,15 @@ internal sealed class CharacterService : ICharacterService
         
         _byId.TryRemove(character.CharacterId, out _);
         _byName.TryRemove(character.Name, out _);
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        return LoadDirectoryAsync();
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
     }
 }
