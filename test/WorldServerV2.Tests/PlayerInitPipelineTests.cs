@@ -96,7 +96,8 @@ public class PlayerInitPipelineTests
             new CreatureData(
                 FrozenDictionary<uint, CreatureProto>.Empty,
                 FrozenDictionary<uint, CreatureSpawn>.Empty,
-                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty),
+                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty,
+                FrozenDictionary<uint, ImmutableArray<CreatureStatEntry>>.Empty),
             new ZoneData(
                 FrozenDictionary<ushort, ZoneInfo>.Empty,
                 FrozenDictionary<uint, ZoneJump>.Empty),
