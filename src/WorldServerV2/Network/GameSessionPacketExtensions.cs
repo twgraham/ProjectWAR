@@ -166,4 +166,17 @@ public static class GameSessionPacketExtensions
     /// <summary>Sends <c>F_OBJECT_DEATH</c> (0x0A) — notifies client of an entity's death.</summary>
     public static void SendObjectDeath(this IGameSession session, ObjectDeathResponse response)
         => session.Send((byte)Opcodes.F_OBJECT_DEATH, response);
+
+    // ── State ────────────────────────────────────────────────────────
+
+    /// <summary>Sends <c>F_UPDATE_STATE</c> (0xE4) — general-purpose entity state change (combat, stun, etc.).</summary>
+    public static void SendUpdateState(this IGameSession session, UpdateStateResponse response)
+        => session.Send((byte)Opcodes.F_UPDATE_STATE, response);
+
+    /// <summary>
+    /// Sends <c>F_UPDATE_STATE</c> (0xE4), opcode 0x1B — releases the caster's animation
+    /// pose after a cast completes or is forcibly interrupted (V1: <c>SetCastCompleted</c>).
+    /// </summary>
+    public static void SendCastCompletion(this IGameSession session, CastCompletionResponse response)
+        => session.Send((byte)Opcodes.F_UPDATE_STATE, response);
 }

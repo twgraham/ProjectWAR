@@ -1239,6 +1239,42 @@ public class BinaryPacketSerializerTests
         result.After.ShouldBe((byte)0x03);
     }
 
+    [Fact]
+    public void ConditionalOn_FlagsEnum_MultiBitValue_SatisfiesSingleBitCondition()
+    {
+        // Flags = SelfTarget|HasDamage|ShowVisual (0x07) must satisfy [ConditionalOn HasDamage (0x02)]
+        var original = new FlagsConditionalPacket
+        {
+            Flags = CombatTestFlags.SelfTarget | CombatTestFlags.HasDamage | CombatTestFlags.ShowVisual,
+            DamageAmount = 42,
+            After = 0xFF
+        };
+
+        var result = RoundTrip(original);
+
+        result.Flags.ShouldBe(original.Flags);
+        result.DamageAmount.ShouldBe((ushort)42);
+        result.After.ShouldBe((byte)0xFF);
+    }
+
+    [Fact]
+    public void ConditionalOn_FlagsEnum_ConditionBitAbsent_FieldSkipped()
+    {
+        // Flags = SelfTarget only (0x01) — HasDamage (0x02) bit not set → field skipped
+        var original = new FlagsConditionalPacket
+        {
+            Flags = CombatTestFlags.SelfTarget,
+            DamageAmount = 9999,
+            After = 0x77
+        };
+
+        var result = RoundTrip(original);
+
+        result.Flags.ShouldBe(CombatTestFlags.SelfTarget);
+        result.DamageAmount.ShouldBe((ushort)0); // not on wire → default
+        result.After.ShouldBe((byte)0x77);
+    }
+
     // ── PacketLength LittleEndian ───────────────────────────────────────
 
     [Fact]
@@ -1725,6 +1761,22 @@ public class BinaryPacketSerializerTests
         public byte Type { get; set; }
         [ConditionalOn(nameof(Type), 23, 24)]
         public ushort Extra { get; set; }
+        public byte After { get; set; }
+    }
+
+    [Flags]
+    public enum CombatTestFlags : byte
+    {
+        SelfTarget = 1 << 0, // 0x01
+        HasDamage  = 1 << 1, // 0x02
+        ShowVisual = 1 << 2, // 0x04
+    }
+
+    public class FlagsConditionalPacket
+    {
+        public CombatTestFlags Flags { get; set; }
+        [ConditionalOn(nameof(Flags), CombatTestFlags.HasDamage)]
+        public ushort DamageAmount { get; set; }
         public byte After { get; set; }
     }
 

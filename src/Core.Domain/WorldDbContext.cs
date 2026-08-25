@@ -26,6 +26,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
     public DbSet<GameObjectSpawn> GameObjectSpawns => Set<GameObjectSpawn>();
     public DbSet<GameObjectProto> GameObjectProtos => Set<GameObjectProto>();
     public DbSet<CreatureItem> CreatureItems => Set<CreatureItem>();
+    public DbSet<CreatureStatEntry> CreatureStatEntries => Set<CreatureStatEntry>();
     public DbSet<AbilityCommandEntity> AbilityCommands => Set<AbilityCommandEntity>();
     public DbSet<AbilityDamageHealEntity> AbilityDamageHeals => Set<AbilityDamageHealEntity>();
 
@@ -46,6 +47,7 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
         ConfigureAbilityDamageHeal(modelBuilder);
         ConfigureGameObjectSpawn(modelBuilder);
         ConfigureGameObjectProto(modelBuilder);
+        ConfigureCreatureStatEntry(modelBuilder);
     }
 
     private static void ConfigureClassInfo(ModelBuilder modelBuilder)
@@ -354,6 +356,19 @@ public sealed class WorldDbContext(DbContextOptions<WorldDbContext> options)
             entity.Property(e => e.AiRange).HasColumnName("ai_range");
             entity.Property(e => e.IgnoreCooldownReduction).HasColumnName("ignore_cooldown_reduction");
             entity.Property(e => e.CooldownCap).HasColumnName("c_dcap");
+        });
+    }
+
+    private static void ConfigureCreatureStatEntry(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CreatureStatEntry>(entity =>
+        {
+            entity.ToTable("creature_stats");
+            entity.HasKey(e => new { e.ProtoEntry, e.StatId });
+
+            entity.Property(e => e.ProtoEntry).HasColumnName("proto_entry");
+            entity.Property(e => e.StatId).HasColumnName("stat_id");
+            entity.Property(e => e.StatValue).HasColumnName("stat_value");
         });
     }
 

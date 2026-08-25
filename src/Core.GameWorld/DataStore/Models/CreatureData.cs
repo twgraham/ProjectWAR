@@ -13,7 +13,12 @@ namespace Core.GameWorld.DataStore.Models;
 /// Equipped visual items per creature entry. Keyed by <see cref="CreatureItem.Entry"/>,
 /// each value contains the full set of equipment slots for that creature.
 /// </param>
+/// <param name="StatOverrides">
+/// Per-entry stat overrides from the <c>creature_stats</c> table.
+/// Keyed by <see cref="CreatureStatEntry.ProtoEntry"/>.
+/// </param>
 public readonly record struct CreatureData(
     FrozenDictionary<uint, CreatureProto> Protos,
     FrozenDictionary<uint, CreatureSpawn> Spawns,
-    FrozenDictionary<uint, ImmutableArray<CreatureItem>> Items);
+    FrozenDictionary<uint, ImmutableArray<CreatureItem>> Items,
+    FrozenDictionary<uint, ImmutableArray<CreatureStatEntry>> StatOverrides);

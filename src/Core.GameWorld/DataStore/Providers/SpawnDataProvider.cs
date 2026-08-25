@@ -87,8 +87,7 @@ public sealed class SpawnDataProvider(
                 skippedCount, nameof(CreatureSpawn.ZoneId));
 
         return buckets.ToFrozenDictionary(
-            kvp => kvp.Key,
-            kvp => (IReadOnlyList<SpawnDescriptor>)kvp.Value);
+            kvp => kvp.Key, IReadOnlyList<SpawnDescriptor> (kvp) => kvp.Value);
     }
 
     private FrozenDictionary<CellKey, IReadOnlyList<GameObjectSpawnDescriptor>> BucketGameObjectSpawns(
@@ -122,7 +121,6 @@ public sealed class SpawnDataProvider(
                 skippedCount);
 
         return buckets.ToFrozenDictionary(
-            kvp => kvp.Key,
-            kvp => (IReadOnlyList<GameObjectSpawnDescriptor>)kvp.Value);
+            kvp => kvp.Key, IReadOnlyList<GameObjectSpawnDescriptor> (kvp) => kvp.Value);
     }
 }

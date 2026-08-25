@@ -637,7 +637,8 @@ public class ObjectStateTests
         public CreatureData Creatures => new(
             FrozenDictionary<uint, CreatureProto>.Empty,
             FrozenDictionary<uint, CreatureSpawn>.Empty,
-            FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty);
+            FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty,
+            FrozenDictionary<uint, ImmutableArray<CreatureStatEntry>>.Empty);
         public ZoneData Zones { get; }
         public CareerStatData CareerStats => CareerStatData.Empty;
         public AbilityData Abilities => AbilityData.Empty;

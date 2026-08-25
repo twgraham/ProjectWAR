@@ -56,8 +56,9 @@ public class BinaryPacketSerializer : IPacketSerializer
             var conditionalAttr = property.GetCustomAttribute<ConditionalOnAttribute>();
             if (conditionalAttr != null)
             {
-                var siblingValue = type.GetProperty(conditionalAttr.PropertyName)?.GetValue(instance);
-                if (!conditionalAttr.Values.Any(v => Equals(Convert.ToInt64(v), Convert.ToInt64(siblingValue))))
+                var siblingProp = type.GetProperty(conditionalAttr.PropertyName);
+                var siblingValue = siblingProp?.GetValue(instance);
+                if (!EvaluateConditionalOn(siblingProp, siblingValue, conditionalAttr.Values))
                     continue;
             }
                 
@@ -102,8 +103,9 @@ public class BinaryPacketSerializer : IPacketSerializer
             var conditionalAttr = property.GetCustomAttribute<ConditionalOnAttribute>();
             if (conditionalAttr != null)
             {
-                var siblingValue = type.GetProperty(conditionalAttr.PropertyName)?.GetValue(message);
-                if (!conditionalAttr.Values.Any(v => Equals(Convert.ToInt64(v), Convert.ToInt64(siblingValue))))
+                var siblingProp = type.GetProperty(conditionalAttr.PropertyName);
+                var siblingValue = siblingProp?.GetValue(message);
+                if (!EvaluateConditionalOn(siblingProp, siblingValue, conditionalAttr.Values))
                     continue;
             }
 
@@ -1317,5 +1319,26 @@ public class BinaryPacketSerializer : IPacketSerializer
                 value >>= 7;
             }
         }
+    }
+
+    /// <summary>
+    /// Evaluates a <c>[ConditionalOn]</c> check against the sibling property's current value.
+    /// For <c>[Flags]</c> enums, uses bitwise AND so that multi-flag values like <c>0x07</c>
+    /// correctly satisfy a condition value of <c>0x02</c>. Falls back to equality for
+    /// non-flags types.
+    /// </summary>
+    private static bool EvaluateConditionalOn(PropertyInfo? siblingProp, object? siblingValue, object[] conditionValues)
+    {
+        var propType = siblingProp?.PropertyType;
+        var underlying = propType != null ? (Nullable.GetUnderlyingType(propType) ?? propType) : null;
+        var isFlags = underlying != null && underlying.IsEnum
+                      && underlying.GetCustomAttribute<FlagsAttribute>() != null;
+
+        long sib = siblingValue != null ? Convert.ToInt64(siblingValue) : 0L;
+
+        if (isFlags)
+            return conditionValues.Any(v => (sib & Convert.ToInt64(v)) != 0);
+
+        return conditionValues.Any(v => Equals(Convert.ToInt64(v), sib));
     }
 }

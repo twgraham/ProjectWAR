@@ -1,6 +1,7 @@
 using Core.Domain.Entities;
 using Core.GameWorld.Combat;
 using Core.GameWorld.Combat.Abilities;
+using Core.GameWorld.Combat.AutoAttack;
 using Core.GameWorld.Entities;
 
 namespace Core.GameWorld.Events;
@@ -49,6 +50,16 @@ public readonly record struct AbilityCooldownApplied(
     ushort AbilityEntry,
     int CooldownMs) : ITickEvent;
 
+/// <summary>
+/// Fired when an ability with a positive <c>EffectDelay</c> launches a projectile.
+/// Handlers send <c>F_USE_ABILITY</c> (state=6) to the caster and nearby players.
+/// Damage is applied server-side after <see cref="FlightTimeMs"/> elapses.
+/// </summary>
+public readonly record struct AbilityProjectileFired(
+    UnitEntity Caster,
+    AbilityCastContext Context,
+    ushort FlightTimeMs) : ITickEvent;
+
 // ── Combat damage ────────────────────────────────────────────────────
 
 /// <summary>
@@ -76,3 +87,35 @@ public readonly record struct DamageDealt(
 /// <see cref="Components.HealthComponent.TakeDamage"/> reduces HP to 0.
 /// </summary>
 public readonly record struct EntityDied(UnitEntity Entity) : ITickEvent;
+
+// ── Auto-attack ──────────────────────────────────────────────────
+
+/// <summary>
+/// Fired when an auto-attack swing begins (before damage resolution).
+/// <para>Handlers send <c>F_USE_ABILITY</c> with <c>abilityEntry = 0</c>
+/// (state = completed) to trigger the melee/ranged swing animation on the client.</para>
+/// </summary>
+public readonly record struct AutoAttackSwing(
+    UnitEntity Caster,
+    UnitEntity Target) : ITickEvent;
+
+/// <summary>
+/// Fired when auto-attack damage is resolved (main-hand, offhand, or ranged).
+/// <para>Handlers send <c>F_CAST_PLAYER_EFFECT</c> (0xB3) and <c>F_HIT_PLAYER</c>
+/// (0x14) just like ability damage, but with <c>abilityEntry = 0</c>.</para>
+/// </summary>
+public readonly record struct AutoAttackDamageDealt(
+    UnitEntity Caster,
+    UnitEntity Target,
+    DamageContext Context) : ITickEvent;
+
+// ── Combat state ─────────────────────────────────────────────────
+
+/// <summary>
+/// Fired when a unit enters or leaves combat.
+/// <para>Handlers send <c>F_UPDATE_STATE</c> with <c>StateOpcode = 0x1A</c>
+/// (val1: 1 = enter, 0 = leave) to the entity and nearby players.</para>
+/// </summary>
+public readonly record struct CombatStateChanged(
+    UnitEntity Entity,
+    bool InCombat) : ITickEvent;

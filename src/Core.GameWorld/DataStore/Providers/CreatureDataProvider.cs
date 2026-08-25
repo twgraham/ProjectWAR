@@ -21,8 +21,8 @@ public sealed class CreatureDataProvider(
         await using var db = await dbContextFactory.CreateDbContextAsync();
         var protos = (await db.CreatureProtos
             .AsNoTracking()
-            .ToListAsync())
-            .ToFrozenDictionary(x => x.Entry);
+            .ToDictionaryAsync(x => x.Entry))
+            .ToFrozenDictionary();
 
         var spawnList = await db.CreatureSpawns
             .AsNoTracking()
@@ -36,15 +36,22 @@ public sealed class CreatureDataProvider(
             .AsNoTracking()
             .ToListAsync())
             .GroupBy(i => i.Entry)
-            .ToFrozenDictionary(g => g.Key, g => g.ToImmutableArray());
+            .ToFrozenDictionary(x => x.Key, x => x.ToImmutableArray());
+
+        var statOverrides = (await db.CreatureStatEntries
+            .AsNoTracking()
+            .ToListAsync())
+            .GroupBy(s => s.ProtoEntry)
+            .ToFrozenDictionary(x => x.Key, x => x.ToImmutableArray());
 
         logger.LogInformation(
-            "Loaded {ProtoCount} creature prototypes, {SpawnCount} creature spawns, {ItemGroupCount} creatures with equipment",
+            "Loaded {ProtoCount} creature prototypes, {SpawnCount} creature spawns, {ItemGroupCount} creatures with equipment, {StatOverrideCount} creatures with stat overrides",
             protos.Count,
             spawns.Count,
-            items.Count);
+            items.Count,
+            statOverrides.Count);
 
-        return new CreatureData(Protos: protos, Spawns: spawns, Items: items);
+        return new CreatureData(Protos: protos, Spawns: spawns, Items: items, StatOverrides: statOverrides);
     }
 
     /// <summary>

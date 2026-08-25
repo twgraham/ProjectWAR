@@ -81,7 +81,8 @@ public class WorldTopologyTests
         public CreatureData Creatures => new(
             FrozenDictionary<uint, CreatureProto>.Empty,
             FrozenDictionary<uint, CreatureSpawn>.Empty,
-            FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty);
+            FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty,
+            FrozenDictionary<uint, ImmutableArray<CreatureStatEntry>>.Empty);
         public ZoneData Zones => new(
             FrozenDictionary<ushort, ZoneInfo>.Empty,
             FrozenDictionary<uint, ZoneJump>.Empty);
@@ -1634,7 +1635,8 @@ public class WorldTopologyTests
                 new Dictionary<uint, ImmutableArray<CreatureItem>>
                 {
                     [1] = [new CreatureItem { Entry = 1, SlotId = 10, ModelId = 3105, EffectId = 0 }]
-                }.ToFrozenDictionary());
+                }.ToFrozenDictionary(),
+                FrozenDictionary<uint, ImmutableArray<CreatureStatEntry>>.Empty);
         }
 
         public ClassData Classes => new(
@@ -1678,7 +1680,8 @@ public class WorldTopologyTests
                     [1] = new CreatureProto { Entry = 1, Name = "Mob" }
                 }.ToFrozenDictionary(),
                 FrozenDictionary<uint, CreatureSpawn>.Empty,
-                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty);
+                FrozenDictionary<uint, ImmutableArray<CreatureItem>>.Empty,
+                FrozenDictionary<uint, ImmutableArray<CreatureStatEntry>>.Empty);
         }
 
         public ClassData Classes => new(

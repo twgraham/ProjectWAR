@@ -1,8 +1,10 @@
 using Core.GameWorld.Combat;
 using Core.GameWorld.Combat.Abilities;
+using Core.GameWorld.Combat.AutoAttack;
 using Core.GameWorld.Combat.Buffs;
 using Core.GameWorld.Components;
 using Core.GameWorld.Events;
+using Core.GameWorld.Spatial;
 using Core.GameWorld.Stats;
 
 namespace Core.GameWorld.Entities;
@@ -40,6 +42,14 @@ public abstract class UnitEntity : WorldEntity
         Abilities = new AbilityComponent(this) { EffectExecutor = SharedEffectExecutor };
         Stats = new StatContainer();
         Buffs = new BuffContainer(this);
+        CombatState = new CombatStateTracker();
+
+        // ── Auto-attack ─────────────────────────────────────────────
+        AutoAttack = new AutoAttackComponent(
+            this,
+            new AutoAttackConfig(),
+            Random.Shared.Next);
+
         Stats.OnMaxHealthChanged = newMax => Health.Max = newMax;
 
         // ── Wire component callbacks → tick events ──────────────────
@@ -49,10 +59,42 @@ public abstract class UnitEntity : WorldEntity
         Abilities.OnCastCompleted = ctx => Emit(new AbilityCastCompleted(this, ctx));
         Abilities.OnCastFailed = (ctx, reason) => Emit(new AbilityCastFailed(this, ctx, reason));
         Abilities.OnCooldownApplied = (entry, ms) => Emit(new AbilityCooldownApplied(this, entry, ms));
-        Abilities.OnDamageDealt = (caster, result) => Emit(new DamageDealt(
-            caster, result.Target, result.AbilityEntry, result.CommandIndex,
-            result.Damage, result.Mitigation, result.Absorption,
-            result.WasCritical, result.WasDefended, result.DefenseType));
+        Abilities.OnProjectileFlight = (ctx, flightMs) => Emit(new AbilityProjectileFired(this, ctx, flightMs));
+        Abilities.OnDamageDealt = (caster, result) =>
+        {
+            Emit(new DamageDealt(
+                caster, result.Target, result.AbilityEntry, result.CommandIndex,
+                result.Damage, result.Mitigation, result.Absorption,
+                result.WasCritical, result.WasDefended, result.DefenseType));
+
+            // Ability damage starts auto-attack if not already attacking (V1 parity:
+            // CombatManager.InflictDamage sets caster.CbtInterface.IsAttacking = true).
+            if (!AutoAttack.IsAttacking)
+                AutoAttack.StartAttack(result.Target);
+
+            CombatState.RefreshCombat(0);              // caster enters/stays in combat
+            result.Target.CombatState.RefreshCombat(0); // target enters/stays in combat
+        };
+
+        // ── Auto-attack callbacks → tick events ─────────────────────
+        AutoAttack.OnSwing = (caster, target) =>
+            Emit(new AutoAttackSwing(caster, target));
+
+        AutoAttack.OnDamageDealt = (caster, ctx) =>
+        {
+            // Target is the current auto-attack target at the time damage was dealt
+            var target = AutoAttack.Target;
+            if (target is not null)
+            {
+                Emit(new AutoAttackDamageDealt(caster, target, ctx));
+                target.CombatState.RefreshCombat(0); // target enters/stays in combat
+            }
+            CombatState.RefreshCombat(0); // tick will be corrected by next Update
+        };
+
+        // ── Combat state callbacks → tick events ────────────────────
+        CombatState.OnCombatStateChanged = entered =>
+            Emit(new CombatStateChanged(this, entered));
     }
 
     /// <summary>Health pool — always present on units. Never null.</summary>
@@ -67,6 +109,19 @@ public abstract class UnitEntity : WorldEntity
     /// <summary>Buff container — always present on units. Never null.</summary>
     public BuffContainer Buffs { get; }
 
+    /// <summary>
+    /// Auto-attack state (timing, target, melee/ranged/offhand) — always present on units.
+    /// For creatures, <see cref="AutoAttackComponent.IsAttacking"/> starts <c>false</c>
+    /// and is activated by the AI system.
+    /// </summary>
+    public AutoAttackComponent AutoAttack { get; }
+
+    /// <summary>
+    /// Combat-state tracker (in/out of combat, 10s timeout) — always present on units.
+    /// Transitions emit <see cref="CombatStateChanged"/> for <c>F_UPDATE_STATE</c> packets.
+    /// </summary>
+    public CombatStateTracker CombatState { get; }
+
     /// <summary>Unit level (1–40 for players, variable for creatures).</summary>
     public byte Level { get; set; }
 
@@ -75,6 +130,21 @@ public abstract class UnitEntity : WorldEntity
 
     /// <summary>Raw faction value used for aggression rules.</summary>
     public byte Faction { get; set; }
+
+    /// <summary>
+    /// Collision / hit-box radius in feet. Used by <see cref="Spatial.UnitEntitySpatialExtensions.DistanceTo"/>
+    /// to compute edge-to-edge distance and by <see cref="Spatial.UnitEntitySpatialExtensions.IsInRange"/> for
+    /// range gating. Matches V1's <c>Object.BaseRadius</c>.
+    /// <para>Default: 4.5 feet. Creatures override this from proto data × scale.</para>
+    /// </summary>
+    public float BaseRadius { get; set; } = RegionConstants.DefaultBaseRadiusFeet;
+
+    /// <summary>
+    /// Returns the weapon equipped in the given slot, or <c>null</c> if the slot is empty.
+    /// Override in concrete entity types to provide real equipment data.
+    /// The base implementation always returns <c>null</c> (unarmed).
+    /// </summary>
+    public virtual WeaponInfo? GetWeaponInfo(WeaponSlot slot) => null;
 
     /// <summary>Current action points. Consumed by ability casts, regenerated by tick systems.</summary>
     public int ActionPoints { get; set; }
@@ -99,7 +169,8 @@ public abstract class UnitEntity : WorldEntity
         Buffs.Update(tick);
         Stats.Flush();
         Abilities.Update(tick);
-        // TODO: HP regen, combat timers (System 4 — remaining steps)
+        AutoAttack.Update(tick);
+        CombatState.Update(tick);
         base.Update(tick);
     }
 }

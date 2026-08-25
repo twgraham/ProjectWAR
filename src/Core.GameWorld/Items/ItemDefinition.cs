@@ -68,6 +68,9 @@ public sealed class ItemDefinition
     /// <summary>Whether this is a two-handed weapon.</summary>
     public bool TwoHanded { get; init; }
 
+    /// <summary>Whether this item is a shield (Type == 5, matching V1's ITEMTYPES_SHIELD).</summary>
+    public bool IsShield => Type == 5;
+
     // ── Bonus Stats ──────────────────────────────────────────────────
 
     /// <summary>

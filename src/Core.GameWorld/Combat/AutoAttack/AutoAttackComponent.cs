@@ -1,5 +1,5 @@
-using Core.GameWorld.Components;
 using Core.GameWorld.Entities;
+using Core.GameWorld.Spatial;
 using Core.GameWorld.Stats;
 
 namespace Core.GameWorld.Combat.AutoAttack;
@@ -16,6 +16,7 @@ namespace Core.GameWorld.Combat.AutoAttack;
 /// <param name="OffhandStatCoefficient">Stat coefficient for offhand swings (V1: 0.05).</param>
 /// <param name="RetryIntervalMs">Back-off delay when attack conditions fail (V1: 100ms).</param>
 /// <param name="RangedLosRetryMs">Extra delay when LOS check fails for ranged (V1: 1000ms).</param>
+/// <param name="DamageVariance">Weapon damage variance ±N% (V1: 25 = ±25%).</param>
 public sealed record AutoAttackConfig(
     uint MeleeRange = 5,
     uint BaseRangedRange = 90,
@@ -25,7 +26,8 @@ public sealed record AutoAttackConfig(
     float AutoAttackStatCoefficient = 0.1f,
     float OffhandStatCoefficient = 0.05f,
     long RetryIntervalMs = 100,
-    long RangedLosRetryMs = 1000);
+    long RangedLosRetryMs = 1000,
+    ushort DamageVariance = 25);
 
 /// <summary>
 /// Slot identity for weapon lookup.
@@ -48,29 +50,6 @@ public sealed record WeaponInfo(
     bool IsCharm = false);
 
 /// <summary>
-/// Delegate for querying equipped weapon information.
-/// Returns <c>null</c> if the slot is empty.
-/// </summary>
-public delegate WeaponInfo? WeaponQuery(UnitEntity entity, WeaponSlot slot);
-
-/// <summary>
-/// Delegate for checking distance between two entities.
-/// Returns squared distance or actual distance — the component uses ≤ comparison.
-/// </summary>
-public delegate float DistanceFunc(UnitEntity a, UnitEntity b);
-
-/// <summary>
-/// Delegate for line-of-sight check. Returns <c>true</c> if clear LOS.
-/// </summary>
-public delegate bool LosFunc(UnitEntity attacker, UnitEntity target);
-
-/// <summary>
-/// Delegate for facing check. Returns <c>true</c> if <paramref name="target"/>
-/// is within the attacker's front arc.
-/// </summary>
-public delegate bool FacingFunc(UnitEntity attacker, UnitEntity target);
-
-/// <summary>
 /// Callback invoked when auto-attack deals damage (main-hand, offhand, ranged).
 /// Useful for career resource generation, threat management, etc.
 /// </summary>
@@ -78,19 +57,26 @@ public delegate void OnAutoAttackHit(UnitEntity attacker, UnitEntity target, Dam
 
 /// <summary>
 /// Controls auto-attack timing, range checks, and offhand procs for a <see cref="UnitEntity"/>.
-/// Ticked automatically via <see cref="ITickable"/> when attached to an entity.
 /// <para>
-/// Each tick checks: alive → CC → active → timing → range (melee or ranged)
+/// Owned directly by <see cref="UnitEntity"/> as a guaranteed field (like Health, Stats,
+/// Abilities). Ticked explicitly from <see cref="UnitEntity.Update"/> rather than through
+/// the optional component bag.
+/// </para>
+/// <para>
+/// Each tick checks: alive → CC → casting → active → timing → range (melee or ranged)
 /// → swing → offhand proc → schedule next attack.
 /// </para>
+/// <para>
+/// <b>Ability interaction (matches V1):</b> Auto-attacks are blocked while
+/// <see cref="UnitEntity.Abilities"/> has an active cast (cast-bar or channel).
+/// Instant casts complete within a single tick and do not block. When blocked,
+/// the scheduled swing remains due and fires on the update that the cast completes.
+/// </para>
 /// </summary>
-public sealed class AutoAttackComponent : ComponentBase, ITickable
+public sealed class AutoAttackComponent
 {
+    private readonly UnitEntity _owner;
     private readonly AutoAttackConfig _config;
-    private readonly WeaponQuery _weaponQuery;
-    private readonly DistanceFunc _distanceFunc;
-    private readonly LosFunc _losFunc;
-    private readonly FacingFunc _facingFunc;
     private readonly Func<int, int, int> _random;
 
     private long _nextAttackTime;
@@ -101,8 +87,21 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
     /// <summary>Current auto-attack target.</summary>
     public UnitEntity? Target { get; set; }
 
-    /// <summary>Optional callback when a swing lands.</summary>
+    /// <summary>Optional callback when a swing lands (career resource, threat, etc.).</summary>
     public OnAutoAttackHit? OnHit { get; set; }
+
+    /// <summary>
+    /// Callback invoked after each swing resolves damage. The entity wires this to
+    /// emit <see cref="Events.DamageDealt"/> so the region event system can send packets.
+    /// </summary>
+    public Action<UnitEntity, DamageContext>? OnDamageDealt { get; set; }
+
+    /// <summary>
+    /// Callback invoked when a melee/ranged swing animation should play (before damage).
+    /// The entity wires this to emit <see cref="Events.AutoAttackSwing"/> so the region
+    /// handler can send <c>F_USE_ABILITY</c> with abilityId 0.
+    /// </summary>
+    public Action<UnitEntity, UnitEntity>? OnSwing { get; set; }
 
     /// <summary>True if the unit is currently moving (blocks ranged unless overridden).</summary>
     public bool IsMoving { get; set; }
@@ -111,27 +110,18 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
     public bool MoveAndShoot { get; set; }
 
     /// <summary>
-    /// Creates a new auto-attack component.
+    /// Creates a new auto-attack component owned by the given entity.
     /// </summary>
+    /// <param name="owner">The unit that owns this auto-attack state.</param>
     /// <param name="config">Tuning parameters.</param>
-    /// <param name="weaponQuery">Equipment lookup delegate.</param>
-    /// <param name="distanceFunc">Distance check delegate.</param>
-    /// <param name="losFunc">Line-of-sight delegate.</param>
-    /// <param name="facingFunc">Facing-arc delegate.</param>
     /// <param name="random">RNG returning int in [min, max) — for offhand proc and rolls.</param>
     public AutoAttackComponent(
+        UnitEntity owner,
         AutoAttackConfig config,
-        WeaponQuery weaponQuery,
-        DistanceFunc distanceFunc,
-        LosFunc losFunc,
-        FacingFunc facingFunc,
         Func<int, int, int> random)
     {
+        _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _config = config;
-        _weaponQuery = weaponQuery;
-        _distanceFunc = distanceFunc;
-        _losFunc = losFunc;
-        _facingFunc = facingFunc;
         _random = random;
     }
 
@@ -141,8 +131,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
 
     public void Update(long tick)
     {
-        var caster = Owner as UnitEntity;
-        if (caster is null) return;
+        var caster = _owner;
 
         // 1. Dead → stop
         if (caster.Health.IsDead)
@@ -155,11 +144,18 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
         if ((caster.Buffs.GetActiveCrowdControl() & CrowdControlFlags.NoAutoAttack) != 0)
             return;
 
-        // 3. Must be actively attacking with a target
+        // 3. Casting/channelling check — matches V1 behaviour where IsCasting()
+        //    blocks auto-attacks. Instant casts clear ActiveCast within the same
+        //    tick they start, so they don't block. Cast-bar and channel abilities
+        //    keep ActiveCast non-null for their full duration.
+        if (caster.Abilities.HasActiveCast)
+            return;
+
+        // 4. Must be actively attacking with a target
         if (!IsAttacking || Target is null)
             return;
 
-        // 4. Timing — not yet
+        // 5. Timing — not yet
         if (_nextAttackTime > tick)
             return;
 
@@ -173,12 +169,12 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
             return;
         }
 
-        // 6. Check melee range first
-        float distance = _distanceFunc(caster, target);
+        // 6. Check melee range first (edge-to-edge distance in feet)
+        float distance = caster.DistanceTo(target);
         if (distance <= _config.MeleeRange)
         {
             // 6a. Facing check — skip swing if target not in front arc
-            if (!_facingFunc(caster, target))
+            if (!caster.IsInFrontArc(target))
             {
                 _nextAttackTime = tick + _config.RetryIntervalMs;
                 return;
@@ -198,9 +194,12 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
 
     private void PerformMeleeSwing(UnitEntity caster, UnitEntity target, long tick)
     {
-        var weapon = _weaponQuery(caster, WeaponSlot.MainHand);
+        var weapon = caster.GetWeaponInfo(WeaponSlot.MainHand);
         var weaponDps = weapon?.Dps ?? 0f;
         var weaponSpeed = weapon?.Speed ?? _config.DefaultWeaponSpeed;
+
+        // Swing animation (F_USE_ABILITY with abilityId 0)
+        OnSwing?.Invoke(caster, target);
 
         // Build + resolve damage
         var ctx = BuildAutoAttackContext(caster, target, weaponDps, weaponSpeed,
@@ -208,6 +207,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
 
         DamagePipeline.Resolve(ctx);
         ApplyDamage(target, ctx);
+        OnDamageDealt?.Invoke(caster, ctx);
         OnHit?.Invoke(caster, target, ctx);
 
         // Schedule next attack
@@ -231,7 +231,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
         }
 
         // Must have ranged weapon
-        var weapon = _weaponQuery(caster, WeaponSlot.Ranged);
+        var weapon = caster.GetWeaponInfo(WeaponSlot.Ranged);
         if (weapon is null)
         {
             _nextAttackTime = tick + _config.RetryIntervalMs;
@@ -247,12 +247,15 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
             return;
         }
 
-        // LOS check
-        if (!_losFunc(caster, target))
+        // LOS check (uses region occlusion provider; clear when unavailable)
+        if (!caster.HasLineOfSight(target))
         {
             _nextAttackTime = tick + _config.RangedLosRetryMs;
             return;
         }
+
+        // Swing animation
+        OnSwing?.Invoke(caster, target);
 
         // Build + resolve
         var ctx = BuildAutoAttackContext(caster, target, weapon.Dps, weapon.Speed,
@@ -260,6 +263,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
 
         DamagePipeline.Resolve(ctx);
         ApplyDamage(target, ctx);
+        OnDamageDealt?.Invoke(caster, ctx);
         OnHit?.Invoke(caster, target, ctx);
 
         // Schedule next attack
@@ -274,7 +278,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
 
     private void TryOffhandSwing(UnitEntity caster, UnitEntity target)
     {
-        var offhand = _weaponQuery(caster, WeaponSlot.OffHand);
+        var offhand = caster.GetWeaponInfo(WeaponSlot.OffHand);
         if (offhand is null || offhand.IsShield || offhand.IsCharm)
             return;
 
@@ -284,7 +288,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
             return;
 
         // Offhand swing uses main-hand speed for scaling (matches V1)
-        var mainWeapon = _weaponQuery(caster, WeaponSlot.MainHand);
+        var mainWeapon = caster.GetWeaponInfo(WeaponSlot.MainHand);
         var mhSpeed = mainWeapon?.Speed ?? _config.DefaultWeaponSpeed;
 
         var ctx = BuildAutoAttackContext(caster, target, offhand.Dps, mhSpeed,
@@ -293,6 +297,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
 
         DamagePipeline.Resolve(ctx);
         ApplyDamage(target, ctx);
+        OnDamageDealt?.Invoke(caster, ctx);
         OnHit?.Invoke(caster, target, ctx);
     }
 
@@ -333,13 +338,15 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
             TargetInitiative = target.Stats.GetTotal(StatId.Initiative),
 
             // Target facing / shield for defense rolls
-            TargetIsFacing = _facingFunc(target, attacker),
+            TargetIsFacing = target.IsInFrontArc(attacker),
             TargetHasShield = HasShield(target),
 
             // Random rolls
             DefenseRoll = _random(0, 100),
             CritRoll = _random(0, 100),
-            CritVarianceRoll = _random(0, 21) / 100f, // [0.0, 0.2]
+            CritVarianceRoll = _random(0, 21) / 100f,  // [0.0, 0.2]
+            DamageVariance = _config.DamageVariance,
+            DamageVarianceRoll = _random(-100, 101) / 100f, // [-1.0, 1.0]
         };
 
         return ctx;
@@ -353,7 +360,7 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
     /// Computes attack interval in ms from weapon speed and speed modifiers.
     /// Formula: <c>weaponSpeed × 10 / (1 + bonus − reduction)</c>.
     /// </summary>
-    internal long ComputeAttackInterval(UnitEntity entity, ushort weaponSpeed)
+    internal static long ComputeAttackInterval(UnitEntity entity, ushort weaponSpeed)
     {
         float bonus = entity.Stats.GetTotal(StatId.AutoAttackSpeed) / 100f;
         // Reduced stat handling — in V1, speed reduction comes from a separate "reduced" stat.
@@ -372,9 +379,9 @@ public sealed class AutoAttackComponent : ComponentBase, ITickable
             target.Health.TakeDamage(ctx.FinalDamage);
     }
 
-    private bool HasShield(UnitEntity entity)
+    private static bool HasShield(UnitEntity entity)
     {
-        var offhand = _weaponQuery(entity, WeaponSlot.OffHand);
+        var offhand = entity.GetWeaponInfo(WeaponSlot.OffHand);
         return offhand is { IsShield: true };
     }
 

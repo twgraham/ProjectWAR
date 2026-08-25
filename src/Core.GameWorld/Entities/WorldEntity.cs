@@ -92,6 +92,15 @@ public abstract class WorldEntity
     /// </summary>
     internal WorldPosition LastVisibilityCheckPosition { get; set; }
 
+    // ── Region Services ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Region-scoped services (occlusion, etc.) set by the <see cref="Region"/> when the
+    /// entity is added and cleared on removal. Extension methods on <see cref="UnitEntity"/>
+    /// read this to resolve services like line-of-sight without static singletons.
+    /// </summary>
+    public RegionServices? RegionServices { get; internal set; }
+
     // ── State Broadcasting ──────────────────────────────────────────────
 
     /// <summary>

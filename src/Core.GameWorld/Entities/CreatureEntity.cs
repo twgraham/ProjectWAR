@@ -1,4 +1,5 @@
 using Core.Domain.Entities;
+using Core.GameWorld.Combat.AutoAttack;
 using Core.GameWorld.Spawning;
 
 namespace Core.GameWorld.Entities;
@@ -39,5 +40,11 @@ public sealed class CreatureEntity : UnitEntity
     /// <c>Proto.Emote</c>.
     /// </summary>
     public byte Emote { get; set; }
+
+    /// <inheritdoc />
+    public override WeaponInfo? GetWeaponInfo(WeaponSlot slot) =>
+        slot == WeaponSlot.MainHand && Proto.WeaponDps > 0
+            ? new WeaponInfo(Dps: Proto.WeaponDps * 0.1f, Speed: 200)
+            : null;
 }
 

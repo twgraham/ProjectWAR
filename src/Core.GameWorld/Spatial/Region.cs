@@ -7,6 +7,7 @@ using Core.GameWorld.Entities;
 using Core.GameWorld.Events;
 using Core.GameWorld.Spawning;
 using Core.GameWorld.Telemetry;
+using Core.Spatial;
 using Microsoft.Extensions.Logging;
 using static Core.GameWorld.Spatial.RegionConstants;
 
@@ -51,6 +52,7 @@ public sealed class Region : IDisposable
     private readonly IGameDataStore _gameData;
     private readonly RespawnScheduler _respawnScheduler = new();
     private readonly RegionActionContext _actionContext;
+    private readonly RegionServices _regionServices;
     
     private readonly ILogger<Region> _logger;
     private readonly IWorldServerMetrics _metrics;
@@ -66,7 +68,8 @@ public sealed class Region : IDisposable
         IEntityFactory entityFactory,
         IGameDataStore gameData,
         ILogger<Region> logger,
-        IWorldServerMetrics metrics)
+        IWorldServerMetrics metrics,
+        IOcclusionProvider? occlusion = null)
     {
         RegionId = regionId;
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -74,6 +77,7 @@ public sealed class Region : IDisposable
         _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+        _regionServices = new RegionServices(occlusion);
 
         _commands = Channel.CreateUnbounded<RegionCommand>(
             new UnboundedChannelOptions { SingleReader = true });
@@ -447,6 +451,7 @@ public sealed class Region : IDisposable
         entity.LastVisibilityCheckPosition = default;
         _movedEntities.Add(entity);
 
+        entity.RegionServices = _regionServices;
         entity.EventEmitted += _emitEvent;
 
         placed?.TrySetResult(true);
@@ -491,6 +496,7 @@ public sealed class Region : IDisposable
         _entitiesByOid.TryRemove(oid, out _);
         ReleaseOid(oid);
         entity.AssignOid(0);
+        entity.RegionServices = null;
         _allEntities.Remove(entity);
     }
 

@@ -13,6 +13,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Core.Domain\Core.Domain.csproj" />
+      <ProjectReference Include="..\Core.Spatial\Core.Spatial.csproj" />
     </ItemGroup>
 
     <ItemGroup>

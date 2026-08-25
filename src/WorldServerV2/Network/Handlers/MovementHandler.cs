@@ -37,6 +37,7 @@ public class MovementHandler : IPacketHandler
         IConnectionContext context,
         [FromServices] PlayerService playerService,
         [FromServices] WorldService worldService,
+        [FromServices] CombatService combatService,
         [FromServices] IGameDataStore gameData)
     {
         var player = playerService.GetPlayer(context.Session);
@@ -85,6 +86,10 @@ public class MovementHandler : IPacketHandler
             zone.OffX, zone.OffY,
             pos.X, pos.Y,
             pos.Z, (ushort)(pos.Heading * 4095 / (2 * MathF.PI)));
+
+        // Cancel any active non-moveable cast only when the decoded position actually changes.
+        // The client emits F_PLAYER_STATE2 packets while stationary as well.
+        combatService.CancelCastOnMove(player, newPosition);
 
         worldService.UpdatePlayerState(player, newPosition, relay);
     }

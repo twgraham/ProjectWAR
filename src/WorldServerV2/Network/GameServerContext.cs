@@ -10,6 +10,7 @@ namespace WorldServerV2.Network;
     typeof(AccountCharacterModifiedResponse),
     typeof(AccountCharacterModifyErrorResponse),
     typeof(BagInfoResponse),
+    typeof(CastPlayerEffectResponse),
     typeof(CareerAbilityResponse),
     typeof(CareerCategoryResponse),
     typeof(CareerPackageUpdateResponse),

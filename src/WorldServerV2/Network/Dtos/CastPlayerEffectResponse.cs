@@ -56,7 +56,9 @@ public class CastPlayerEffectResponse
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Standard ability damage packet.
+    /// Standard ability damage packet (flags 0x07 = SelfTarget + HasDamage + ShowVisual).
+    /// When absorption is present, uses flags 0x2A (HasDamage + SkipEffect + HasAbsorption)
+    /// to match the client's conditional read of the absorption zigzag.
     /// </summary>
     public static CastPlayerEffectResponse Damage(
         ushort casterOid,
@@ -68,9 +70,9 @@ public class CastPlayerEffectResponse
         uint absorption,
         bool wasCritical)
     {
-        var flags = CombatFlags.HasDamageData;
+        var flags = CombatFlags.SelfTarget | CombatFlags.HasDamageData | CombatFlags.ShowVisual;
         if (absorption > 0)
-            flags |= CombatFlags.HasAbsorptionData | CombatFlags.SkipEffectLogic;
+            flags = CombatFlags.HasDamageData | CombatFlags.SkipEffectLogic | CombatFlags.HasAbsorptionData;
 
         return new CastPlayerEffectResponse
         {
@@ -78,7 +80,39 @@ public class CastPlayerEffectResponse
             TargetId = targetOid,
             AbilityId = abilityEntry,
             CommandIndex = subIndex,
-            Event = wasCritical ? CombatEvent.AbilityCritical : CombatEvent.AbilityHit,
+            Event = wasCritical ? CombatEvent.AbilityCritical : CombatEvent.Hit,
+            Flags = flags,
+            DamageAmount = -(int)damage,
+            MitigationAmount = (int)mitigation,
+            AbsorptionAmount = (int)absorption
+        };
+    }
+
+    /// <summary>
+    /// Auto-attack damage packet (flags 0x13 = SelfTarget + HasDamage + UseAlternateAbility).
+    /// The client reads <c>UseAlternateAbility</c> to show the current weapon icon rather
+    /// than an ability icon. CombatEvent is <c>Hit</c> or <c>Critical</c> (not AbilityHit).
+    /// When absorption is present, uses flags 0x2A (HasDamage + SkipEffect + HasAbsorption).
+    /// </summary>
+    public static CastPlayerEffectResponse AutoAttackDamage(
+        ushort casterOid,
+        ushort targetOid,
+        uint damage,
+        uint mitigation,
+        uint absorption,
+        bool wasCritical)
+    {
+        var flags = absorption > 0
+            ? CombatFlags.HasDamageData | CombatFlags.SkipEffectLogic | CombatFlags.HasAbsorptionData
+            : CombatFlags.SelfTarget | CombatFlags.HasDamageData | CombatFlags.UseAlternateAbility;
+
+        return new CastPlayerEffectResponse
+        {
+            CasterId = casterOid,
+            TargetId = targetOid,
+            AbilityId = 0,
+            CommandIndex = 0,
+            Event = wasCritical ? CombatEvent.Critical : CombatEvent.Hit,
             Flags = flags,
             DamageAmount = -(int)damage,
             MitigationAmount = (int)mitigation,

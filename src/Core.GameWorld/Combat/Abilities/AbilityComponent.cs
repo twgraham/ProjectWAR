@@ -27,6 +27,12 @@ public sealed class AbilityComponent
     private long _globalCooldownExpiry;
     private readonly UnitEntity _owner;
 
+    /// <summary>
+    /// Pending deferred effect (for projectile abilities): the cast context and the
+    /// tick timestamp at which damage should be applied after projectile travel.
+    /// </summary>
+    private (AbilityCastContext Context, long ExecuteAt)? _pendingEffect;
+
     /// <summary>Default global cooldown duration in milliseconds.</summary>
     public const int DefaultGcdMs = 1500;
 
@@ -64,6 +70,12 @@ public sealed class AbilityComponent
 
     /// <summary>Invoked when a cooldown is applied after cast completion.</summary>
     public Action<ushort, int>? OnCooldownApplied;
+
+    /// <summary>
+    /// Invoked when a projectile is launched (ability with <see cref="AbilityDefinition.EffectDelay"/> != 0).
+    /// Second parameter is the flight time in milliseconds. Damage is applied after the delay elapses.
+    /// </summary>
+    public Action<AbilityCastContext, ushort>? OnProjectileFlight;
 
     /// <summary>
     /// Invoked when a damage effect is resolved. Caster and result are provided
@@ -201,6 +213,12 @@ public sealed class AbilityComponent
         // 4. Apply pre-cast modifiers (modify context only, not entity state)
         if (!definition.IgnoreOwnModifiers)
             ApplyModifiers(context, ModifierStage.PreCast);
+
+        // Pre-cast modifiers can change an ability between instant and cast-bar behavior.
+        // Channels retain their dedicated lifecycle regardless of their effective duration.
+        context.CastState = definition.ChannelId > 0
+            ? CastState.Channeling
+            : context.CastTime > 0 ? CastState.Casting : CastState.Instant;
 
         // 5. CC check
         var ccFailure = CheckCrowdControl(_owner, definition);
@@ -346,7 +364,6 @@ public sealed class AbilityComponent
                 OnCastConfirmed?.Invoke(context);
                 if (CompleteCast(context, tick))
                 {
-                    OnCastCompleted?.Invoke(context);
                     NotifyCooldown(context);
                 }
                 else
@@ -385,6 +402,13 @@ public sealed class AbilityComponent
     /// </summary>
     public void Update(long tick)
     {
+        // Fire deferred projectile damage when the flight time has elapsed.
+        if (_pendingEffect is { } pending && tick >= pending.ExecuteAt)
+        {
+            _pendingEffect = null;
+            EffectExecutor?.ExecuteCommands(pending.Context, _owner, pending.Context.Target, OnDamageDealt);
+        }
+
         var context = ActiveCast;
         if (context is null)
             return;
@@ -488,8 +512,24 @@ public sealed class AbilityComponent
         if (!definition.IgnoreOwnModifiers)
             ApplyModifiers(context, ModifierStage.PostCast);
 
-        // Execute commands
-        EffectExecutor?.ExecuteCommands(context, _owner, context.Target, OnDamageDealt);
+        // Signal cast completion BEFORE effects run so that F_USE_ABILITY (state=2)
+        // and the animation packet reach the client before F_CAST_PLAYER_EFFECT (damage).
+        // This matches V1 send order: completed → animation → damage numbers.
+        OnCastCompleted?.Invoke(context);
+
+        // Check for projectile flight delay (V1: EffectDelay on AbilityConstantInfo)
+        if (definition.EffectDelay != 0)
+        {
+            var flightMs = ComputeFlightTimeMs(definition, context.Target);
+            // Defer damage application until after the projectile reaches the target.
+            _pendingEffect = (context, tick + flightMs);
+            OnProjectileFlight?.Invoke(context, flightMs);
+        }
+        else
+        {
+            // No flight delay — apply damage immediately (standard behaviour)
+            EffectExecutor?.ExecuteCommands(context, _owner, context.Target, OnDamageDealt);
+        }
 
         // Apply cooldown
         ApplyCooldown(definition, context, tick);
@@ -529,7 +569,6 @@ public sealed class AbilityComponent
         {
             if (CompleteCast(context, tick))
             {
-                OnCastCompleted?.Invoke(context);
                 NotifyCooldown(context);
             }
             else
@@ -590,6 +629,26 @@ public sealed class AbilityComponent
                 : 1000;
             NextChannelTick += interval;
         }
+    }
+
+    /// <summary>
+    /// Computes the projectile flight time in milliseconds for abilities with
+    /// <see cref="AbilityDefinition.EffectDelay"/> != 0.
+    /// <para>
+    /// Negative <c>EffectDelay</c>: fixed absolute delay (<c>-EffectDelay</c> ms).
+    /// Positive <c>EffectDelay</c>: scaled by range (V1 formula: <c>EffectDelay * range * 0.01</c>
+    /// where range is in engine units; V2 converts feet × 12 to match).
+    /// </para>
+    /// </summary>
+    private ushort ComputeFlightTimeMs(AbilityDefinition definition, UnitEntity? target)
+    {
+        if (definition.EffectDelay < 0)
+            return (ushort)(-definition.EffectDelay);
+
+        float distFeet = target is not null ? _owner.DistanceTo(target) : definition.Range;
+        float distEngineUnits = distFeet * RegionConstants.UnitsPerFoot;
+        float ms = definition.EffectDelay * (distEngineUnits * 0.01f);
+        return (ushort)MathF.Max(0f, ms);
     }
 
     /// <summary>
@@ -682,21 +741,15 @@ public sealed class AbilityComponent
     private static AbilityFailure? CheckRange(
         UnitEntity caster, UnitEntity target, float rangeFeet, float minRangeFeet)
     {
-        long distSq = caster.Position.DistanceSquared2D(target.Position);
+        // Edge-to-edge distance in feet — includes BaseRadius subtraction,
+        // consistent with auto-attack range gating via UnitEntitySpatialExtensions.
+        float distFeet = caster.DistanceTo(target);
 
-        if (rangeFeet > 0)
-        {
-            long rangeUnits = (long)(rangeFeet * RegionConstants.UnitsPerFoot);
-            if (distSq > rangeUnits * rangeUnits)
-                return AbilityFailure.OutOfRange;
-        }
+        if (rangeFeet > 0 && distFeet > rangeFeet)
+            return AbilityFailure.OutOfRange;
 
-        if (minRangeFeet > 0)
-        {
-            long minRangeUnits = (long)(minRangeFeet * RegionConstants.UnitsPerFoot);
-            if (distSq < minRangeUnits * minRangeUnits)
-                return AbilityFailure.TooClose;
-        }
+        if (minRangeFeet > 0 && distFeet < minRangeFeet)
+            return AbilityFailure.TooClose;
 
         return null;
     }

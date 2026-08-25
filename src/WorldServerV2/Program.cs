@@ -89,6 +89,8 @@ try
 
             s.AddWorldTopology()
                 .RegisterHandlers();
+            
+            s.AddOcclusion(ctx.Configuration["occlusion"]!);
 
             s.AddServerNetworking(IPEndPoint.Parse($"0.0.0.0:{realmConfig.Realm.Port}"))
                 .WithPacketFramer<GameServerFramer>(ServiceLifetime.Scoped)
@@ -102,10 +104,6 @@ try
         });
 
     var host = builder.Build();
-
-    // Populate the lightweight character directory before accepting connections
-    var characterService = host.Services.GetRequiredService<ICharacterService>();
-    await characterService.LoadDirectoryAsync();
     
     await host.RunAsync();
 }

@@ -188,6 +188,34 @@ public class DamagePipelineTests
     }
 
     [Fact]
+    public void AddWeaponDamage_auto_attack_applies_positive_variance()
+    {
+        // DamageVariance=25, roll=1.0 → +25%
+        var ctx = MakeAutoAttackContext(weaponDps: 100f, weaponSpeed: 1f);
+        ctx.DamageVariance = 25;
+        ctx.DamageVarianceRoll = 1.0f;
+
+        DamagePipeline.AddWeaponDamage(ctx);
+
+        // 100 * 1.0 * (1 + 1.0 * 0.25) = 125
+        ctx.Damage.ShouldBe(125f, 0.01f);
+    }
+
+    [Fact]
+    public void AddWeaponDamage_auto_attack_applies_negative_variance()
+    {
+        // DamageVariance=25, roll=-1.0 → -25%
+        var ctx = MakeAutoAttackContext(weaponDps: 100f, weaponSpeed: 1f);
+        ctx.DamageVariance = 25;
+        ctx.DamageVarianceRoll = -1.0f;
+
+        DamagePipeline.AddWeaponDamage(ctx);
+
+        // 100 * 1.0 * (1 - 0.25) = 75
+        ctx.Damage.ShouldBe(75f, 0.01f);
+    }
+
+    [Fact]
     public void AddWeaponDamage_proc_skips_weapon()
     {
         var ctx = MakeAbilityContext();

@@ -16,6 +16,7 @@
     <Project Path="src/Core.Infrastructure.Network.RpcSourceGenerators/Core.Infrastructure.Network.RpcSourceGenerators.csproj" />
     <Project Path="src/Core.Infrastructure.Network/Core.Infrastructure.Network.csproj" />
     <Project Path="src/Core.Session/Core.Session.csproj" />
+    <Project Path="src/Core.Spatial/Core.Spatial.csproj" />
     <Project Path="src/FrameWork/FrameWork.csproj" />
     <Project Path="src/Launcher/Launcher.csproj" />
     <Project Path="src/LauncherServer.Dtos/LauncherServer.Dtos.csproj" />
@@ -29,6 +30,7 @@
     <Project Path="test/Core.Infrastructure.Cryptography.Tests/Core.Infrastructure.Cryptography.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.RpcSourceGenerator.Tests/Core.Infrastructure.Network.RpcSourceGenerator.Tests.csproj" />
     <Project Path="test/Core.Infrastructure.Network.Tests/Core.Infrastructure.Network.Tests.csproj" />
+    <Project Path="test/Core.Spatial.Tests/Core.Spatial.Tests.csproj" />
     <Project Path="test/LobbyServer.Tests/LobbyServer.Tests.csproj" />
     <Project Path="test/Core.GameWorld.Tests/Core.GameWorld.Tests.csproj" />
     <Project Path="test/WorldServerV2.Tests/WorldServerV2.Tests.csproj" />

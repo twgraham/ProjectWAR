@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Core.GameWorld.DataStore;
 using Core.GameWorld.Spawning;
 using Core.GameWorld.Telemetry;
+using Core.Spatial;
 using Microsoft.Extensions.Logging;
 
 namespace Core.GameWorld.Spatial;
@@ -27,6 +28,7 @@ public sealed class RegionManager : IDisposable
     private readonly IEntityFactory _entityFactory;
     private readonly IGameDataStore _gameData;
     private readonly IWorldServerMetrics _metrics;
+    private readonly IOcclusionProvider? _occlusion;
     private readonly bool _autoStart;
 
     public RegionManager(
@@ -35,6 +37,7 @@ public sealed class RegionManager : IDisposable
         IEntityFactory entityFactory,
         IGameDataStore gameData,
         IWorldServerMetrics metrics,
+        IOcclusionProvider? occlusion = null,
         bool autoStart = true)
     {
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -42,6 +45,7 @@ public sealed class RegionManager : IDisposable
         _entityFactory = entityFactory ?? throw new ArgumentNullException(nameof(entityFactory));
         _gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+        _occlusion = occlusion;
         _autoStart = autoStart;
     }
 
@@ -66,7 +70,7 @@ public sealed class RegionManager : IDisposable
     {
         return _regions.GetOrAdd(regionId, id =>
         {
-            var region = new Region(id, _eventDispatcher, _entityFactory, _gameData, _loggerFactory.CreateLogger<Region>(), _metrics);
+            var region = new Region(id, _eventDispatcher, _entityFactory, _gameData, _loggerFactory.CreateLogger<Region>(), _metrics, _occlusion);
             if (_autoStart)
                 region.Start();
             return region;
